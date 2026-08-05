@@ -319,6 +319,8 @@ model Team {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([leagueSeasonId])
+  @@index([ownerId])
   @@map("teams")
 }
 
@@ -423,6 +425,8 @@ model ApprovalRequest {
   createdAt     DateTime       @default(now())
 
   @@index([teamId, status])
+  @@index([requestedById])
+  @@index([resolvedById])
   @@map("approval_requests")
 }
 
@@ -513,6 +517,7 @@ model Match {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
+  @@index([teamId])
   @@map("matches")
 }
 
@@ -568,6 +573,7 @@ model VideoTimestamp {
   event            Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@index([videoId])
+  @@index([eventId])
   @@map("video_timestamps")
 }
 
@@ -712,6 +718,7 @@ model Message {
   // autoincrement seq column and paginate on that instead.
   @@unique([channelId, clientKey])
   @@index([channelId, createdAt])
+  @@index([senderId])
   @@map("messages")
 }
 
@@ -774,6 +781,7 @@ model TrainingSession {
   updatedAt       DateTime @updatedAt
 
   @@index([teamId])
+  @@index([createdByUserId])
   @@map("training_sessions")
 }
 
@@ -922,5 +930,7 @@ model LeagueMatch {
   @@index([leagueSeasonId])
   @@index([homeLeagueTeamId])
   @@index([awayLeagueTeamId])
+  @@index([homeMatchId])
+  @@index([awayMatchId])
   @@map("league_matches")
 }
