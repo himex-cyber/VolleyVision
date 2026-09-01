@@ -7,8 +7,9 @@
 import { randomUUID } from 'node:crypto';
 import { imageSize } from 'image-size';
 import { AttachmentKind } from '@prisma/client';
-import { supabase } from '../lib/supabase';
+import { getSupabaseClient } from '../lib/supabase';
 import { AppError } from '../middleware/errorHandler';
+import { resolveUploadContentType, isInlineRenderableKey } from '../lib/fileSignature';
 
 const BUCKET = process.env.SUPABASE_CHAT_BUCKET || 'team-chat';
 
@@ -97,9 +98,10 @@ export function buildObjectKey(opts: {
 // ─── Storage operations ───────────────────────────────────────────────────────
 
 export async function uploadAttachment(opts: { key: string; buffer: Buffer; mimeType: string }): Promise<string> {
-  const { error } = await supabase.storage
+  const contentType = resolveUploadContentType(opts.mimeType, opts.buffer);
+  const { error } = await getSupabaseClient().storage
     .from(BUCKET)
-    .upload(opts.key, opts.buffer, { contentType: opts.mimeType, upsert: false });
+    .upload(opts.key, opts.buffer, { contentType, upsert: false });
   if (error) {
     console.error(`Supabase upload failed for ${opts.key}:`, error.message);
     throw new AppError(502, 'File storage upload failed. Please try again.');
@@ -111,25 +113,43 @@ export async function uploadAttachment(opts: { key: string; buffer: Buffer; mime
  * Batch-sign a page of attachments in one Storage call. Returns
  * storagePath → signedUrl, with null for any path that failed to sign —
  * a page of messages must never 500 because one attachment couldn't sign.
+ *
+ * Supabase's batch API applies one `options` set to the whole call, but
+ * non-image attachments need `download: true` (forced download) while
+ * images need the browser-renders-inline default — so the paths are split
+ * by kind and signed in up to two calls, then merged back into one map.
  */
 export async function signAttachmentUrls(paths: string[], ttlSeconds = 3600): Promise<Map<string, string | null>> {
   if (paths.length === 0) return new Map();
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(paths, ttlSeconds);
-  if (error || !data) {
-    console.error(`Supabase batch signing failed for ${paths.length} path(s):`, error?.message);
-    return new Map(paths.map((p) => [p, null]));
-  }
+  const imagePaths = paths.filter((p) => isInlineRenderableKey(p));
+  const filePaths = paths.filter((p) => !isInlineRenderableKey(p));
+
   const map = new Map<string, string | null>();
-  for (const entry of data) {
-    if (entry.path) map.set(entry.path, entry.error ? null : entry.signedUrl);
+  const bucket = getSupabaseClient().storage.from(BUCKET);
+
+  async function signGroup(group: string[], options?: { download: true }) {
+    if (group.length === 0) return;
+    const { data, error } = await bucket.createSignedUrls(group, ttlSeconds, options);
+    if (error || !data) {
+      console.error(`Supabase batch signing failed for ${group.length} path(s):`, error?.message);
+      for (const p of group) map.set(p, null);
+      return;
+    }
+    for (const entry of data) {
+      if (entry.path) map.set(entry.path, entry.error ? null : entry.signedUrl);
+    }
+    for (const p of group) if (!map.has(p)) map.set(p, null);
   }
-  for (const p of paths) if (!map.has(p)) map.set(p, null);
+
+  await signGroup(imagePaths);
+  await signGroup(filePaths, { download: true });
   return map;
 }
 
 /** Short-lived signed URL — the storagePath itself is never sent to clients. */
 export async function signAttachmentUrl(storagePath: string, ttlSeconds = 3600): Promise<string> {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, ttlSeconds);
+  const options = isInlineRenderableKey(storagePath) ? undefined : { download: true as const };
+  const { data, error } = await getSupabaseClient().storage.from(BUCKET).createSignedUrl(storagePath, ttlSeconds, options);
   if (error || !data?.signedUrl) {
     console.error(`Supabase signed URL failed for ${storagePath}:`, error?.message);
     throw new AppError(502, 'Could not generate a download link for an attachment.');
@@ -145,7 +165,7 @@ export async function signAttachmentUrl(storagePath: string, ttlSeconds = 3600):
 export async function deleteObjects(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   try {
-    const { error } = await supabase.storage.from(BUCKET).remove(paths);
+    const { error } = await getSupabaseClient().storage.from(BUCKET).remove(paths);
     if (error) console.error(`Supabase cleanup failed for ${paths.length} object(s):`, error.message);
   } catch (err) {
     console.error('Supabase cleanup threw:', err);

@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { PrismaClient, TeamRole } from '@prisma/client';
 import { prisma as serviceprisma } from '../src/lib/prisma';
-import { supabase } from '../src/lib/supabase';
+import { getSupabaseClient } from '../src/lib/supabase';
 import { postMessageWithAttachments } from '../src/services/message.service';
 
 const API = `http://localhost:${process.env.PORT || 3001}/api/v1`;
@@ -126,7 +126,7 @@ async function main() {
     // ── Forced DB failure → compensating cleanup, no orphans ────────────────
     const channelPrefix = `teams/${TEAM_ID}/channels/${channelId}`;
     const listFolders = async () => {
-      const { data, error } = await supabase.storage.from(BUCKET).list(channelPrefix, { limit: 1000 });
+      const { data, error } = await getSupabaseClient().storage.from(BUCKET).list(channelPrefix, { limit: 1000 });
       assert.ok(!error, `bucket list failed: ${error?.message}`);
       return new Set((data ?? []).map((e) => e.name));
     };
@@ -159,7 +159,7 @@ async function main() {
       where: { uploadedByUserId: user.id },
       select: { storagePath: true },
     });
-    if (atts.length) await supabase.storage.from(BUCKET).remove(atts.map((a) => a.storagePath));
+    if (atts.length) await getSupabaseClient().storage.from(BUCKET).remove(atts.map((a) => a.storagePath));
     await prisma.message.deleteMany({ where: { senderId: user.id } });
     await prisma.teamMembership.deleteMany({ where: { userId: user.id, teamId: TEAM_ID } });
     await prisma.user.delete({ where: { id: user.id } }).catch(() => {});

@@ -1,8 +1,10 @@
 import { randomUUID } from 'crypto';
 import { InvitationStatus, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { generateUniqueCode } from '../lib/joinCode';
+import { generateUniqueCode, normalizeCode } from '../lib/joinCode';
 import { addMember, isMember } from './teamMembership.service';
+import { canActInCategory } from './permission.service';
+import { AppError } from '../middleware/errorHandler';
 import { sendInvitationEmail } from '../lib/mailer';
 
 const EXPIRY_DAYS = 7;
@@ -97,7 +99,7 @@ export async function acceptInvitation(token: string, userId: string) {
  * the invited address.
  */
 export async function redeemInvitationByCode(joinCode: string, userId: string) {
-  const inv = await prisma.invitation.findUnique({ where: { joinCode: joinCode.trim().toUpperCase() } });
+  const inv = await prisma.invitation.findUnique({ where: { joinCode: normalizeCode(joinCode) } });
   if (!inv) throw Object.assign(new Error('Invalid or unknown join code'), { statusCode: 404 });
   if (inv.status !== InvitationStatus.PENDING) {
     throw Object.assign(new Error(`Invitation is ${inv.status.toLowerCase()}`), { statusCode: 409 });
@@ -154,7 +156,16 @@ export async function expireStaleInvitations() {
   });
 }
 
-export async function getTeamInvitations(teamId: string) {
+/**
+ * Invitee emails + inviting-staff identities — team-private. The route guard
+ * (requireTeamAccess('invitation')) is the primary gate; this second check is
+ * defence in depth so a future caller that skips the middleware can't leak the
+ * list.
+ */
+export async function getTeamInvitations(teamId: string, userId: string) {
+  if (!(await canActInCategory(userId, teamId, 'invitation'))) {
+    throw new AppError(403, 'You do not have permission to view this team’s invitations.');
+  }
   await expireStaleInvitations();
   return prisma.invitation.findMany({
     where: { teamId },

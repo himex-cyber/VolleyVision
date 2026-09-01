@@ -1,6 +1,6 @@
 import { TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { generateUniqueCode } from '../lib/joinCode';
+import { generateUniqueCode, normalizeCode } from '../lib/joinCode';
 import { addMember, isMember } from './teamMembership.service';
 
 export type TeamJoinCodeKind = 'PLAYER' | 'STAFF';
@@ -49,7 +49,7 @@ export async function regenerateTeamJoinCode(teamId: string, kind: TeamJoinCodeK
  * pick one of the staff roles.
  */
 export async function redeemTeamJoinCode(code: string, userId: string, role?: TeamRole) {
-  const normalized = code.trim().toUpperCase();
+  const normalized = normalizeCode(code);
 
   const playerTeam = await prisma.team.findUnique({
     where: { playerJoinCode: normalized },
@@ -93,7 +93,7 @@ export type CodeLookupResult =
  * (e.g. a role picker for staff codes) without redeeming twice.
  */
 export async function lookupCode(code: string): Promise<CodeLookupResult> {
-  const normalized = code.trim().toUpperCase();
+  const normalized = normalizeCode(code);
 
   const invitation = await prisma.invitation.findUnique({
     where: { joinCode: normalized },

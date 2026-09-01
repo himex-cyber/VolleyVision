@@ -61,7 +61,9 @@ router.patch('/:id', requireAuth, requireRosterAccess, updatePlayer);
 router.delete('/:id', requireAuth, requireRosterAccess, deletePlayer);
 
 // Phase 7 — multi-team player links
-router.get('/:playerId/teams', getPlayerTeams);
+// Same visibility contract as the player reads above — the link list carries the
+// player's name and every team they belong to, so a private home team hides it.
+router.get('/:playerId/teams', optionalAuth, visibleByPlayerParam('playerId'), getPlayerTeams);
 router.post('/:playerId/team-links', requireAuth, requireManageLinkedTeam, addPlayerTeamLink);
 router.delete('/:playerId/team-links/:teamId', requireAuth, requireManageLinkedTeam, removePlayerTeamLink);
 

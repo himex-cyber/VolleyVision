@@ -4,6 +4,13 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { sendPasswordResetEmail } from '../lib/mailer';
+import {
+  CONSUMED_RESET_FIELDS,
+  RESET_TOKEN_BYTES,
+  hashResetToken,
+  resetTokenExpiry,
+  usableResetTokenWhere,
+} from '../lib/passwordReset';
 
 const SALT_ROUNDS = 12;
 
@@ -127,12 +134,24 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
 // ── Forgot password ───────────────────────────────────────────────────────────
 
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+/**
+ * Floor on how long requestPasswordReset takes, whichever branch it runs.
+ *
+ * The identical success message is pointless if the response *time* still says
+ * whether the address is registered — and the branches are not naturally
+ * comparable: a known address costs a DB write plus an SMTP round trip that an
+ * unknown one has no equivalent for. A decoy hash alone can't cover an SMTP
+ * send, so both branches are padded out to a fixed duration instead and the
+ * send happens inside that budget.
+ *
+ * ponytail: a fixed floor, not constant-time crypto — an unusually slow SMTP
+ * server can still overshoot it. The rate limit on this route (5 per 15 min per
+ * IP and per email) is what makes exploiting any residual difference across a
+ * meaningful number of addresses impractical.
+ */
+const FORGOT_PASSWORD_FLOOR_MS = 1200;
 
-/** Only the hash is ever stored, so a DB leak can't be replayed as a reset link. */
-function hashResetToken(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Issues a single-use reset link. Silent no-op for an unknown email: the
@@ -143,22 +162,35 @@ function hashResetToken(token: string): string {
  * one — there is at most one live reset token per user.
  */
 export async function requestPasswordReset(email: string): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user) return;
+  const startedAt = Date.now();
+  try {
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 
-  const token = crypto.randomBytes(32).toString('hex');
+    const token = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      passwordResetTokenHash: hashResetToken(token),
-      passwordResetExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
-    },
-  });
+    if (!user) {
+      // Same shape of work as the known branch, so the two aren't distinguishable
+      // even if the floor below were removed. No email is sent for an address
+      // that has no account.
+      await bcrypt.hash(token, SALT_ROUNDS);
+      return;
+    }
 
-  // Fire-and-forget by design: sendPasswordResetEmail never throws, and a
-  // delivery failure must not change the response the caller sees.
-  await sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetTokenHash: hashResetToken(token),
+        passwordResetExpiresAt: resetTokenExpiry(),
+      },
+    });
+
+    // sendPasswordResetEmail never throws, and a delivery failure must not
+    // change the response the caller sees.
+    await sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token);
+  } finally {
+    const remaining = FORGOT_PASSWORD_FLOOR_MS - (Date.now() - startedAt);
+    if (remaining > 0) await sleep(remaining);
+  }
 }
 
 /**
@@ -170,12 +202,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
     throw new AppError(400, 'Password must be at least 8 characters.');
   }
 
-  const user = await prisma.user.findFirst({
-    where: {
-      passwordResetTokenHash: hashResetToken(token),
-      passwordResetExpiresAt: { gt: new Date() },
-    },
-  });
+  const user = await prisma.user.findFirst({ where: usableResetTokenWhere(token) });
   if (!user) {
     throw new AppError(400, 'This reset link is invalid or has expired. Request a new one.');
   }
@@ -184,8 +211,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
     where: { id: user.id },
     data: {
       passwordHash: await bcrypt.hash(newPassword, SALT_ROUNDS),
-      passwordResetTokenHash: null,
-      passwordResetExpiresAt: null,
+      ...CONSUMED_RESET_FIELDS,
     },
   });
 }

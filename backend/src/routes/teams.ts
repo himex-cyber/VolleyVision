@@ -50,7 +50,7 @@ router.delete('/:id/members/:memberId', requireAuth, requireTeamPermission(Permi
 
 // Invitation management. Sending is tiered (Iteration 3) — gated on the member's
 // invitation access tier, not the static INVITE_USERS role permission.
-router.get('/:id/invitations',  requireAuth, listTeamInvitations);
+router.get('/:id/invitations',  requireAuth, requireTeamAccess('invitation', 'id'), listTeamInvitations);
 router.post('/:id/invitations', requireAuth, requireTeamAccess('invitation', 'id'), createTeamInvitation);
 
 // Reusable team join codes — viewing and regenerating share the invitation

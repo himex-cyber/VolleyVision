@@ -42,7 +42,7 @@ export async function createTeamInvitation(req: Request, res: Response, next: Ne
 
 export async function listTeamInvitations(req: Request, res: Response, next: NextFunction) {
   try {
-    const invitations = await getTeamInvitations(req.params.id);
+    const invitations = await getTeamInvitations(req.params.id, req.user!.userId);
     res.json(invitations);
   } catch (err) {
     next(err);

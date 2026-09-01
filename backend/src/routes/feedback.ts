@@ -6,7 +6,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
 import { requireAdmin } from '../middleware/permissions';
-import { chatPostRateLimit } from '../middleware/chatRateLimit';
+import { chatPostRateLimit } from '../middleware/rateLimit';
 import { MAX_ATTACHMENTS_PER_FEEDBACK, MAX_FILE_BYTES } from '../services/feedbackStorage.service';
 import {
   createFeedback,

@@ -6,7 +6,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
-import { chatPostRateLimit } from '../middleware/chatRateLimit';
+import { chatPostRateLimit } from '../middleware/rateLimit';
 import { requireChannelPermission, requireTeamPermission } from '../middleware/permissions';
 import { Permission } from '../services/permission.service';
 import { MAX_ATTACHMENTS_PER_MESSAGE, MAX_FILE_BYTES } from '../services/chatStorage.service';
