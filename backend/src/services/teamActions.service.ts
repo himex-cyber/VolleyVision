@@ -13,52 +13,10 @@ import { createInvitation } from './invitation.service';
  */
 
 // ── Players ──────────────────────────────────────────────────────────────────
-
-export interface PlayerCreatePayload {
-  firstName: string;
-  lastName: string;
-  jerseyNumber: number;
-  position: string;
-  teamId: string;
-  // Set when the roster row is created for an existing user account (e.g. a
-  // member promoted to PLAYER) — links the row to that user.
-  userId?: string;
-}
-export interface PlayerUpdatePayload {
-  firstName?: string;
-  lastName?: string;
-  jerseyNumber?: number;
-  position?: string;
-}
-
-export function applyCreatePlayer(p: PlayerCreatePayload) {
-  return prisma.player.create({
-    data: {
-      firstName: p.firstName,
-      lastName: p.lastName,
-      jerseyNumber: Number(p.jerseyNumber),
-      position: p.position as any,
-      teamId: p.teamId,
-      userId: p.userId ?? null,
-    },
-  });
-}
-
-export function applyUpdatePlayer(playerId: string, p: PlayerUpdatePayload) {
-  return prisma.player.update({
-    where: { id: playerId },
-    data: {
-      firstName: p.firstName,
-      lastName: p.lastName,
-      jerseyNumber: p.jerseyNumber != null ? Number(p.jerseyNumber) : undefined,
-      position: p.position as any,
-    },
-  });
-}
-
-export function applyDeletePlayer(playerId: string) {
-  return prisma.player.delete({ where: { id: playerId } });
-}
+// Moved to playerActions.service.ts. They are primitives, not orchestration, and
+// teamMembership.service needs them — importing them from here made a service
+// below this one depend on this one, closing an import cycle. Deliberately NOT
+// re-exported: a shim here would keep the edge that the move removed.
 
 // ── Matches ──────────────────────────────────────────────────────────────────
 

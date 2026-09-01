@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { getAccessTier } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
-import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from '../services/teamActions.service';
+import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from '../services/playerActions.service';
 import { logAudit } from '../lib/audit';
 
 // Response body when a non-head-coach action is queued for approval.

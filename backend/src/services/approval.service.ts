@@ -3,8 +3,8 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { isApprovalAuthority } from './permission.service';
 import { onApprovalRequestCreated, onApprovalResolved } from './approvalNotifications';
+import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from './playerActions.service';
 import {
-  applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer,
   applyCreateMatch, applyUpdateMatch, applyDeleteMatch,
   applyCreateInvitation,
 } from './teamActions.service';

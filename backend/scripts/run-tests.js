@@ -5,6 +5,15 @@ const { spawnSync } = require('child_process');
 const { readdirSync } = require('fs');
 const path = require('path');
 
+// A cycle hands one module a half-initialised copy of the other, so the
+// failure surfaces later and somewhere else. Cheap to check, so check first.
+const cycleCheck = spawnSync(
+  process.execPath,
+  [path.join(__dirname, 'check-import-cycles.js')],
+  { stdio: 'inherit', cwd: path.join(__dirname, '..') },
+);
+if (cycleCheck.status !== 0) process.exit(cycleCheck.status ?? 1);
+
 const libDir = path.join(__dirname, '..', 'src', 'lib');
 const testFiles = readdirSync(libDir)
   .filter((f) => f.endsWith('.test.ts'))

@@ -2,7 +2,7 @@ import { AccessTier, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { defaultAccessTiers } from './permission.service';
-import { applyCreatePlayer } from './teamActions.service';
+import { applyCreatePlayer } from './playerActions.service';
 
 const memberSelect = {
   id: true,
