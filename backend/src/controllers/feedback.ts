@@ -32,10 +32,20 @@ export async function createFeedback(req: Request, res: Response, next: NextFunc
   }
 }
 
+// clampPageSize (lib/chat.ts) already defaults on NaN/undefined, so this just
+// forwards the raw query string through Number().
+function parseLimit(raw: unknown): number | undefined {
+  return typeof raw === 'string' ? Number(raw) : undefined;
+}
+
 export async function listMine(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.user) throw new AppError(401, 'Authentication required.');
-    res.json(await listMyFeedback(req.user.userId));
+    const { limit, cursor } = req.query;
+    res.json(await listMyFeedback(req.user.userId, {
+      limit: parseLimit(limit),
+      cursor: typeof cursor === 'string' ? cursor : undefined,
+    }));
   } catch (err) {
     next(err);
   }
@@ -43,11 +53,13 @@ export async function listMine(req: Request, res: Response, next: NextFunction) 
 
 export async function listAll(req: Request, res: Response, next: NextFunction) {
   try {
-    const { status, type, severity } = req.query;
+    const { status, type, severity, limit, cursor } = req.query;
     res.json(await listAllFeedback({
       status: typeof status === 'string' ? status : undefined,
       type: typeof type === 'string' ? type : undefined,
       severity: typeof severity === 'string' ? severity : undefined,
+      limit: parseLimit(limit),
+      cursor: typeof cursor === 'string' ? cursor : undefined,
     }));
   } catch (err) {
     next(err);
@@ -69,6 +81,7 @@ export async function getAttachmentUrl(req: Request, res: Response, next: NextFu
   try {
     if (!req.user) throw new AppError(401, 'Authentication required.');
     const url = await getAttachmentSignedUrl(
+      req.params.feedbackId,
       req.params.attachmentId,
       req.user.userId,
       req.user.role === 'ADMIN',

@@ -8,6 +8,8 @@ import { AttachmentKind, FeedbackAttachment, FeedbackSeverity, FeedbackStatus, F
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { beforeCursorWhere, clampPageSize } from '../lib/chat';
+import { isEnumValue, parseRequiredText, parseSeverity, parseType } from '../lib/feedbackValidation';
 import {
   MAX_ATTACHMENTS_PER_FEEDBACK,
   assertAcceptable,
@@ -48,33 +50,8 @@ function serializeFeedback<T extends { attachments: FeedbackAttachment[] }>(row:
 }
 
 // ─── Input validation ─────────────────────────────────────────────────────────
-
-/** Own-key membership test — `in` would also match prototype keys like "toString". */
-function isEnumValue<T extends Record<string, string>>(enumObj: T, raw: unknown): raw is T[keyof T] {
-  return typeof raw === 'string' && Object.values(enumObj).includes(raw);
-}
-
-function parseType(raw: unknown): FeedbackType {
-  if (isEnumValue(FeedbackType, raw)) return raw;
-  throw new AppError(400, 'Feedback type must be BUG, FEATURE_REQUEST, or GENERAL.');
-}
-
-function parseSeverity(raw: unknown, type: FeedbackType): FeedbackSeverity | null {
-  // Severity only applies to bugs — silently dropped otherwise so a client
-  // that leaves a stale value in the form doesn't get rejected.
-  if (type !== FeedbackType.BUG || raw == null || raw === '') return null;
-  if (isEnumValue(FeedbackSeverity, raw)) return raw;
-  throw new AppError(400, 'Severity must be LOW, MEDIUM, or HIGH.');
-}
-
-function parseRequiredText(raw: unknown, field: string, maxLength: number): string {
-  const value = typeof raw === 'string' ? raw.trim() : '';
-  if (!value) throw new AppError(400, `${field} is required.`);
-  if (value.length > maxLength) {
-    throw new AppError(400, `${field} must be at most ${maxLength.toLocaleString()} characters.`);
-  }
-  return value;
-}
+// parseType / parseSeverity / parseRequiredText / isEnumValue live in
+// lib/feedbackValidation.ts (unit-tested there, no DB needed).
 
 function parseOptionalText(raw: unknown, maxLength: number): string | null {
   if (typeof raw !== 'string') return null;
@@ -164,14 +141,49 @@ export async function createFeedback(input: CreateFeedbackInput) {
 }
 
 // ─── Lists ────────────────────────────────────────────────────────────────────
+// Feedback is ordered newest-first (createdAt desc) — the opposite of chat's
+// ascending timeline — so a page of "more" is strictly OLDER than the cursor.
+// beforeCursorWhere's (createdAt, id) tuple comparison is order-agnostic, so
+// it's reused as-is from lib/chat.ts rather than reimplemented here.
 
-export async function listMyFeedback(userId: string) {
-  const rows = await prisma.feedback.findMany({
-    where: { userId },
-    include: { attachments: true },
-    orderBy: { createdAt: 'desc' },
+export interface ListFeedbackOptions {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface FeedbackPage<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+/** Cursor anchor → WHERE fragment. An unknown/stale cursor id is treated as
+ * no cursor (restart pagination) rather than a 500. */
+async function resolveCursorWhere(cursor: string | undefined): Promise<Prisma.FeedbackWhereInput> {
+  if (!cursor) return {};
+  const anchor = await prisma.feedback.findUnique({
+    where: { id: cursor },
+    select: { id: true, createdAt: true },
   });
-  return rows.map(serializeFeedback);
+  return anchor ? beforeCursorWhere(anchor) : {};
+}
+
+/** Trim a `limit + 1` fetch down to a page + nextCursor, without a second query. */
+function paginate<T extends { id: string }>(rows: T[], limit: number): FeedbackPage<T> {
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  return { items, nextCursor: hasMore ? items[items.length - 1].id : null };
+}
+
+export async function listMyFeedback(userId: string, opts: ListFeedbackOptions = {}) {
+  const limit = clampPageSize(opts.limit);
+  const rows = await prisma.feedback.findMany({
+    where: { userId, ...(await resolveCursorWhere(opts.cursor)) },
+    include: { attachments: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+  });
+  const { items, nextCursor } = paginate(rows, limit);
+  return { items: items.map(serializeFeedback), nextCursor };
 }
 
 export interface FeedbackFilters {
@@ -180,19 +192,24 @@ export interface FeedbackFilters {
   severity?: string;
 }
 
+export interface ListAllFeedbackOptions extends FeedbackFilters, ListFeedbackOptions {}
+
 /** Admin-only (enforced by requireAdmin in the routes) — all users' feedback. */
-export async function listAllFeedback(filters: FeedbackFilters = {}) {
-  const where: Prisma.FeedbackWhereInput = {};
-  if (isEnumValue(FeedbackStatus, filters.status)) where.status = filters.status;
-  if (isEnumValue(FeedbackType, filters.type)) where.type = filters.type;
-  if (isEnumValue(FeedbackSeverity, filters.severity)) where.severity = filters.severity;
+export async function listAllFeedback(options: ListAllFeedbackOptions = {}) {
+  const limit = clampPageSize(options.limit);
+  const where: Prisma.FeedbackWhereInput = { ...(await resolveCursorWhere(options.cursor)) };
+  if (isEnumValue(FeedbackStatus, options.status)) where.status = options.status;
+  if (isEnumValue(FeedbackType, options.type)) where.type = options.type;
+  if (isEnumValue(FeedbackSeverity, options.severity)) where.severity = options.severity;
 
   const rows = await prisma.feedback.findMany({
     where,
     include: { attachments: true, user: { select: submitterSelect } },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
   });
-  return rows.map(serializeFeedback);
+  const { items, nextCursor } = paginate(rows, limit);
+  return { items: items.map(serializeFeedback), nextCursor };
 }
 
 // ─── Triage ───────────────────────────────────────────────────────────────────
@@ -244,18 +261,23 @@ export async function updateFeedbackStatus(
 /**
  * Signed URL for one attachment. 403 unless the caller is the ADMIN or the
  * attachment's feedback belongs to them — this endpoint serves both audiences,
- * so ownership is checked here rather than in route middleware.
+ * so ownership is checked here rather than in route middleware. Also verifies
+ * the attachment actually belongs to the feedbackId in the route (a
+ * mismatched pair would otherwise silently succeed since only attachmentId
+ * was previously checked) — same not-found message as the missing-attachment
+ * branch so the endpoint doesn't become an existence oracle.
  */
 export async function getAttachmentSignedUrl(
+  feedbackId: string,
   attachmentId: string,
   requestingUserId: string,
   isAdmin: boolean,
 ): Promise<string> {
   const attachment = await prisma.feedbackAttachment.findUnique({
     where: { id: attachmentId },
-    select: { storagePath: true, feedback: { select: { userId: true } } },
+    select: { storagePath: true, feedbackId: true, feedback: { select: { userId: true } } },
   });
-  if (!attachment) throw new AppError(404, 'Attachment not found.');
+  if (!attachment || attachment.feedbackId !== feedbackId) throw new AppError(404, 'Attachment not found.');
   if (!isAdmin && attachment.feedback.userId !== requestingUserId) {
     throw new AppError(403, 'You do not have permission to view this attachment.');
   }

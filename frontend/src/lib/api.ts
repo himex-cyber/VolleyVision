@@ -487,7 +487,7 @@ export const chatApi = {
 };
 
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
-import type { Feedback, FeedbackStatus } from '../types/feedback';
+import type { Feedback, FeedbackPage, FeedbackStatus } from '../types/feedback';
 
 export const feedbackApi = {
   create: (data: {
@@ -509,13 +509,15 @@ export const feedbackApi = {
       .post<Feedback>('/feedback', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       .then((r) => r.data);
   },
-  listMine: () => api.get<Feedback[]>('/feedback/mine').then((r) => r.data),
+  listMine: (cursor?: string) =>
+    api.get<FeedbackPage>('/feedback/mine', { params: cursor ? { cursor } : undefined }).then((r) => r.data),
   // Admin-only — 403 for everyone else.
-  listAll: (filters?: { status?: string; type?: string }) => {
+  listAll: (filters?: { status?: string; type?: string }, cursor?: string) => {
     const params: Record<string, string> = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.type) params.type = filters.type;
-    return api.get<Feedback[]>('/feedback', { params }).then((r) => r.data);
+    if (cursor) params.cursor = cursor;
+    return api.get<FeedbackPage>('/feedback', { params }).then((r) => r.data);
   },
   updateStatus: (id: string, data: { status?: FeedbackStatus; adminNotes?: string | null }) =>
     api.patch<Feedback>(`/feedback/${id}`, data).then((r) => r.data),

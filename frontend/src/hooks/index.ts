@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, videosApi, leagueApi, approvalApi, feedbackApi } from '../lib/api';
 import type { TeamJoinCodeKind } from '../lib/api';
 import type { CreateTeamInput } from '../lib/api';
@@ -11,7 +11,12 @@ import { PLAYER_VIEW_PERMISSIONS } from '../lib/teamRoles';
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
 
 export function useMyFeedback() {
-  return useQuery({ queryKey: ['feedback', 'mine'], queryFn: feedbackApi.listMine });
+  return useInfiniteQuery({
+    queryKey: ['feedback', 'mine'],
+    queryFn: ({ pageParam }) => feedbackApi.listMine(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
 }
 
 export function useCreateFeedback() {
@@ -24,9 +29,11 @@ export function useCreateFeedback() {
 
 /** Admin panel only — the endpoint 403s for non-admins. */
 export function useAllFeedback(filters: { status?: string; type?: string }, enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['feedback', 'all', filters],
-    queryFn: () => feedbackApi.listAll(filters),
+    queryFn: ({ pageParam }) => feedbackApi.listAll(filters, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
   });
 }
