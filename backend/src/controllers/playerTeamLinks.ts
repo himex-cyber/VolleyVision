@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { isTeamVisibleTo } from '../lib/teamVisibility';
 
 // GET /players/:playerId/teams
 // Returns the player's home team plus all additional linked teams.
@@ -24,9 +25,21 @@ export async function getPlayerTeams(req: Request, res: Response, next: NextFunc
     });
     if (!player) throw new AppError(404, 'Player not found.');
 
+    // visibleByPlayerParam upstream only clears the player's HOME team, which
+    // says nothing about the teams they are *linked* to. Without this filter a
+    // home-team member reads back the id and name of every private team the
+    // player belongs to, holding no membership on any of them.
+    // ponytail: one visibility lookup per link, sequentially fanned out. A
+    // player has a handful of links; batch the membership query if that ever
+    // grows into a page of teams.
+    const viewerId = req.user?.userId ?? null;
+    const visible = await Promise.all(player.teamLinks.map((l) => isTeamVisibleTo(l.team.id, viewerId)));
+
     res.json({
       homeTeam: player.team,
-      linkedTeams: player.teamLinks.map((l) => ({ linkId: l.id, team: l.team, linkedAt: l.createdAt })),
+      linkedTeams: player.teamLinks
+        .filter((_, i) => visible[i])
+        .map((l) => ({ linkId: l.id, team: l.team, linkedAt: l.createdAt })),
     });
   } catch (err) { next(err); }
 }

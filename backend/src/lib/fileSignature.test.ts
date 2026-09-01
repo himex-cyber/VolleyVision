@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { sniffMimeType, resolveUploadContentType, isInlineRenderableKey } from './fileSignature';
+import { sniffMimeType, resolveUploadContentType, isInlineRenderableKey, storageExtensionFor } from './fileSignature';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -100,5 +100,58 @@ describe('isInlineRenderableKey', () => {
   it('is true for an image key and false for a .pdf key', () => {
     assert.equal(isInlineRenderableKey('teams/t1/channels/c1/m1/uuid-photo.png'), true);
     assert.equal(isInlineRenderableKey('teams/t1/channels/c1/m1/uuid-report.pdf'), false);
+  });
+});
+
+// ─── storageExtensionFor ──────────────────────────────────────────────────────
+
+describe('storageExtensionFor', () => {
+  it('maps every type resolveUploadContentType can return', () => {
+    assert.equal(storageExtensionFor('image/png'), '.png');
+    assert.equal(storageExtensionFor('image/jpeg'), '.jpg');
+    assert.equal(storageExtensionFor('image/gif'), '.gif');
+    assert.equal(storageExtensionFor('image/webp'), '.webp');
+    assert.equal(storageExtensionFor('application/pdf'), '.pdf');
+    assert.equal(storageExtensionFor('text/plain'), '.txt');
+    assert.equal(storageExtensionFor('text/csv'), '.csv');
+    assert.equal(storageExtensionFor('application/msword'), '.doc');
+    assert.equal(storageExtensionFor('application/vnd.ms-excel'), '.xls');
+    assert.equal(storageExtensionFor('application/vnd.ms-powerpoint'), '.ppt');
+    assert.equal(
+      storageExtensionFor('application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+      '.docx',
+    );
+    assert.equal(
+      storageExtensionFor('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+      '.xlsx',
+    );
+    assert.equal(
+      storageExtensionFor('application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+      '.pptx',
+    );
+  });
+
+  it('fails closed on an unmapped type — no extension, so not inline-renderable', () => {
+    assert.equal(storageExtensionFor('application/x-msdownload'), '');
+    assert.equal(isInlineRenderableKey(`teams/t1/channels/c1/m1/uuid-thing${storageExtensionFor('application/x-msdownload')}`), false);
+  });
+});
+
+// Key extension comes from the verified bytes, not the uploader's filename —
+// this is the pair of cases the filename-keyed version got wrong.
+describe('storage key extension is derived from bytes', () => {
+  const keyFor = (originalName: string, declaredMime: string, buffer: Buffer) =>
+    `teams/t1/channels/c1/m1/uuid-${originalName.replace(/\.[^./]+$/, '')}${storageExtensionFor(resolveUploadContentType(declaredMime, buffer))}`;
+
+  it('a real PDF named evil.png keys as .pdf and is not served inline', () => {
+    const key = keyFor('evil.png', 'application/pdf', PDF);
+    assert.equal(key.endsWith('.pdf'), true);
+    assert.equal(isInlineRenderableKey(key), false);
+  });
+
+  it('a real image with no filename extension still keys as an image and renders inline', () => {
+    const key = keyFor('screenshot', 'image/png', PNG);
+    assert.equal(key.endsWith('.png'), true);
+    assert.equal(isInlineRenderableKey(key), true);
   });
 });

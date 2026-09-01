@@ -122,12 +122,56 @@ function mismatch(): AppError {
 }
 
 /**
- * True only when the storage key's extension is an image extension.
- * ponytail: keys off the extension in the storage key rather than re-reading
- * the stored object's resolved content type. Good enough while every upload
- * path already runs bytes through resolveUploadContentType before the key is
- * written. Upgrade path if that ever proves insufficient: store the resolved
- * content type alongside the path and key off that instead.
+ * Canonical file extension for a byte-verified content type, or '' when the
+ * type has none mapped.
+ *
+ * Storage keys take their extension from here, never from the uploader's
+ * filename: the filename is attacker-chosen, so a PDF uploaded as `evil.png`
+ * used to produce a key ending `.png` and get served inline. Every value
+ * resolveUploadContentType can return is listed; anything else falls through to
+ * '' — an extensionless key, which isInlineRenderableKey treats as not inline,
+ * so a type added to the allow-list without an entry here fails closed.
+ */
+const EXTENSION_BY_CONTENT_TYPE = new Map<string, string>([
+  ['image/png', '.png'],
+  ['image/jpeg', '.jpg'],
+  ['image/gif', '.gif'],
+  ['image/webp', '.webp'],
+  ['application/pdf', '.pdf'],
+  ['text/plain', '.txt'],
+  ['text/csv', '.csv'],
+  ['application/msword', '.doc'],
+  ['application/vnd.ms-excel', '.xls'],
+  ['application/vnd.ms-powerpoint', '.ppt'],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.docx'],
+  ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.xlsx'],
+  ['application/vnd.openxmlformats-officedocument.presentationml.presentation', '.pptx'],
+]);
+
+export function storageExtensionFor(contentType: string): string {
+  return EXTENSION_BY_CONTENT_TYPE.get(contentType) ?? '';
+}
+
+/**
+ * True only when the storage key's extension is an image extension. Callers use
+ * it to pick between an inline signed URL and one carrying `?download`.
+ *
+ * `download` is a query parameter on the signed URL, and the signature covers
+ * the path and expiry, not the query string — a recipient can strip it and get
+ * the object inline. So this is a UX hint about how the browser will present
+ * the file, not an enforceable Content-Disposition and not a security control.
+ * What keeps a mislabelled file from being served under a dangerous type is
+ * resolveUploadContentType, which pins the stored Content-Type to the bytes.
+ *
+ * The extension it reads is a fact derived from those bytes: key builders
+ * append storageExtensionFor(verified type) rather than the uploader's own
+ * extension.
+ *
+ * ponytail: keys written before that change carry whatever extension the
+ * uploader chose, so those rows keep the old, occasionally wrong answer — they
+ * still resolve to a boolean and never throw. Upgrade path if the legacy rows
+ * ever matter: store the resolved content type on the attachment row and key
+ * off that instead.
  */
 export function isInlineRenderableKey(storagePath: string): boolean {
   const match = /\.[^./]+$/.exec(storagePath);

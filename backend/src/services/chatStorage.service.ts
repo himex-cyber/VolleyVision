@@ -9,7 +9,7 @@ import { imageSize } from 'image-size';
 import { AttachmentKind } from '@prisma/client';
 import { getSupabaseClient } from '../lib/supabase';
 import { AppError } from '../middleware/errorHandler';
-import { resolveUploadContentType, isInlineRenderableKey } from '../lib/fileSignature';
+import { resolveUploadContentType, isInlineRenderableKey, storageExtensionFor } from '../lib/fileSignature';
 
 const BUCKET = process.env.SUPABASE_CHAT_BUCKET || 'team-chat';
 
@@ -85,14 +85,26 @@ function sanitizeFilename(name: string): string {
   return safe || 'file';
 }
 
-/** `teams/{teamId}/channels/{channelId}/{messageId}/{uuid}-{safeName}` (uuid = key uniqueness). */
+/**
+ * Sanitized filename with the uploader's extension dropped. The key's extension
+ * is appended from the byte-verified content type instead, so the uploader can't
+ * name a PDF `evil.png` and have the key claim a type its bytes don't back up.
+ */
+function keyBaseName(name: string): string {
+  return sanitizeFilename(name).replace(/\.[^./]+$/, '') || 'file';
+}
+
+/** `teams/{teamId}/channels/{channelId}/{messageId}/{uuid}-{safeName}{ext}` (uuid = key uniqueness). */
 export function buildObjectKey(opts: {
   teamId: string;
   channelId: string;
   messageId: string;
   originalName: string;
+  /** Byte-verified type from resolveUploadContentType, never the declared mime. */
+  contentType: string;
 }): string {
-  return `teams/${opts.teamId}/channels/${opts.channelId}/${opts.messageId}/${randomUUID()}-${sanitizeFilename(opts.originalName)}`;
+  const name = `${randomUUID()}-${keyBaseName(opts.originalName)}${storageExtensionFor(opts.contentType)}`;
+  return `teams/${opts.teamId}/channels/${opts.channelId}/${opts.messageId}/${name}`;
 }
 
 // ─── Storage operations ───────────────────────────────────────────────────────

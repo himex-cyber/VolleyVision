@@ -173,3 +173,27 @@ describe('RateLimiter — chat limiter parity', () => {
     assert.equal(limiter.tryConsume('u', T0 + 500), true);
   });
 });
+
+// ─── maxKeys cap ──────────────────────────────────────────────────────────────
+// The IP arm of a limiter is keyed on a header we cannot fully trust, so the
+// key space is partly caller-controlled. Time-based eviction alone does not
+// bound it: sweep() runs at most once per window, which for the 15-minute
+// forgot-password window is a long time to insert keys into.
+
+describe('RateLimiter — maxKeys cap', () => {
+  it('bounds the map even when every key is unique', () => {
+    const limiter = new RateLimiter({ windowMs: 900_000, max: 5, maxKeys: 100 });
+    for (let i = 0; i < 5_000; i++) limiter.tryConsume(`forged:${i}`, T0 + i);
+    assert.ok(limiter.size <= 100, `expected <= 100 keys, got ${limiter.size}`);
+  });
+
+  it('does not let a flood of forged keys reset the bucket being charged', () => {
+    const limiter = new RateLimiter({ windowMs: 900_000, max: 5, maxKeys: 10 });
+    for (let i = 0; i < 4; i++) {
+      assert.equal(limiter.tryConsume('real:victim', T0), true, `spend ${i}`);
+    }
+    for (let i = 0; i < 500; i++) limiter.tryConsume(`forged:${i}`, T0);
+    assert.equal(limiter.tryConsume('real:victim', T0), true, 'fifth and last token');
+    assert.equal(limiter.tryConsume('real:victim', T0), false, 'bucket survived the flood');
+  });
+});

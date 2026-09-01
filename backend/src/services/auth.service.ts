@@ -138,15 +138,16 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
  * Floor on how long requestPasswordReset takes, whichever branch it runs.
  *
  * The identical success message is pointless if the response *time* still says
- * whether the address is registered — and the branches are not naturally
- * comparable: a known address costs a DB write plus an SMTP round trip that an
- * unknown one has no equivalent for. A decoy hash alone can't cover an SMTP
- * send, so both branches are padded out to a fixed duration instead and the
- * send happens inside that budget.
+ * whether the address is registered. Only work that fits inside the floor can
+ * be padded away, and an SMTP send does not: a real TLS handshake + AUTH + DATA
+ * routinely runs past a second, so awaiting it made the registered branch
+ * overshoot while the unknown branch landed on the floor — the oracle, restored.
+ * The send is therefore dispatched *after* the floor and never awaited; only
+ * the DB work each branch does is inside the budget.
  *
- * ponytail: a fixed floor, not constant-time crypto — an unusually slow SMTP
- * server can still overshoot it. The rate limit on this route (5 per 15 min per
- * IP and per email) is what makes exploiting any residual difference across a
+ * ponytail: a fixed floor, not constant-time crypto — a pathologically slow DB
+ * could still overshoot it. The rate limit on this route (5 per 15 min per IP
+ * and per email) is what makes exploiting any residual difference across a
  * meaningful number of addresses impractical.
  */
 const FORGOT_PASSWORD_FLOOR_MS = 1200;
@@ -163,15 +164,18 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  */
 export async function requestPasswordReset(email: string): Promise<void> {
   const startedAt = Date.now();
+  let dispatchEmail: (() => void) | undefined;
   try {
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
 
     const token = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
 
     if (!user) {
-      // Same shape of work as the known branch, so the two aren't distinguishable
-      // even if the floor below were removed. No email is sent for an address
-      // that has no account.
+      // Not shape-matched to the known branch — that one does a DB update and no
+      // bcrypt at all. This is only a CPU-time pad so an unknown address isn't
+      // near-instant should the floor below ever be removed; the floor, not this,
+      // is what actually equalises the two branches. No email is sent for an
+      // address that has no account.
       await bcrypt.hash(token, SALT_ROUNDS);
       return;
     }
@@ -184,12 +188,21 @@ export async function requestPasswordReset(email: string): Promise<void> {
       },
     });
 
-    // sendPasswordResetEmail never throws, and a delivery failure must not
-    // change the response the caller sees.
-    await sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token);
+    // Deferred to after the floor and deliberately not awaited: an SMTP round
+    // trip inside the measured response is exactly the timing signal the floor
+    // exists to remove, and a delivery failure must not change the response the
+    // caller sees. sendPasswordResetEmail swallows send errors today and returns
+    // false, but nothing awaits this promise any more — the .catch is what keeps
+    // a rejection it ever grows from becoming an unhandled one.
+    dispatchEmail = () => {
+      void sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token).catch(
+        (err) => console.error('Password reset email failed to send:', err),
+      );
+    };
   } finally {
     const remaining = FORGOT_PASSWORD_FLOOR_MS - (Date.now() - startedAt);
     if (remaining > 0) await sleep(remaining);
+    dispatchEmail?.();
   }
 }
 

@@ -18,3 +18,8 @@ graphify-out/
 
 # Editor scratch
 .cursor/
+
+# Ruflo runtime state (regenerated; never source)
+.claude-flow/
+ruvector.db
+.swarm/

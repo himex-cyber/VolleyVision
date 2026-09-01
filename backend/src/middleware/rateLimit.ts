@@ -32,18 +32,31 @@ export function createRateLimit(config: RateLimitConfig): RequestHandler {
 }
 
 /**
- * Client IP for keying. Netlify sets x-forwarded-for; Express's req.ip is the
- * socket peer, which behind the platform proxy is the same for everyone.
+ * Client IP for keying, best effort.
  *
- * ponytail: x-forwarded-for is spoofable because Express `trust proxy` is not
- * enabled, so this arm alone is weak — every limiter below pairs it with a key
- * the caller can't forge (their email, or their authenticated user id). Enable
- * trust proxy if the IP arm ever needs to stand on its own.
+ * Netlify sets x-nf-client-connection-ip to the connecting address, so prefer
+ * it. Falling back to x-forwarded-for, take the RIGHT-most entry, not the
+ * left-most: proxies append as the request travels, so the left-most value is
+ * whatever the caller wrote and the right-most is what the nearest proxy
+ * observed. Reading the left-most made this key fully caller-chosen.
+ *
+ * ponytail: we cannot prove the platform overwrites either header rather than
+ * passing a forged one through, so treat the IP arm as best-effort. Two things
+ * make that acceptable: every limiter below pairs it with a key the caller
+ * can't forge (their email, or their authenticated user id), and RateLimiter
+ * caps its key count, so a forged-IP flood can't grow the map without bound.
+ * Enable Express `trust proxy` with a known hop count if the IP arm ever needs
+ * to stand on its own.
  */
 function clientIp(req: Request): string {
+  const nf = req.headers['x-nf-client-connection-ip'];
+  const direct = Array.isArray(nf) ? nf[0] : nf;
+  if (direct) return direct.trim();
+
   const forwarded = req.headers['x-forwarded-for'];
-  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0];
-  return (first ?? req.ip ?? 'unknown').trim();
+  const chain = Array.isArray(forwarded) ? forwarded.join(',') : forwarded;
+  const nearest = chain?.split(',').pop();
+  return (nearest ?? req.ip ?? 'unknown').trim();
 }
 
 // ─── Instances ────────────────────────────────────────────────────────────────
@@ -63,10 +76,17 @@ export const chatPostRateLimit = createRateLimit({
 /**
  * Forgot-password — unauthenticated and it sends mail, so it's both an
  * email-bombing vector and the natural place to hammer for account enumeration.
- * Keyed on IP *and* the normalized email so neither rotating the address nor
- * (where the platform header is trustworthy) rotating the source buys more
- * attempts. Tokens trickle back continuously — one every 3 minutes — rather
- * than the caller being hard-blocked for the full window.
+ *
+ * Three arms. Per-email stops one address being flooded. Per-IP raises the cost
+ * of hammering from one source. Neither bounds TOTAL outbound mail, because a
+ * caller who rotates both the address and a forged IP header gets a fresh
+ * bucket every time — so a global arm caps how much reset mail this deployment
+ * will send in a window, whatever the caller varies.
+ *
+ * ponytail: the global arm is a blunt instrument — once tripped, legitimate
+ * resets queue behind the abuse. 60 per 15 minutes sits far above real volume
+ * for a club-sized user base and far below a useful mail bomb. Make it
+ * per-tenant if that stops being true.
  */
 export const forgotPasswordRateLimit = createRateLimit({
   windowMs: 15 * 60 * 1000,
@@ -78,6 +98,19 @@ export const forgotPasswordRateLimit = createRateLimit({
     return keys;
   },
   message: 'Too many password reset requests. Wait a few minutes and try again.',
+});
+
+/**
+ * The global cap on outbound reset mail, mounted alongside the per-IP/per-email
+ * limiter above. Separate instance because it needs its own budget: a single
+ * fixed key in the same bucket map would be drained by the same `max` as an
+ * individual caller.
+ */
+export const forgotPasswordGlobalRateLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyFn: () => 'forgot:global',
+  message: 'Too many password reset requests right now. Try again shortly.',
 });
 
 /**

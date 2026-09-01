@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { beforeCursorWhere, clampPageSize } from '../lib/chat';
+import { resolveUploadContentType } from '../lib/fileSignature';
 import { isEnumValue, parseRequiredText, parseSeverity, parseType } from '../lib/feedbackValidation';
 import {
   MAX_ATTACHMENTS_PER_FEEDBACK,
@@ -91,9 +92,13 @@ export async function createFeedback(input: CreateFeedbackInput) {
 
   // Reject the whole batch up front so one bad file can't strand siblings
   // that were already uploaded.
+  // contentType is verified against the file's bytes here so a byte/type
+  // mismatch also rejects the batch up front. uploadAttachment re-derives it —
+  // it stays the choke point that decides what Storage is actually told.
   const prepared = input.files.map((file) => ({
     file,
     kind: assertAcceptable(file),
+    contentType: resolveUploadContentType(file.mimetype, file.buffer),
   })).map((p) => ({
     ...p,
     dims: p.kind === AttachmentKind.IMAGE ? imageDimensions(p.file.buffer) : null,
@@ -104,7 +109,7 @@ export async function createFeedback(input: CreateFeedbackInput) {
   const uploaded: { p: (typeof prepared)[number]; storagePath: string }[] = [];
   try {
     for (const p of prepared) {
-      const key = buildFeedbackObjectKey({ feedbackId, originalName: p.file.originalname });
+      const key = buildFeedbackObjectKey({ feedbackId, originalName: p.file.originalname, contentType: p.contentType });
       await uploadAttachment({ key, buffer: p.file.buffer, mimeType: p.file.mimetype });
       uploaded.push({ p, storagePath: key });
     }
