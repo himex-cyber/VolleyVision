@@ -57,7 +57,7 @@ export default function CoachDashboardPage() {
   if (!primaryTeam) {
     return (
       <div className="space-y-5">
-        <h1 className="font-display font-bold text-2xl text-grey-900">Welcome back, {user?.firstName}</h1>
+        <h1 className="font-display font-bold text-2xl text-grey-900">Welcome back, Coach {user?.firstName}</h1>
         <div className="card p-12 text-center space-y-3">
           <p className="text-grey-900 font-medium">No teams yet</p>
           <p className="text-grey-600 text-sm">Create a team to unlock your coaching dashboard.</p>
@@ -104,7 +104,7 @@ export default function CoachDashboardPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-navy-300">
               {primaryTeam.name} · Season {primaryTeam.season}
             </p>
-            <h1 className="font-display font-bold text-[30px] leading-tight mt-2">Welcome back, {user?.firstName}</h1>
+            <h1 className="font-display font-bold text-[30px] leading-tight mt-2">Welcome back, Coach {user?.firstName}</h1>
             {summary && <p className="text-[13.5px] text-navy-100 mt-2 max-w-sm leading-relaxed">{summary}</p>}
             <div className="flex flex-wrap gap-2.5 mt-4">
               <Link

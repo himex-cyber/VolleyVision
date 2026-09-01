@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,37 +9,43 @@ import { ViewModeProvider } from './context/ViewModeContext';
 import { features } from './config/features';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import RedeemInvitationPage from './pages/RedeemInvitationPage';
-import InvitationsPage from './pages/InvitationsPage';
-import DashboardPage from './pages/DashboardPage';
-import ProfilePage from './pages/ProfilePage';
-import PlayerPortalPage from './pages/PlayerPortalPage';
-import CoachDashboardPage from './pages/CoachDashboardPage';
-import TeamsPage from './pages/TeamsPage';
-import TeamDetailPage from './pages/TeamDetailPage';
-import MatchesPage from './pages/MatchesPage';
-import TrackingPage from './pages/TrackingPage';
-import MatchDashboardPage from './pages/MatchDashboardPage';
-import MatchEventsPage from './pages/MatchEventsPage';
-import MatchWatchPage from './pages/MatchWatchPage';
-import TeamDashboardPage from './pages/TeamDashboardPage';
-import PlayersDashboardPage from './pages/PlayersDashboardPage';
-import OnboardingCoachPage from './pages/OnboardingCoachPage';
-import OnboardingPlayerPage from './pages/OnboardingPlayerPage';
-import LeagueHubPage from './pages/LeagueHubPage';
-import LeagueSeasonPage from './pages/LeagueSeasonPage';
-import LeagueSeasonStandingsPage from './pages/LeagueSeasonStandingsPage';
-import FixturesPage from './pages/FixturesPage';
-import ResultsPage from './pages/ResultsPage';
-import LeagueTeamProfilePage from './pages/LeagueTeamProfilePage';
-import LeagueSeasonRankingsPage from './pages/LeagueSeasonRankingsPage';
-import MatchCentrePage from './pages/MatchCentrePage';
-import TeamChatPage from './pages/TeamChatPage';
-import FeedbackPage from './pages/FeedbackPage';
+import PageLoadingFallback from './components/ui/PageLoadingFallback';
+
+// Pages are lazy-loaded so a visitor downloads only the route they landed on
+// rather than all 31 screens up front. Layout / RequireAuth / the providers
+// above stay eagerly imported — they're small and needed on every route, so
+// splitting them would only add a request waterfall.
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const RedeemInvitationPage = lazy(() => import('./pages/RedeemInvitationPage'));
+const InvitationsPage = lazy(() => import('./pages/InvitationsPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const PlayerPortalPage = lazy(() => import('./pages/PlayerPortalPage'));
+const CoachDashboardPage = lazy(() => import('./pages/CoachDashboardPage'));
+const TeamsPage = lazy(() => import('./pages/TeamsPage'));
+const TeamDetailPage = lazy(() => import('./pages/TeamDetailPage'));
+const MatchesPage = lazy(() => import('./pages/MatchesPage'));
+const TrackingPage = lazy(() => import('./pages/TrackingPage'));
+const MatchDashboardPage = lazy(() => import('./pages/MatchDashboardPage'));
+const MatchEventsPage = lazy(() => import('./pages/MatchEventsPage'));
+const MatchWatchPage = lazy(() => import('./pages/MatchWatchPage'));
+const TeamDashboardPage = lazy(() => import('./pages/TeamDashboardPage'));
+const PlayersDashboardPage = lazy(() => import('./pages/PlayersDashboardPage'));
+const OnboardingCoachPage = lazy(() => import('./pages/OnboardingCoachPage'));
+const OnboardingPlayerPage = lazy(() => import('./pages/OnboardingPlayerPage'));
+const LeagueHubPage = lazy(() => import('./pages/LeagueHubPage'));
+const LeagueSeasonPage = lazy(() => import('./pages/LeagueSeasonPage'));
+const LeagueSeasonStandingsPage = lazy(() => import('./pages/LeagueSeasonStandingsPage'));
+const FixturesPage = lazy(() => import('./pages/FixturesPage'));
+const ResultsPage = lazy(() => import('./pages/ResultsPage'));
+const LeagueTeamProfilePage = lazy(() => import('./pages/LeagueTeamProfilePage'));
+const LeagueSeasonRankingsPage = lazy(() => import('./pages/LeagueSeasonRankingsPage'));
+const MatchCentrePage = lazy(() => import('./pages/MatchCentrePage'));
+const TeamChatPage = lazy(() => import('./pages/TeamChatPage'));
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 
 // Backward-compat redirect: live tracking moved under the shared match shell at
 // /matches/:matchId/track. Old bookmarks to /track/:matchId land here.
@@ -62,6 +68,11 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ViewModeProvider>
+        {/* Outer boundary covers the standalone routes (auth, onboarding) that
+            render outside Layout. Routes nested under Layout suspend against
+            Layout's own inner boundary instead, so the nav chrome stays put
+            while a page chunk loads. */}
+        <Suspense fallback={<PageLoadingFallback />}>
         <Routes>
           {/* Auth pages — standalone, no Layout chrome */}
           <Route path="/login" element={<LoginPage />} />
@@ -122,6 +133,7 @@ function App() {
             </Route>
           </Route>
         </Routes>
+        </Suspense>
         </ViewModeProvider>
       </AuthProvider>
     </BrowserRouter>

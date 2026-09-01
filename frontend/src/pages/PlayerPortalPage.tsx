@@ -25,6 +25,14 @@ function won(match: MatchSummaryItem) {
   return match.homeSetsWon > match.awaySetsWon;
 }
 
+function WelcomeBanner({ firstName }: { firstName?: string }) {
+  return (
+    <div className="relative overflow-hidden rounded-[20px] bg-navy-700 text-white p-6 sm:p-7">
+      <h1 className="font-display font-bold text-[30px] leading-tight">Welcome back, {firstName}</h1>
+    </div>
+  );
+}
+
 // ─────────────────────────────── Row A ───────────────────────────────
 
 function ProfileHero({ player, teamNames, matchesRecorded }: {
@@ -364,6 +372,8 @@ export default function PlayerPortalPage() {
 
   return (
     <div className="space-y-5">
+      <WelcomeBanner firstName={user?.firstName} />
+
       {/* Row A — profile + kill efficiency */}
       {primaryPlayer ? (
         <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
@@ -378,10 +388,7 @@ export default function PlayerPortalPage() {
         </div>
       ) : (
         <div className="card p-6">
-          <h1 className="font-display font-bold text-xl text-grey-900">
-            Welcome, {user?.firstName}
-          </h1>
-          <p className="text-grey-600 text-sm mt-1">
+          <p className="text-grey-600 text-sm">
             Link a player record below to see your career statistics and development.
           </p>
         </div>

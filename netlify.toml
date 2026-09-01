@@ -1,0 +1,65 @@
+# VolleyVision — Netlify build & deploy config
+#
+# Frontend (Vite/React SPA) is published as static assets. Backend (Express +
+# Prisma REST API) runs as a single Netlify Function (backend/netlify-functions/api.js)
+# via serverless-http, so the whole existing API ships unchanged instead of being
+# rewritten as many small functions.
+#
+# DATABASE_URL / DIRECT_URL / JWT_SECRET / etc. are set as Netlify environment
+# variables (Project configuration > Environment variables), not here.
+#
+# No `prisma migrate deploy` in the build: deploys run via `netlify deploy
+# --prod --build` (local build), and the CLI injects the site's env vars over
+# the shell env — but secret vars (DATABASE_URL/DIRECT_URL) come back masked,
+# so migrate would fail with P1013. Run migrations from backend/ first
+# (`npx prisma migrate deploy`, uses backend/.env) whenever the schema changes.
+
+[build]
+  # --include=dev: NODE_ENV=production is set site-wide (for the function at
+  # runtime), which would otherwise make npm skip devDependencies — where
+  # typescript/@types/vite live — and break both builds.
+  command = "cd backend && npm install --include=dev && npx prisma generate && npm run build && cd ../frontend && npm install --include=dev && npm run build"
+  publish = "frontend/dist"
+
+[build.environment]
+  # Pins BOTH the build image's Node version AND the Functions runtime Node
+  # version. The Prisma binaryTarget in backend/prisma/schema.prisma (rhel-
+  # openssl-3.0.x) assumes the Amazon Linux 2023 Lambda runtime that ships
+  # with Node 20+ — bumping or dropping this changes which OpenSSL the
+  # deployed query engine needs to match.
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "backend/netlify-functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["@prisma/client", ".prisma/client"]
+  included_files = ["backend/node_modules/.prisma/client/**"]
+
+# Route the API through the same domain as the frontend so the SPA's default
+# same-origin "/api/v1" base URL (see frontend/.env.example) just works with no
+# VITE_API_URL needed.
+[[redirects]]
+  from = "/api/v1/*"
+  to = "/.netlify/functions/api/api/v1/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/api/health"
+  status = 200
+
+# SPA fallback so client-side routing (react-router-dom) works on refresh/deep links.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Vite fingerprints everything in dist/assets (index-B_9ZZk-T.js etc.), so a
+# new deploy always produces new filenames — these can be cached forever.
+# Deliberately NOT applied to /index.html: that's the unhashed entry point and
+# must be revalidated on every load, or clients would keep booting the old
+# build. Netlify's default (must-revalidate) already handles it correctly.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
