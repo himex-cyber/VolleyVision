@@ -107,12 +107,14 @@ export function requireChannelPermission(permission: Permission) {
 // ─── Match-context middleware ─────────────────────────────────────────────────
 
 /**
- * Looks up the match by `req.params.id`, resolves teamId, then checks permission.
+ * Looks up the match by `req.params[paramName]` (default "id"), resolves teamId,
+ * then checks permission. The param name is configurable for the same reason
+ * requireTeamPermission's is — nested routes carry the id as `:matchId`.
  */
-export function requireMatchPermission(permission: Permission) {
+export function requireMatchPermission(permission: Permission, paramName = 'id') {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-    const matchId = req.params.id;
+    const matchId = req.params[paramName];
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
     const allowed = await hasTeamPermission(req.user.userId, match.teamId, permission);

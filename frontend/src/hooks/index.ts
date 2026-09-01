@@ -462,19 +462,145 @@ export function useOpponentScoutingReport(matchId: string) {
 }
 
 // ─── Videos (Phase 7) ─────────────────────────────────────────────────────────
-export function useMatchVideos(matchId: string) {
+export function useMatchVideos(matchId: string, includePending = false) {
   return useQuery({
-    queryKey: ['videos', 'match', matchId],
-    queryFn: () => videosApi.listByMatch(matchId),
+    queryKey: ['videos', 'match', matchId, includePending],
+    queryFn: () => videosApi.listByMatch(matchId, includePending),
     enabled: !!matchId,
   });
 }
 
+/**
+ * Three-step upload (intent → direct-to-storage PUT → confirm). `onProgress`
+ * reports the middle step, which is where all the time goes.
+ *
+ * Invalidates on settle, not just on success: a failed upload still leaves a
+ * row (FAILED), and staff viewing pending uploads should see it.
+ */
 export function useUploadVideo(matchId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => videosApi.upload(matchId, file),
+    mutationFn: ({ file, onProgress, signal }: { file: File; onProgress?: (p: number) => void; signal?: AbortSignal }) =>
+      videosApi.upload(matchId, file, { onProgress, signal }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] }),
+  });
+}
+
+/**
+ * Resume a PENDING upload. The browser no longer holds the original File after
+ * a reload, so the user re-selects it and TUS matches it by fingerprint and
+ * continues from the committed offset rather than starting over.
+ */
+export function useResumeUpload(matchId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ videoId, file, onProgress, signal }: { videoId: string; file: File; onProgress?: (p: number) => void; signal?: AbortSignal }) =>
+      videosApi.resumeUpload(videoId, file, { onProgress, signal }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] }),
+  });
+}
+
+// ─── YouTube source, calibration, clips ───────────────────────────────────────
+
+export function useLinkYouTubeVideo(matchId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => videosApi.linkYouTube(matchId, url),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] }),
+  });
+}
+
+/**
+ * Sync a video to match time. Invalidates clips too: recalibrating makes every
+ * GENERATED clip's range stale, so the list the coach is looking at is no
+ * longer trustworthy.
+ */
+export function useCalibrateVideo(matchId: string, videoId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (videoSeconds: number) => videosApi.calibrate(videoId, videoSeconds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] });
+      qc.invalidateQueries({ queryKey: ['clips', videoId] });
+    },
+  });
+}
+
+/** Fire-and-forget: the player learns the duration once, and we persist it once. */
+export function useSetVideoDuration(matchId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ videoId, durationSeconds }: { videoId: string; durationSeconds: number }) =>
+      videosApi.setDuration(videoId, durationSeconds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] }),
+  });
+}
+
+export function useVideoClips(videoId: string | null) {
+  return useQuery({
+    queryKey: ['clips', videoId],
+    queryFn: () => videosApi.listClips(videoId!),
+    enabled: !!videoId,
+  });
+}
+
+export function useGenerateClips(videoId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (filter?: { eventType?: string; playerId?: string; setNumber?: number }) =>
+      videosApi.generateClips(videoId, filter),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clips', videoId] }),
+  });
+}
+
+export function useClearGeneratedClips(videoId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => videosApi.clearGeneratedClips(videoId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clips', videoId] }),
+  });
+}
+
+export function useCreateClip(videoId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { startSeconds: number; endSeconds: number; label?: string }) =>
+      videosApi.createClip(videoId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clips', videoId] }),
+  });
+}
+
+export function useUpdateClip(videoId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clipId, ...data }: { clipId: string; startSeconds?: number; endSeconds?: number; label?: string }) =>
+      videosApi.updateClip(clipId, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clips', videoId] }),
+  });
+}
+
+export function useDeleteClip(videoId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (clipId: string) => videosApi.deleteClip(clipId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clips', videoId] }),
+  });
+}
+
+/**
+ * Signed playback source, fetched per video rather than derived from a path.
+ * The URL expires, so it is not cached beyond its own TTL and is never written
+ * into a list payload.
+ */
+export function useVideoPlayback(videoId: string | null) {
+  return useQuery({
+    queryKey: ['videos', 'playback', videoId],
+    queryFn: () => videosApi.getPlaybackSource(videoId!),
+    enabled: !!videoId,
+    // A signed URL is a wasting asset — don't serve a stale one from cache.
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
   });
 }
 
@@ -483,31 +609,6 @@ export function useDeleteVideo(matchId: string) {
   return useMutation({
     mutationFn: (videoId: string) => videosApi.delete(videoId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] }),
-  });
-}
-
-export function useVideoTimestamps(videoId: string) {
-  return useQuery({
-    queryKey: ['timestamps', videoId],
-    queryFn: () => videosApi.listTimestamps(videoId),
-    enabled: !!videoId,
-  });
-}
-
-export function useCreateTimestamp(videoId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { timestampSeconds: number; label: string; eventId?: string }) =>
-      videosApi.createTimestamp(videoId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['timestamps', videoId] }),
-  });
-}
-
-export function useDeleteTimestamp(videoId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (timestampId: string) => videosApi.deleteTimestamp(timestampId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['timestamps', videoId] }),
   });
 }
 

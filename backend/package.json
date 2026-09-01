@@ -10,6 +10,7 @@
     "test": "node scripts/run-tests.js",
     "check:cycles": "node scripts/check-import-cycles.js",
     "test:analytics": "ts-node src/lib/analytics.test.ts",
+    "check:video": "ts-node scripts/check-video-config.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

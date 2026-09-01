@@ -1,6 +1,7 @@
 import axios from 'axios';
+import * as tus from 'tus-js-client';
 import { getToken } from './tokenStorage';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, HeatmapData, ZoneCounts, MomentumData, RotationData, AdvancedMetrics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, UserSearchResult, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, DetailedHeatmapData, Recommendation, PlayerDevelopmentReport, SeasonIntelligenceReport, TrainingRecommendation, AssistantAnswer, PlayerTeamsResponse, Video, VideoTimestamp, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, HeatmapData, ZoneCounts, MomentumData, RotationData, AdvancedMetrics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, UserSearchResult, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, DetailedHeatmapData, Recommendation, PlayerDevelopmentReport, SeasonIntelligenceReport, TrainingRecommendation, AssistantAnswer, PlayerTeamsResponse, Video, VideoUploadIntent, VideoUploadTarget, VideoPlaybackSource, VideoClip, CalibrationResult, ClipGenerationResult, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -219,24 +220,229 @@ export const analyticsApi = {
 };
 
 // ─── Videos (Phase 7) ─────────────────────────────────────────────────────────
-export const videosApi = {
-  listByMatch: (matchId: string) =>
-    api.get<Video[]>(`/matches/${matchId}/videos`).then((r) => r.data),
-  upload: (matchId: string, file: File) => {
-    const fd = new FormData();
-    fd.append('video', file);
-    return api.post<Video>(`/matches/${matchId}/videos`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then((r) => r.data);
-  },
-  delete: (videoId: string) => api.delete(`/videos/${videoId}`),
-  fileUrl: (videoId: string) => `/api/v1/videos/${videoId}/file`,
+const UPLOAD_FAILED_MESSAGE = "Upload didn't finish. Check your connection and try again.";
 
-  listTimestamps: (videoId: string) =>
-    api.get<VideoTimestamp[]>(`/videos/${videoId}/timestamps`).then((r) => r.data),
-  createTimestamp: (videoId: string, data: { timestampSeconds: number; label: string; eventId?: string }) =>
-    api.post<VideoTimestamp>(`/videos/${videoId}/timestamps`, data).then((r) => r.data),
-  deleteTimestamp: (timestampId: string) => api.delete(`/timestamps/${timestampId}`),
+/** Absolute endpoints go to a vendor; relative ones are our own proxy. */
+function resolveUploadEndpoint(endpoint: string): string {
+  return /^https?:\/\//i.test(endpoint) ? endpoint : `${api.defaults.baseURL ?? ''}${endpoint}`;
+}
+
+/**
+ * PUT the file straight to the storage vendor. Deliberately raw XHR, not the
+ * axios instance: this request leaves our origin, so it must NOT carry the
+ * Authorization interceptor's JWT — the presigned URL is its own credential.
+ * XHR (not fetch) because only XHR reports upload progress, which is the whole
+ * UX win of uploading direct.
+ */
+function uploadToPresignedUrl(
+  upload: Extract<VideoUploadTarget, { protocol: 'http' }>,
+  file: File,
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(upload.method, upload.uploadUrl, true);
+    for (const [k, v] of Object.entries(upload.headers ?? {})) xhr.setRequestHeader(k, v);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`Storage rejected the upload (${xhr.status}).`));
+    xhr.onerror = () => reject(new Error(UPLOAD_FAILED_MESSAGE));
+    xhr.onabort = () => reject(new Error('Upload cancelled.'));
+    signal?.addEventListener('abort', () => xhr.abort());
+
+    // Providers that need multipart (S3 POST policies) send `fields`; the
+    // PUT providers we have today take the raw file body.
+    if (upload.fields) {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(upload.fields)) fd.append(k, v);
+      fd.append('file', file);
+      xhr.send(fd);
+    } else {
+      xhr.send(file);
+    }
+  });
+}
+
+/**
+ * Resumable upload (tus.io). Supabase's single-request upload path is only
+ * documented as reliable to 6 MB; TUS is what makes a match recording work at
+ * all, and it means a dropped connection resumes at the last committed offset
+ * instead of restarting from zero.
+ *
+ * When `endpoint` is relative it points at this app's own TUS proxy, which
+ * exists so the storage credential never reaches the browser. That proxy
+ * authorizes on our JWT, so it is attached here — tus-js-client issues raw XHRs
+ * and does not go through the axios interceptor.
+ */
+async function uploadViaTus(
+  upload: Extract<VideoUploadTarget, { protocol: 'tus' }>,
+  file: File,
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = getToken();
+  const tusUpload = new tus.Upload(file, {
+    endpoint: resolveUploadEndpoint(upload.endpoint),
+    chunkSize: upload.chunkSizeBytes,
+    metadata: upload.metadata,
+    headers: { ...upload.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    // Persists the fingerprint so an upload interrupted by a crash, a closed
+    // tab, or a lost connection can be picked up later instead of restarted.
+    storeFingerprintForResuming: true,
+    removeFingerprintOnSuccess: true,
+    // Keyed on the object this upload was issued for, NOT on tus-js-client's
+    // default (file name/type/size/mtime + endpoint). Every upload goes to the
+    // same proxy endpoint, so the default fingerprint collides whenever the same
+    // file is uploaded twice — and findPreviousUploads below would then resume
+    // the new video row into the PREVIOUS row's object. Scoping to objectName
+    // makes a fresh intent start at zero and a genuine resume find its own
+    // offset, without either path needing to know which one it is.
+    fingerprint: async () => `vv-video-${upload.metadata.objectName}`,
+    retryDelays: [0, 3000, 5000, 10000, 20000],
+    onProgress: (bytesSent, bytesTotal) => {
+      if (onProgress && bytesTotal > 0) onProgress(Math.round((bytesSent / bytesTotal) * 100));
+    },
+  });
+
+  // Resume rather than restart when this exact file was uploaded before.
+  const previous = await tusUpload.findPreviousUploads();
+  if (previous.length > 0) tusUpload.resumeFromPreviousUpload(previous[0]);
+
+  return new Promise<void>((resolve, reject) => {
+    tusUpload.options.onSuccess = () => resolve();
+    tusUpload.options.onError = (err) => reject(err);
+    signal?.addEventListener('abort', () => {
+      void tusUpload.abort();
+      reject(new Error('Upload cancelled.'));
+    });
+    tusUpload.start();
+  });
+}
+
+/**
+ * True when a TUS failure looks like an expired or rejected credential rather
+ * than a network problem. Supabase's resumable token has a fixed two-hour
+ * server-side life the API cannot extend, so a long upload on a slow line can
+ * genuinely outlive it — that case is recoverable by re-crediting, and only
+ * that case is worth an automatic retry.
+ */
+function isUploadCredentialError(err: unknown): boolean {
+  const status = (err as { originalResponse?: { getStatus?: () => number } })?.originalResponse?.getStatus?.();
+  return status === 401 || status === 403 || status === 410;
+}
+
+export const videosApi = {
+  // includePending surfaces in-flight and failed uploads; the server ignores it
+  // for anyone without TRACK_MATCH.
+  listByMatch: (matchId: string, includePending = false) =>
+    api
+      .get<Video[]>(`/matches/${matchId}/videos`, { params: includePending ? { includePending: true } : undefined })
+      .then((r) => r.data),
+
+  createUploadIntent: (matchId: string, meta: { filename: string; contentType: string; sizeBytes: number }) =>
+    api.post<VideoUploadIntent>(`/matches/${matchId}/videos/upload-intent`, meta).then((r) => r.data),
+
+  completeUpload: (videoId: string) =>
+    api.post<Video>(`/videos/${videoId}/complete`).then((r) => r.data),
+
+  /** Signed URL + kind. Re-fetch when it expires rather than caching the URL. */
+  getPlaybackSource: (videoId: string) =>
+    api.get<VideoPlaybackSource>(`/videos/${videoId}/playback`).then((r) => r.data),
+
+  /** Fresh upload credential for a video still PENDING, reusing the same object. */
+  refreshUpload: (videoId: string) =>
+    api.post<VideoUploadIntent>(`/videos/${videoId}/refresh-upload`).then((r) => r.data),
+
+  /**
+   * The whole upload: intent → bytes direct to storage → server-side
+   * confirmation. The middle step is the only one carrying the bytes.
+   *
+   * On a credential failure it re-credentials once via refresh-upload and
+   * resumes from the last offset. Exactly once — a loop here would hammer the
+   * API while looking, to the user, like nothing is happening.
+   */
+  upload: async (
+    matchId: string,
+    file: File,
+    opts?: { onProgress?: (percent: number) => void; signal?: AbortSignal },
+  ): Promise<Video> => {
+    const { videoId, upload } = await videosApi.createUploadIntent(matchId, {
+      filename: file.name,
+      contentType: file.type,
+      sizeBytes: file.size,
+    });
+
+    try {
+      await videosApi.sendBytes(upload, file, opts);
+    } catch (err) {
+      if (!isUploadCredentialError(err)) throw err;
+      const refreshed = await videosApi.refreshUpload(videoId);
+      await videosApi.sendBytes(refreshed.upload, file, opts);
+    }
+
+    return videosApi.completeUpload(videoId);
+  },
+
+  /**
+   * Resume a PENDING upload the user started earlier — after a reload the File
+   * object is gone, so they re-select it and TUS matches it by fingerprint and
+   * continues from the committed offset.
+   */
+  resumeUpload: async (
+    videoId: string,
+    file: File,
+    opts?: { onProgress?: (percent: number) => void; signal?: AbortSignal },
+  ): Promise<Video> => {
+    const { upload } = await videosApi.refreshUpload(videoId);
+    await videosApi.sendBytes(upload, file, opts);
+    return videosApi.completeUpload(videoId);
+  },
+
+  /** Protocol dispatch. Branches on what the server said, never on vendor name. */
+  sendBytes: (
+    upload: VideoUploadTarget,
+    file: File,
+    opts?: { onProgress?: (percent: number) => void; signal?: AbortSignal },
+  ): Promise<void> =>
+    upload.protocol === 'tus'
+      ? uploadViaTus(upload, file, opts?.onProgress, opts?.signal)
+      : uploadToPresignedUrl(upload, file, opts?.onProgress, opts?.signal),
+
+  delete: (videoId: string) => api.delete(`/videos/${videoId}`),
+
+  // ── YouTube source ─────────────────────────────────────────────────────────
+  // No presign, no upload, no bytes. The coach pastes a link; YouTube keeps the
+  // file and we keep the id.
+  linkYouTube: (matchId: string, url: string) =>
+    api.post<Video>(`/matches/${matchId}/videos/youtube`, { url }).then((r) => r.data),
+
+  /** Anchor video time 0:00 by marking the first tracked event's moment. */
+  calibrate: (videoId: string, videoSeconds: number) =>
+    api.post<CalibrationResult>(`/videos/${videoId}/calibrate`, { videoSeconds }).then((r) => r.data),
+
+  /** Reported once by the player — the IFrame API returns 0 until metadata loads. */
+  setDuration: (videoId: string, durationSeconds: number) =>
+    api.patch<Video>(`/videos/${videoId}/duration`, { durationSeconds }).then((r) => r.data),
+
+  // ── Clips (time ranges, never files) ───────────────────────────────────────
+  listClips: (videoId: string) =>
+    api.get<VideoClip[]>(`/videos/${videoId}/clips`).then((r) => r.data),
+  createClip: (videoId: string, data: { startSeconds: number; endSeconds: number; label?: string }) =>
+    api.post<VideoClip>(`/videos/${videoId}/clips`, data).then((r) => r.data),
+  generateClips: (videoId: string, filter?: { eventType?: string; playerId?: string; setNumber?: number }) =>
+    api.post<ClipGenerationResult>(`/videos/${videoId}/clips/generate`, filter ?? {}).then((r) => r.data),
+  /** After recalibration: GENERATED ranges are stale, MANUAL ones are not. */
+  clearGeneratedClips: (videoId: string) =>
+    api.delete<{ deleted: number }>(`/videos/${videoId}/clips/generated`).then((r) => r.data),
+  updateClip: (clipId: string, data: { startSeconds?: number; endSeconds?: number; label?: string }) =>
+    api.patch<VideoClip>(`/clips/${clipId}`, data).then((r) => r.data),
+  deleteClip: (clipId: string) => api.delete(`/clips/${clipId}`),
 };
 
 // ─── Team Chat (foundation) ───────────────────────────────────────────────────

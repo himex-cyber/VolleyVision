@@ -11,10 +11,13 @@
 
 generator client {
   provider      = "prisma-client-js"
-  // Netlify Functions run on Amazon Linux; "native" covers local/dev, the
-  // rhel targets cover the Lambda runtime so the query engine binary that
-  // ships with the deployed function actually works in production.
-  binaryTargets = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x"]
+  // "native" covers local/dev; the rhel target is the query engine binary that
+  // ships inside the deployed Netlify Function. Netlify's Node 20+ Lambda
+  // runtime is Amazon Linux 2023, which has OpenSSL 3.x — so 3.0.x is the only
+  // target that runtime can load. rhel-openssl-1.0.x was for the older Amazon
+  // Linux 2 (Node 18) runtime and is dropped: it was dead weight in a ~74 MB
+  // bundle. Revisit if NODE_VERSION (netlify.toml) ever drops below 20.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -545,36 +548,123 @@ model ScoreAdjustment {
   @@map("score_adjustments")
 }
 
+// Lifecycle of a presigned direct-to-storage upload. The API issues an upload
+// URL (PENDING) but never sees the bytes, so only a server-side head() against
+// the provider can promote a row to READY.
+enum VideoStatus {
+  PENDING // presigned URL issued, bytes not yet confirmed
+  READY   // upload confirmed via provider.head()
+  FAILED  // object missing, oversize, or rejected by the provider
+}
+
+// Where the footage actually lives. The two sources share a row shape but
+// almost nothing else: an upload has bytes we are responsible for, a YouTube
+// link has none. Fields belonging to only one source are nullable.
+enum VideoSource {
+  UPLOAD  // presigned direct-to-storage (built, dormant — private-storage option)
+  YOUTUBE // coach-provided link, embedded. YouTube owns storage, transcoding, CDN.
+}
+
 // Phase 7 — Video upload & timestamp tagging
 model Video {
   id               String           @id @default(cuid())
   matchId          String           @map("match_id")
-  filename         String
-  filePath         String           @map("file_path")
-  mimeType         String           @map("mime_type")
+  source           VideoSource      @default(UPLOAD) // pre-existing rows are all uploads
+  // ── Upload-only ─────────────────────────────────────────────────────────────
+  // Nullable because a YouTube record has neither: there is no file and no
+  // content type, only a link.
+  filename         String?
+  // Legacy on-disk path from the multer era. Nullable, never written by new
+  // uploads, and unreadable in practice — those bytes lived on an ephemeral
+  // function container. Kept so old rows still list; playback 410s.
+  filePath         String?          @map("file_path")
+  mimeType         String?          @map("mime_type")
+  // Which adapter wrote the object, so a later vendor switch can tell its own
+  // keys from a previous provider's instead of 404ing against the wrong bucket.
+  storageProvider  String?          @map("storage_provider")
+  storageKey       String?          @map("storage_key")
+  status           VideoStatus      @default(PENDING)
+  // Client-declared at intent, overwritten with the provider's real value on
+  // completion — the declared size is never trusted.
+  sizeBytes        Int?             @map("size_bytes")
+
+  // ── YouTube-only ────────────────────────────────────────────────────────────
+  youtubeVideoId   String?          @map("youtube_video_id")
+
+  // ── Both sources ────────────────────────────────────────────────────────────
+  // YouTube title at link time, or a coach-supplied label. Not kept in sync —
+  // a rename on YouTube does not propagate, which is fine for a display label.
+  title            String?
+  // Length of the footage. Reported by the client once the player knows it
+  // (the IFrame API returns 0 until metadata loads); enables end-of-video
+  // clamping when generating clips.
+  durationSeconds  Int?             @map("duration_seconds")
+
+  // Real-world instant that video time 0:00 corresponds to. Null until
+  // calibrated. Every Event carries an absolute recordedAt, so this single
+  // anchor maps any event to a point in the video:
+  //   videoSeconds = (event.recordedAt - recordingStartedAt) / 1000
+  // Anchoring on a real event rather than wall-clock assumptions is deliberate:
+  // it absorbs any clock skew on the tracking device, because both sides of the
+  // subtraction come from the same clock.
+  recordingStartedAt DateTime?      @db.Timestamptz(3) @map("recording_started_at")
+
   uploadedAt       DateTime         @default(now()) @map("uploaded_at")
+  // Intentionally a plain column, no User relation — audit-trail field kept
+  // denormalized to avoid cascade coupling.
   uploadedByUserId String           @map("uploaded_by_user_id")
 
   match            Match            @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  timestamps       VideoTimestamp[]
+  clips            VideoClip[]
 
   @@index([matchId])
+  // Both list paths filter on status: the default READY-only listing and the
+  // orphan sweep for stale PENDING rows.
+  @@index([matchId, status])
+  // The TUS proxy authorizes every chunk by looking the row up from the storage
+  // key in the request. A 1 GB upload is ~170 chunks, so this lookup is on a
+  // hot path even though nothing else queries by key.
+  @@index([storageKey])
   @@map("videos")
 }
 
-model VideoTimestamp {
-  id               String  @id @default(cuid())
-  videoId          String  @map("video_id")
-  timestampSeconds Int     @map("timestamp_seconds")
-  label            String
-  eventId          String? @map("event_id")
+// VideoTimestamp was retired in 20260807120000_retire_video_timestamps. It was a
+// point marker; VideoClip is a range, which is what reviewing a rally needs.
+// Existing markers were copied into 15-second MANUAL clips, not discarded.
 
-  video            Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  event            Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+// How a clip came to exist. Matters for regeneration: recalibrating a video
+// invalidates every GENERATED clip (their ranges were computed from the old
+// anchor) while MANUAL clips, which a coach dragged by eye, stay correct.
+enum ClipOrigin {
+  MANUAL    // coach marked a range by hand
+  GENERATED // derived from a tracked event via recordingStartedAt
+}
 
-  @@index([videoId])
+// A time range in a video. Never a file: YouTube playback is a cross-origin
+// iframe, so nothing can be cut, exported, or served — a clip is start/end
+// seconds the player seeks between.
+model VideoClip {
+  id              String     @id @default(cuid())
+  videoId         String     @map("video_id")
+  startSeconds    Int        @map("start_seconds")
+  endSeconds      Int        @map("end_seconds")
+  label           String
+  // Set when derived from a tracked event; null for manual clips. SetNull on
+  // delete, not Cascade — deleting the event does not un-happen the moment, so
+  // the range survives as an orphan and the coach keeps their clip.
+  eventId         String?    @map("event_id")
+  origin          ClipOrigin @default(MANUAL)
+  createdByUserId String     @map("created_by_user_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+
+  video           Video      @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  event           Event?     @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  // Clips are always listed for one video in playback order.
+  @@index([videoId, startSeconds])
+  // Generation checks "does this event already have a clip here?" per event.
   @@index([eventId])
-  @@map("video_timestamps")
+  @@map("video_clips")
 }
 
 // Event is the central fact table. Every analytics calculation in Phases 2–5
@@ -616,7 +706,7 @@ model Event {
   // the same lost-baseline problem as ScoreAdjustment.completedSet.
   completedSet Boolean @default(false) @map("completed_set")
 
-  videoTimestamps VideoTimestamp[]
+  videoClips VideoClip[]
 
   recordedAt  DateTime  @default(now()) @db.Timestamptz(3) @map("recorded_at")
 
@@ -702,6 +792,8 @@ model Message {
   // Edit + soft-delete audit trail.
   editedAt        DateTime? @map("edited_at")
   deletedAt       DateTime? @map("deleted_at")
+  // Intentionally a plain column, no User relation — audit-trail field kept
+  // denormalized to avoid cascade coupling.
   deletedByUserId String?   @map("deleted_by_user_id")  // author OR a moderator
 
   // Duplicate-send protection (slice 5). The client mints a key per composed

@@ -678,22 +678,129 @@ export interface SeasonIntelligenceReport {
 
 // ─── Phase 7 — Video upload & timestamp tagging ──────────────────────────────
 
+/**
+ * PENDING — presigned URL issued, bytes not yet confirmed by the server.
+ * READY   — upload verified against the storage provider; playable.
+ * FAILED  — the object never arrived, or came in over the size cap.
+ */
+export type VideoStatus = 'PENDING' | 'READY' | 'FAILED';
+
+/**
+ * UPLOAD  — presigned direct-to-storage; we own the bytes. Dormant.
+ * YOUTUBE — a coach-provided link, embedded. YouTube owns everything.
+ */
+export type VideoSource = 'UPLOAD' | 'YOUTUBE';
+
 export interface Video {
   id:               string;
   matchId:          string;
-  filename:         string;
-  filePath:         string;
-  mimeType:         string;
+  source:           VideoSource;
+  /** Upload-only; null on a YouTube row, which has no file. */
+  filename:         string | null;
+  /** Legacy on-disk path; null for everything uploaded since presigned storage. */
+  filePath:         string | null;
+  /** Upload-only; null on a YouTube row. */
+  mimeType:         string | null;
+  status:           VideoStatus;
+  sizeBytes:        number | null;
+  durationSeconds:  number | null;
+  /** YouTube-only. Never render this as a link — embed it. */
+  youtubeVideoId:   string | null;
+  /** YouTube title at link time, or a coach-supplied label. */
+  title:            string | null;
+  /**
+   * Real-world instant of video time 0:00. Null until the coach syncs the video
+   * to the match; without it, tracked events cannot be placed in the footage.
+   */
+  recordingStartedAt: string | null;
   uploadedAt:       string;
   uploadedByUserId: string;
 }
 
-export interface VideoTimestamp {
-  id:               string;
-  videoId:          string;
-  timestampSeconds: number;
-  label:            string;
-  eventId:          string | null;
+/** MANUAL survives recalibration; GENERATED does not — its range came from the old anchor. */
+export type ClipOrigin = 'MANUAL' | 'GENERATED';
+
+/**
+ * A time range in a video. Never a file — a YouTube embed is a cross-origin
+ * iframe, so nothing can be cut or exported. Playing a clip means seeking
+ * between two numbers.
+ */
+export interface VideoClip {
+  id:              string;
+  videoId:         string;
+  startSeconds:    number;
+  endSeconds:      number;
+  label:           string;
+  eventId:         string | null;
+  origin:          ClipOrigin;
+  createdByUserId: string;
+  createdAt:       string;
+  event?: { id: string; eventType: string; setNumber: number } | null;
+}
+
+/** Result of syncing a video to match time. */
+export interface CalibrationResult {
+  video:             { id: string; recordingStartedAt: string | null; durationSeconds: number | null };
+  matchedEvents:     number;
+  eventsOutsideVideo: number;
+}
+
+/** Result of generating clips from tracked events. */
+export interface ClipGenerationResult {
+  created:            number;
+  skippedExisting:    number;
+  eventsOutsideVideo: number;
+}
+
+/**
+ * Step 1 of the upload. `upload.uploadUrl` points at the storage vendor, not at
+ * our API — the browser PUTs the bytes there directly, because a Netlify
+ * Function caps a request payload at ~6 MB and a match video is far larger.
+ * The provider's storage key is deliberately absent; it stays server-side.
+ */
+export interface VideoUploadIntent {
+  videoId: string;
+  upload: VideoUploadTarget;
+}
+
+/**
+ * How to deliver the bytes. A discriminated union so the client branches on the
+ * protocol the server states, never on which vendor is configured.
+ */
+export type VideoUploadTarget =
+  /** One request, no resume. Small files and S3 POST-policy providers. */
+  | {
+      protocol:  'http';
+      uploadUrl: string;
+      method:    'PUT' | 'POST';
+      headers?:  Record<string, string>;
+      fields?:   Record<string, string>;
+      expiresAt: string;
+    }
+  /**
+   * Resumable and chunked (tus.io). `endpoint` may be relative, in which case
+   * it is a same-origin proxy on this API — the arrangement that keeps a
+   * server-only storage credential off the client.
+   */
+  | {
+      protocol:       'tus';
+      endpoint:       string;
+      headers:        Record<string, string>;
+      metadata:       Record<string, string>;
+      chunkSizeBytes: number;
+      expiresAt:      string;
+    };
+
+/**
+ * Where and how to play a video. `kind` is what lets an adaptive-bitrate
+ * provider (Cloudflare Stream, Mux) drop in later without reshaping the player:
+ * 'file' is a direct MP4/WebM, 'hls' is a manifest needing an HLS player.
+ */
+export interface VideoPlaybackSource {
+  url:        string;
+  kind:       'file' | 'hls';
+  expiresAt:  string;
+  posterUrl?: string;
 }
 
 // ─── Phase 7 — Multi-team player links ───────────────────────────────────────

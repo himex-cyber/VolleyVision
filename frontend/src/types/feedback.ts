@@ -29,3 +29,9 @@ export interface Feedback {
   updatedAt: string;
   user?: { firstName: string; lastName: string; email: string }; // only present on admin's listAll
 }
+
+/** Cursor-paginated response from GET /feedback/mine and GET /feedback. */
+export interface FeedbackPage {
+  items: Feedback[];
+  nextCursor: string | null;
+}
