@@ -6,5 +6,15 @@ frontend/dist/
 *.env.local
 .DS_Store
 .claude/
+.netlify/
 # Video uploads (local disk MVP — never commit actual video files)
 backend/uploads/
+
+# Vite temp config artifacts (regenerated on every dev/build run)
+frontend/vite.config.ts.timestamp-*.mjs
+
+# Generated dependency-graph output (4.9 MB, regenerated on demand)
+graphify-out/
+
+# Editor scratch
+.cursor/
