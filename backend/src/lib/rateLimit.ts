@@ -8,12 +8,17 @@
 // window has refilled to `max`, which is exactly what a freshly minted bucket
 // holds — so dropping it changes nothing a caller can observe.
 //
-// ponytail: in-memory, so each process keeps its own buckets. Correct for a
-// single process; on Netlify Functions every invocation starts with empty
-// buckets and concurrent invocations never share a budget, so the limit does
-// not actually hold in production. Upgrade to a shared store (a Postgres table
-// keyed (key, window_start) - Supabase is already there) when the deployment
-// stops being single-process.
+// ponytail: in-memory, so each process keeps its own buckets. Correct for one
+// long-lived process (local dev, `npm test`), useless on Netlify Functions,
+// where every invocation starts with empty buckets and concurrent invocations
+// never share a budget. Production therefore runs postgresRateLimit.ts, which
+// puts the same buckets in a table every invocation can see; this class stays
+// as the non-production limiter and as that one's fallback when the database
+// is unreachable.
+//
+// The bucket arithmetic itself lives in the three pure functions below, and
+// BOTH limiters call them — a second copy of the refill formula for the shared
+// store would be free to drift away from the one the tests pin.
 
 export interface RateLimitOptions {
   /** Time for an empty bucket to refill completely. */
@@ -33,9 +38,52 @@ export interface RateLimitOptions {
 
 const DEFAULT_MAX_KEYS = 10_000;
 
-interface Bucket {
+/** A bucket's token count, and the instant that count was computed. */
+export interface Bucket {
   tokens: number;
   last: number;
+}
+
+/**
+ * The bucket's state at `now`. `undefined` means "never seen", which is
+ * indistinguishable from a full bucket — the equivalence every eviction path
+ * here relies on.
+ *
+ * Idempotent: refilling to t1 and then to t2 lands on exactly the same token
+ * count as refilling straight to t2, clamp included. That is why a limiter may
+ * decline a request and write nothing at all — the refill it computed is not a
+ * lost update, just work the next reader repeats.
+ */
+export function refill(
+  bucket: Bucket | undefined,
+  now: number,
+  max: number,
+  refillPerMs: number,
+): Bucket {
+  const from = bucket ?? { tokens: max, last: now };
+  return { tokens: Math.min(max, from.tokens + (now - from.last) * refillPerMs), last: now };
+}
+
+/**
+ * The all-or-nothing verdict. A request spends one token from every dimension
+ * it is limited on, so it is admitted only when all of them can pay — and when
+ * one cannot, none are debited. That is what stops a drained shared arm (an IP,
+ * or the global forgot-password cap) from also draining the budget of the
+ * specific email it happened to arrive with.
+ */
+export function allowsAll(buckets: readonly Bucket[]): boolean {
+  return buckets.every((bucket) => bucket.tokens >= 1);
+}
+
+/**
+ * The instant this bucket refills to capacity. Past it the row is
+ * indistinguishable from one that never existed, so deleting it grants nobody
+ * anything — the same argument that makes `sweep` and `evictFull` safe. The
+ * shared store persists this so cleanup is one indexed range scan that needs no
+ * idea which limiter owns the row.
+ */
+export function fullAt(bucket: Bucket, max: number, refillPerMs: number): number {
+  return bucket.last + (max - bucket.tokens) / refillPerMs;
 }
 
 export class RateLimiter {
@@ -77,24 +125,18 @@ export class RateLimiter {
       this.evictFull(now);
       if (this.buckets.size + incoming > this.maxKeys) return false;
     }
-    const refilled = list.map((key) => [key, this.refill(key, now)] as const);
+    const refilled = list.map(
+      (key) => [key, refill(this.buckets.get(key), now, this.opts.max, this.refillPerMs)] as const,
+    );
 
     // Persist the refill either way — the clock has moved on regardless of the
     // verdict, and an unpersisted refill would restart the bucket's timeline.
-    const allowed = refilled.every(([, bucket]) => bucket.tokens >= 1);
+    const allowed = allowsAll(refilled.map(([, bucket]) => bucket));
     for (const [key, bucket] of refilled) {
       if (allowed) bucket.tokens -= 1;
       this.buckets.set(key, bucket);
     }
     return allowed;
-  }
-
-  private refill(key: string, now: number): Bucket {
-    const bucket = this.buckets.get(key) ?? { tokens: this.opts.max, last: now };
-    return {
-      tokens: Math.min(this.opts.max, bucket.tokens + (now - bucket.last) * this.refillPerMs),
-      last: now,
-    };
   }
 
   /**
@@ -123,7 +165,9 @@ export class RateLimiter {
    */
   private evictFull(now: number): void {
     for (const [key, bucket] of this.buckets) {
-      if (this.refill(key, now).tokens >= this.opts.max) this.buckets.delete(key);
+      if (refill(bucket, now, this.opts.max, this.refillPerMs).tokens >= this.opts.max) {
+        this.buckets.delete(key);
+      }
     }
   }
 

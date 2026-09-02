@@ -1026,3 +1026,40 @@ model LeagueMatch {
   @@index([awayMatchId])
   @@map("league_matches")
 }
+
+// ─── Rate limiting (2026-09) ──────────────────────────────────────────────────
+
+// One shared token bucket per limiter key. Production runs as a single Netlify
+// Function, so each invocation gets its own module state: in-memory buckets
+// start empty on every cold start and concurrent invocations never see each
+// other's spend. The bucket has to live somewhere every invocation can reach or
+// the limit does not limit anything.
+//
+// Written only through raw SQL (src/lib/postgresRateLimit.ts): the debit must
+// be one atomic lock-read-write per key, which a read-then-write through the
+// generated client cannot express. This model exists so migrations and drift
+// detection know the table is ours.
+model RateLimitBucket {
+  // The limiter key itself ("forgot:ip:1.2.3.4", a user id, ...). The natural
+  // primary key rather than a surrogate id: it makes two invocations racing on
+  // a key's first use collide on the index instead of inserting two rows and
+  // each granting itself a full bucket.
+  key       String   @id
+
+  // Fractional on purpose — a bucket refills continuously at max/windowMs per
+  // millisecond, so a partial token is the normal state between requests.
+  tokens    Float
+
+  // Timestamptz, and always written from the database clock: buckets are shared
+  // across Function instances whose clocks drift independently, and one stamped
+  // by a fast clock would read as "in the future" to a slow one.
+  updatedAt DateTime @db.Timestamptz(3) @map("updated_at")
+
+  // The instant this bucket refills to capacity. Past it the row is
+  // indistinguishable from one that never existed, so cleanup is a single
+  // indexed range scan that needs no idea which limiter owns the row.
+  fullAt    DateTime @db.Timestamptz(3) @map("full_at")
+
+  @@index([fullAt])
+  @@map("rate_limit_buckets")
+}

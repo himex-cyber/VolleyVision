@@ -1,9 +1,11 @@
-// Express glue for the token-bucket limiter in lib/rateLimit.ts, plus the
-// limiter instances the routes mount. Each instance owns its own bucket map, so
-// hammering one endpoint never spends another's budget.
+// Express glue for the token-bucket limiters in lib/ (in-memory rateLimit.ts,
+// shared postgresRateLimit.ts), plus the limiter instances the routes mount.
+// Each instance owns its own buckets, so hammering one endpoint never spends
+// another's budget.
 
 import { Request, RequestHandler } from 'express';
-import { RateLimiter } from '../lib/rateLimit';
+import { PostgresRateLimiter } from '../lib/postgresRateLimit';
+import { RateLimiter, RateLimitOptions } from '../lib/rateLimit';
 import { AppError } from './errorHandler';
 
 export interface RateLimitConfig {
@@ -21,13 +23,35 @@ export interface RateLimitConfig {
   message: string;
 }
 
+/**
+ * Production is one Netlify Function per invocation, so an in-memory bucket map
+ * is a fresh empty map on every cold start and is never shared between
+ * concurrent invocations — the limit would exist without ever limiting
+ * anything. Everywhere else (local dev, `npm test`) is one long-lived process
+ * where the in-memory limiter is both correct and free of a round trip.
+ */
+function makeLimiter(opts: RateLimitOptions): RateLimiter | PostgresRateLimiter {
+  return process.env.NODE_ENV === 'production'
+    ? new PostgresRateLimiter(opts)
+    : new RateLimiter(opts);
+}
+
 export function createRateLimit(config: RateLimitConfig): RequestHandler {
-  const limiter = new RateLimiter({ windowMs: config.windowMs, max: config.max });
+  const limiter = makeLimiter({ windowMs: config.windowMs, max: config.max });
   return (req, _res, next) => {
     const keys = config.keyFn(req);
     if (!keys || keys.length === 0) { next(); return; }
-    if (!limiter.tryConsume(keys)) { next(new AppError(429, config.message)); return; }
-    next();
+    // The shared limiter is async, the in-memory one is not; Promise.resolve
+    // covers both. The rejection arm is belt and braces — PostgresRateLimiter
+    // already falls back rather than throwing — but an unhandled rejection
+    // would take the whole process down instead of one request.
+    Promise.resolve(limiter.tryConsume(keys)).then(
+      (allowed) => {
+        if (allowed) next();
+        else next(new AppError(429, config.message));
+      },
+      next,
+    );
   };
 }
 
@@ -69,7 +93,10 @@ function clientIp(req: Request): string {
 export const chatPostRateLimit = createRateLimit({
   windowMs: 5_000,
   max: 10,
-  keyFn: (req) => req.user?.userId ?? null, // requireAuth handles the 401
+  // Prefixed like every other limiter: the Postgres table is one shared key
+  // space, so a bare id would let a future limiter keying on the same id
+  // silently share this bucket.
+  keyFn: (req) => (req.user?.userId ? `chat:user:${req.user.userId}` : null), // requireAuth handles the 401
   message: "You're sending messages too quickly — wait a moment and try again.",
 });
 

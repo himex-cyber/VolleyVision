@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { RateLimiter } from './rateLimit';
+import { allowsAll, fullAt, refill, RateLimiter } from './rateLimit';
 
 // Every test drives the clock explicitly (`now` args) rather than sleeping, so
 // the suite stays deterministic and instant.
@@ -195,5 +195,77 @@ describe('RateLimiter — maxKeys cap', () => {
     for (let i = 0; i < 500; i++) limiter.tryConsume(`forged:${i}`, T0);
     assert.equal(limiter.tryConsume('real:victim', T0), true, 'fifth and last token');
     assert.equal(limiter.tryConsume('real:victim', T0), false, 'bucket survived the flood');
+  });
+});
+
+// ─── Pure bucket arithmetic ───────────────────────────────────────────────────
+// The three functions below are the whole of the bucket maths, and both
+// limiters route through them — the in-memory one above and the Postgres-backed
+// one in postgresRateLimit.ts, which cannot be tested here (it needs a
+// database). Pinning them here is what stops the shared limiter's behaviour
+// drifting away from the limiter these tests describe.
+//
+// max and windowMs are powers of two so max/windowMs is exact in binary: these
+// tests are about the arithmetic, not about float noise.
+
+const MAX = 4;
+const WINDOW_MS = 1024;
+const RATE = MAX / WINDOW_MS;
+
+describe('refill — bucket arithmetic', () => {
+  it('treats a bucket that has never been seen as full', () => {
+    assert.deepEqual(refill(undefined, T0, MAX, RATE), { tokens: MAX, last: T0 });
+  });
+
+  it('adds tokens in proportion to the time elapsed', () => {
+    assert.equal(refill({ tokens: 0, last: T0 }, T0 + WINDOW_MS / 4, MAX, RATE).tokens, 1);
+    assert.equal(refill({ tokens: 1, last: T0 }, T0 + WINDOW_MS / 2, MAX, RATE).tokens, 3);
+  });
+
+  it('clamps at capacity however long it idles', () => {
+    assert.equal(refill({ tokens: 0, last: T0 }, T0 + WINDOW_MS * 1000, MAX, RATE).tokens, MAX);
+  });
+
+  it('is idempotent — two steps land where one step lands', () => {
+    // This is what lets the shared limiter write nothing when it rejects a
+    // request: the refill it computed and discarded is not a lost update, just
+    // work the next reader repeats.
+    const bucket = { tokens: 0.5, last: T0 };
+    const oneStep = refill(bucket, T0 + 768, MAX, RATE);
+    const twoSteps = refill(refill(bucket, T0 + 256, MAX, RATE), T0 + 768, MAX, RATE);
+    assert.deepEqual(twoSteps, oneStep);
+  });
+});
+
+describe('allowsAll — the all-or-nothing verdict', () => {
+  it('admits a request only when every bucket can pay', () => {
+    assert.equal(allowsAll([{ tokens: 1, last: T0 }, { tokens: 4, last: T0 }]), true);
+    assert.equal(allowsAll([{ tokens: 4, last: T0 }, { tokens: 0, last: T0 }]), false);
+  });
+
+  it('rejects a bucket holding a fraction of a token', () => {
+    // Forgot-password limits IP *and* email *and* a global arm at once; a
+    // near-empty arm has to reject rather than round its way to a free request.
+    assert.equal(allowsAll([{ tokens: 0.999, last: T0 }]), false);
+  });
+});
+
+describe('fullAt — the safe-to-delete instant', () => {
+  it('is right now for a bucket already at capacity', () => {
+    assert.equal(fullAt({ tokens: MAX, last: T0 }, MAX, RATE), T0);
+  });
+
+  it('is one full window after a bucket is drained', () => {
+    assert.equal(fullAt({ tokens: 0, last: T0 }, MAX, RATE), T0 + WINDOW_MS);
+  });
+
+  it('is the exact instant a dropped bucket stops being observable', () => {
+    // Deleting a full bucket grants nobody anything, because refill treats a
+    // missing bucket as a full one. fullAt has to be the first instant that is
+    // true — earlier and the delete hands back tokens nobody earned.
+    const spent = { tokens: 1.5, last: T0 };
+    const at = fullAt(spent, MAX, RATE);
+    assert.equal(refill(spent, at, MAX, RATE).tokens, MAX);
+    assert.ok(refill(spent, at - 1, MAX, RATE).tokens < MAX, 'not yet full a millisecond earlier');
   });
 });
