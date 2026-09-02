@@ -735,8 +735,8 @@ export function useMyTeams() {
 export function useTransferOwnership() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ teamId, newOwnerId }: { teamId: string; newOwnerId: string }) =>
-      teamsApi.transfer(teamId, newOwnerId),
+    mutationFn: ({ teamId, newOwnerEmail }: { teamId: string; newOwnerEmail: string }) =>
+      teamsApi.transfer(teamId, newOwnerEmail),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['teams'] });
       qc.invalidateQueries({ queryKey: ['teams', vars.teamId] });

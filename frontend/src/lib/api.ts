@@ -62,8 +62,8 @@ export const teamsApi = {
   // Phase 5 Sprint 2 — ownership
   myTeams: () => api.get<Team[]>('/teams/my-teams').then((r) => r.data),
   owner: (id: string) => api.get<TeamOwner | null>(`/teams/${id}/owner`).then((r) => r.data),
-  transfer: (id: string, newOwnerId: string) =>
-    api.post<Team>(`/teams/${id}/transfer`, { newOwnerId }).then((r) => r.data),
+  transfer: (id: string, newOwnerEmail: string) =>
+    api.post<Team>(`/teams/${id}/transfer`, { newOwnerEmail }).then((r) => r.data),
 };
 
 // ─── Players ──────────────────────────────────────────────────────────────────

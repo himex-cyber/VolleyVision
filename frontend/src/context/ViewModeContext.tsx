@@ -59,26 +59,32 @@ export function ViewModeProvider({ children }: { children: React.ReactNode }) {
   const [stored, setStored] = useState<ViewMode | null>(() => readStored());
 
   // Resolve the effective view mode: a single-capability user is locked to that
-  // capability; a dual user respects their stored choice (default: coach).
+  // capability; only a genuine tie (both capabilities, or none yet) falls back
+  // to the user's stored toggle and then to their signup intent.
+  //
+  // ponytail: mirrors backend/src/lib/viewMode.ts, which is the tested copy of
+  // this rule — no shared package and no frontend test runner exist. Change
+  // both, or collapse them once either does.
   const viewMode: ViewMode = useMemo(() => {
     if (canCoach && !canPlay) return 'coach';
     if (canPlay && !canCoach) return 'player';
-    if (isDual) return stored ?? 'coach';
-    // No capabilities yet (still loading or brand-new user) — fall back to stored/coach.
-    return stored ?? 'coach';
-  }, [canCoach, canPlay, isDual, stored]);
+    if (stored) return stored;
+    return user?.signupIntent === 'PLAYER' ? 'player' : 'coach';
+  }, [canCoach, canPlay, stored, user?.signupIntent]);
 
   const setViewMode = (mode: ViewMode) => {
     setStored(mode);
     localStorage.setItem(STORAGE_KEY, mode);
   };
 
-  // Keep storage consistent if a dual user's stored value is stale.
+  // Persist the resolved default for a dual user so the toggle has something to
+  // read back. Writes `viewMode`, not a hardcoded 'coach' — otherwise this would
+  // immediately overwrite a PLAYER-intent user's default on their first render.
   useEffect(() => {
     if (isDual && !stored) {
-      localStorage.setItem(STORAGE_KEY, 'coach');
+      localStorage.setItem(STORAGE_KEY, viewMode);
     }
-  }, [isDual, stored]);
+  }, [isDual, stored, viewMode]);
 
   const value: ViewModeContextValue = {
     viewMode,

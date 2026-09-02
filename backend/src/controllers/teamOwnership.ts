@@ -17,13 +17,15 @@ export async function myTeams(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-/** POST /api/v1/teams/:id/transfer — transfer ownership to another user. */
+/** POST /api/v1/teams/:id/transfer — transfer ownership to another team member, by email. */
 export async function transferTeam(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.user) throw new AppError(401, 'Authentication required.');
-    const { newOwnerId } = req.body;
-    if (!newOwnerId) throw new AppError(400, 'newOwnerId is required.');
-    const team = await transferOwnership(req.params.id, req.user.userId, newOwnerId);
+    const { newOwnerEmail } = req.body;
+    if (typeof newOwnerEmail !== 'string' || !newOwnerEmail.trim()) {
+      throw new AppError(400, 'newOwnerEmail is required.');
+    }
+    const team = await transferOwnership(req.params.id, req.user.userId, newOwnerEmail);
     res.json(team);
   } catch (err) {
     next(err);
