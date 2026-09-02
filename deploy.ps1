@@ -15,7 +15,14 @@
 # bypass that check.
 #
 # Notes:
-# - Deploys build LOCALLY and publish the working tree, not a git ref.
+# - Deploys build LOCALLY (--build) and publish the working tree, not a git
+#   ref. --build is load-bearing: it runs netlify.toml's build command with
+#   the site's env vars injected. Without it the CLI just uploads whatever
+#   frontend/dist already holds, built against a shell that has no
+#   VITE_SENTRY_DSN -- and since main.tsx guards Sentry.init on that var,
+#   Vite tree-shakes the SDK out entirely and the frontend ships with no
+#   error tracking at all, silently. Verified: the dist built that way
+#   contains zero Sentry code.
 # - Requires the Netlify CLI to be logged in as the himextradingltd
 #   account (the KP Enterprise account can read the site but deploys 404).
 # - If the schema changed, run `npx prisma migrate deploy` from backend/ first.
@@ -85,4 +92,4 @@ if (-not $Message) {
 }
 
 Write-Host "Deploying with message: $Message"
-npx netlify-cli@26.2.0 deploy --prod --message "$Message"
+npx netlify-cli@26.2.0 deploy --prod --build --message "$Message"
