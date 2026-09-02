@@ -1,9 +1,14 @@
+// Must be the first import: Sentry.init() (in ./instrument) has to run
+// before express and the route modules load.
+import './instrument';
+
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import * as Sentry from '@sentry/node';
 
 import teamRoutes from './routes/teams';
 import playerRoutes from './routes/players';
@@ -74,6 +79,12 @@ app.use('/api/v1/training-sessions', trainingSessionRoutes);
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'VolleyVision API', version: '1.0.0' });
 });
+
+// After every route so Sentry observes them all, before errorHandler so
+// its captured stack still reflects the original error. Safe to call
+// unconditionally: Sentry.captureException no-ops when instrument.ts
+// skipped Sentry.init() (no SENTRY_DSN).
+Sentry.setupExpressErrorHandler(app);
 
 // ─── Error Handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);

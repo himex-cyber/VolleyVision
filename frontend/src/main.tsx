@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as Sentry from '@sentry/react';
 import './index.css';
 
 import { AuthProvider } from './context/AuthContext';
@@ -10,6 +11,22 @@ import { features } from './config/features';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
 import PageLoadingFallback from './components/ui/PageLoadingFallback';
+
+// Fail-soft: unset VITE_SENTRY_DSN is normal in local dev (see
+// backend/src/instrument.ts for the equivalent backend guard). Session
+// Replay stays off on purpose: this app shows match footage and chat that
+// can include minors, and DOM/video capture is exactly the second copy of
+// that data Sentry must not become.
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE, // Vite's dev/production equivalent of NODE_ENV
+    sendDefaultPii: false,
+    // Free-tier Sentry quota; keep sampling low. See backend/src/instrument.ts.
+    tracesSampleRate: 0.1,
+  });
+}
 
 // Pages are lazy-loaded so a visitor downloads only the route they landed on
 // rather than all 31 screens up front. Layout / RequireAuth / the providers
