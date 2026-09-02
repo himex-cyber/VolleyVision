@@ -74,7 +74,7 @@ export default function TeamMembersCard({ teamId }: Props) {
             <label className="block text-xs text-grey-600 font-medium">Search user</label>
             <input
               className="input text-sm"
-              placeholder="Name or email…"
+              placeholder="Their full email address…"
               value={searchQ}
               onChange={(e) => { setSearchQ(e.target.value); setSelectedUserId(''); }}
             />
@@ -92,8 +92,10 @@ export default function TeamMembersCard({ teamId }: Props) {
                 ))}
               </div>
             )}
-            {searchQ.trim().length >= 2 && searchResults?.length === 0 && !selectedUserId && (
-              <p className="text-grey-600 text-xs px-1">No users found.</p>
+            {searchQ.includes('@') && searchResults?.length === 0 && !selectedUserId && (
+              <p className="text-grey-600 text-xs px-1">
+                No account uses that email — invite them instead.
+              </p>
             )}
           </div>
 

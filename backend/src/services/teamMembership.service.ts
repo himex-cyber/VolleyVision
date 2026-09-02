@@ -1,5 +1,6 @@
 import { AccessTier, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { normalizeEmail, isEmailAddress } from '../lib/email';
 import { AppError } from '../middleware/errorHandler';
 import { defaultAccessTiers } from './permission.service';
 import { applyCreatePlayer } from './playerActions.service';
@@ -201,20 +202,29 @@ export async function syncOwnerMembership(teamId: string, ownerId: string) {
   }
 }
 
-/** Search users by name or email fragment — used for the add-member lookup. */
+/**
+ * Look up the ONE user with this exact email — the add-member lookup.
+ *
+ * Deliberately not a search. It used to substring-match email, firstName and
+ * lastName on any two-character string and return twenty rows to any
+ * authenticated user, which is a directory walk of every person in the product.
+ * Requiring the whole address means a caller must already know it — the same
+ * disclosure registration gives when it rejects an address as taken.
+ *
+ * What this still discloses, deliberately: given a full address, that it has an
+ * account and whose name it is. That is the accepted cost of an add-by-email
+ * flow and it is bounded by already knowing the address — unlike the fragment
+ * search, which needed no prior knowledge at all. `role` is not selected: the
+ * caller never rendered it, and a stranger's platform role is not its business.
+ * Narrowing further means scoping the lookup to a team the caller may add to,
+ * which needs a teamId this endpoint does not currently take.
+ */
 export async function searchUsers(query: string) {
-  const q = query.trim();
-  if (q.length < 2) return [];
-  return prisma.user.findMany({
-    where: {
-      OR: [
-        { email: { contains: q, mode: 'insensitive' } },
-        { firstName: { contains: q, mode: 'insensitive' } },
-        { lastName: { contains: q, mode: 'insensitive' } },
-      ],
-    },
-    select: { id: true, firstName: true, lastName: true, email: true, role: true },
-    take: 20,
-    orderBy: { firstName: 'asc' },
+  const email = normalizeEmail(query);
+  if (!isEmailAddress(email)) return [];
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, firstName: true, lastName: true, email: true },
   });
+  return user ? [user] : [];
 }

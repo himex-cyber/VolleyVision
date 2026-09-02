@@ -43,12 +43,13 @@ export interface UserTeamMembership {
   };
 }
 
+// No `role`: the add-member lookup deliberately does not disclose a
+// stranger's platform role, and nothing rendered it.
 export interface UserSearchResult {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  role: UserRole;
 }
 
 // ─── Profile (Phase 5 Sprint 5) ───────────────────────────────────────────────

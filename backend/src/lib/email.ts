@@ -17,3 +17,24 @@
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+
+// Whether a value is a whole email address rather than a fragment someone is
+// part-way through typing.
+//
+// This exists to keep the add-member lookup an EXACT-match lookup. That lookup
+// used to substring-match email, firstName and lastName on any two-character
+// string and hand back id + email + name twenty rows at a time, to any
+// authenticated user - a complete walk of every person in the product, emails
+// included, in a few hundred requests.
+//
+// Deliberately shape-only, not RFC validation. The lookup is an exact match
+// against a stored address, so a malformed string simply finds nothing; the
+// only job here is to refuse the fragments that made enumeration cheap.
+export function isEmailAddress(value: string): boolean {
+  if (/\s/.test(value)) return false;
+  const at = value.indexOf('@');
+  if (at < 1 || at !== value.lastIndexOf('@')) return false;
+  const domain = value.slice(at + 1);
+  const dot = domain.indexOf('.');
+  return dot > 0 && dot < domain.length - 1;
+}

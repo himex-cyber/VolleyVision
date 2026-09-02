@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { normalizeEmail } from './email';
+import { normalizeEmail, isEmailAddress } from './email';
 
 describe('normalizeEmail', () => {
   it('trims and lowercases', () => {
@@ -26,5 +26,41 @@ describe('normalizeEmail', () => {
 
   it('does not strip whitespace inside the address', () => {
     assert.equal(normalizeEmail('  a b@c.com  '), 'a b@c.com');
+  });
+});
+
+describe('isEmailAddress', () => {
+  // The regression this guard exists to prevent: the add-member lookup
+  // accepting a fragment and substring-matching the user table with it. If
+  // these ever start passing, the enumeration oracle is back.
+  it('rejects the fragments that made enumeration cheap', () => {
+    assert.equal(isEmailAddress('ka'), false);
+    assert.equal(isEmailAddress('karlos'), false);
+    assert.equal(isEmailAddress('@'), false);
+    assert.equal(isEmailAddress('gmail.com'), false);
+    assert.equal(isEmailAddress(''), false);
+  });
+
+  it('accepts a whole address', () => {
+    assert.equal(isEmailAddress('karlos@example.com'), true);
+    assert.equal(isEmailAddress('a.b+tag@sub.example.co.nz'), true);
+  });
+
+  it('accepts exactly what normalizeEmail produces from a padded address', () => {
+    assert.equal(isEmailAddress(normalizeEmail('  Karlos@Example.COM  ')), true);
+  });
+
+  // normalizeEmail trims the ends but not the middle, so an address with an
+  // interior space reaches the lookup intact - and must not be treated as one.
+  it('rejects an address with interior whitespace', () => {
+    assert.equal(isEmailAddress(normalizeEmail('  a b@c.com  ')), false);
+  });
+
+  it('rejects malformed shapes that would otherwise reach the query', () => {
+    assert.equal(isEmailAddress('@example.com'), false);
+    assert.equal(isEmailAddress('a@b'), false);
+    assert.equal(isEmailAddress('a@b.'), false);
+    assert.equal(isEmailAddress('a@.com'), false);
+    assert.equal(isEmailAddress('a@b@c.com'), false);
   });
 });

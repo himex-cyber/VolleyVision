@@ -154,3 +154,32 @@ export const joinCodeRateLimit = createRateLimit({
   keyFn: (req) => [`code:ip:${clientIp(req)}`, `code:user:${req.user?.userId ?? 'anon'}`],
   message: 'Too many join code attempts. Wait a few minutes and try again.',
 });
+
+/**
+ * Add-member lookup. `searchUsers` is an exact match on a whole email address,
+ * so a caller must already know the address to learn anything — but what it
+ * returns is still "yes, that address has an account, and here is whose name it
+ * is". Unmetered, that turns a leaked mailing list into a membership report at
+ * whatever rate the network allows. Metered, the sweep stops being worth
+ * running; the endpoint is already behind requireAuth, so this is the second
+ * half of the same fix.
+ *
+ * Keyed on user and IP for the same reason join codes are: the user arm is the
+ * real dimension, the IP arm is what stops a handful of throwaway accounts
+ * being an easy way around it.
+ *
+ * Deliberately roomy. useUserSearch fires once per keystroke after the "@", so
+ * typing one address costs ~10 requests and correcting a typo costs another
+ * run — a tight budget would break ordinary use long before it inconvenienced
+ * anyone sweeping a list.
+ *
+ * ponytail: per-keystroke requests are why this number is large. Debounce the
+ * hook (or gate it on a complete-looking address) and this can drop by an order
+ * of magnitude.
+ */
+export const userLookupRateLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  keyFn: (req) => [`userlookup:user:${req.user?.userId ?? 'anon'}`, `userlookup:ip:${clientIp(req)}`],
+  message: 'Too many lookups. Wait a few minutes and try again.',
+});

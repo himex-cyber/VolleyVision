@@ -718,11 +718,15 @@ export function useMyMemberships() {
   });
 }
 
+// The lookup is exact-match on email (see searchUsers in
+// teamMembership.service.ts), so anything without an "@" cannot match and the
+// request is skipped. This is request-avoidance only — the backend guard is
+// the control.
 export function useUserSearch(q: string) {
   return useQuery({
     queryKey: ['users', 'search', q],
     queryFn: () => membershipsApi.searchUsers(q),
-    enabled: q.trim().length >= 2,
+    enabled: q.includes('@'),
   });
 }
 
