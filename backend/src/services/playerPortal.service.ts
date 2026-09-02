@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { EventType } from '@prisma/client';
 import { ownEventsOnly } from '../lib/eventFilters';
+import { assertTeamVisible } from '../lib/teamVisibility';
 
 // Reuses the same stat derivation logic as the existing analytics engine
 function deriveStats(events: { eventType: EventType }[]) {
@@ -63,9 +64,35 @@ export async function getLinkedPlayers(userId: string) {
   });
 }
 
+/**
+ * Claim a roster entry as your own player record.
+ *
+ * Both guards below were missing entirely: this checked that the player existed
+ * and then wrote `userId`. Any authenticated user could POST any playerId and
+ * take the record, because `Player.userId` is not unique — the update silently
+ * overwrote whoever was linked before. Everything downstream reads
+ * `where: { userId }`, so claiming a stranger's record handed over their career
+ * stats, per-match development data and team, and cut the real user's link.
+ *
+ * Visibility first, and it throws the same 404 as a missing player on purpose:
+ * a caller who may not see the team must not be able to tell "no such player"
+ * from "player you may not touch". `unlinkPlayer` below has always had the
+ * ownership half of this; the two belong together.
+ *
+ * 409 rather than 404 for an already-claimed record: by then the caller can
+ * already see the team, so the conflict is not a disclosure — and it is the
+ * answer they need, since silently stealing the link is the bug being fixed.
+ */
 export async function linkPlayerToUser(playerId: string, userId: string) {
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player) throw Object.assign(new Error('Player not found'), { statusCode: 404 });
+  await assertTeamVisible(player.teamId, userId);
+  if (player.userId && player.userId !== userId) {
+    throw Object.assign(
+      new Error('This player record is already linked to another account'),
+      { statusCode: 409 },
+    );
+  }
   return prisma.player.update({ where: { id: playerId }, data: { userId } });
 }
 
