@@ -5,6 +5,7 @@
 
 import { Request, RequestHandler } from 'express';
 import { PostgresRateLimiter } from '../lib/postgresRateLimit';
+import { normalizeEmail } from '../lib/email';
 import { RateLimiter, RateLimitOptions } from '../lib/rateLimit';
 import { AppError } from './errorHandler';
 
@@ -119,7 +120,7 @@ export const forgotPasswordRateLimit = createRateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   keyFn: (req) => {
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const email = typeof req.body?.email === 'string' ? normalizeEmail(req.body.email) : '';
     const keys = [`forgot:ip:${clientIp(req)}`];
     if (email) keys.push(`forgot:email:${email}`);
     return keys;

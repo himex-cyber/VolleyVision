@@ -6,6 +6,7 @@ import { addMember, isMember } from './teamMembership.service';
 import { canActInCategory } from './permission.service';
 import { AppError } from '../middleware/errorHandler';
 import { sendInvitationEmail } from '../lib/mailer';
+import { normalizeEmail } from '../lib/email';
 
 const EXPIRY_DAYS = 7;
 
@@ -41,7 +42,7 @@ export async function createInvitation(
   const expiresAt = new Date(Date.now() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
   const invitation = await prisma.invitation.create({
-    data: { email, teamId, invitedById, role, token, joinCode, expiresAt },
+    data: { email: normalizeEmail(email), teamId, invitedById, role, token, joinCode, expiresAt },
     include: { team: { select: { id: true, name: true } }, invitedBy: { select: { id: true, firstName: true, lastName: true, email: true } } },
   });
 
@@ -74,7 +75,7 @@ export async function acceptInvitation(token: string, userId: string) {
   // Verify the authenticated user's email matches the invitation
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
+  if (normalizeEmail(user.email) !== normalizeEmail(inv.email)) {
     throw Object.assign(new Error('This invitation was sent to a different email address'), { statusCode: 403 });
   }
 
@@ -111,7 +112,7 @@ export async function redeemInvitationByCode(joinCode: string, userId: string) {
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
+  if (normalizeEmail(user.email) !== normalizeEmail(inv.email)) {
     throw Object.assign(new Error('This invitation was sent to a different email address'), { statusCode: 403 });
   }
 
@@ -138,7 +139,7 @@ export async function declineInvitation(token: string, userId: string) {
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
+  if (normalizeEmail(user.email) !== normalizeEmail(inv.email)) {
     throw Object.assign(new Error('This invitation was sent to a different email address'), { statusCode: 403 });
   }
 

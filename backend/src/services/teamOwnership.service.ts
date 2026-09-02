@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { normalizeEmail } from '../lib/email';
 import { syncOwnerMembership } from './teamMembership.service';
 
 const ownerSelect = {
@@ -46,7 +47,7 @@ export async function transferOwnership(teamId: string, requesterId: string, new
 
   // Emails are stored lowercased (registerUser); trim matches how the
   // login rate limiter keys the same field off a request body.
-  const email = newOwnerEmail.trim().toLowerCase();
+  const email = normalizeEmail(newOwnerEmail);
   const membership = await prisma.teamMembership.findFirst({
     where: { teamId, user: { email } },
     select: { userId: true },

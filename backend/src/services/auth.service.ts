@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { sendPasswordResetEmail } from '../lib/mailer';
+import { normalizeEmail } from '../lib/email';
 import {
   CONSUMED_RESET_FIELDS,
   RESET_TOKEN_BYTES,
@@ -72,7 +73,7 @@ export async function registerUser(
     throw new AppError(400, 'Password must be at least 8 characters.');
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  const existing = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
   if (existing) throw new AppError(409, 'An account with that email already exists.');
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -83,7 +84,7 @@ export async function registerUser(
 
   const user = await prisma.user.create({
     data: {
-      email: email.toLowerCase(),
+      email: normalizeEmail(email),
       passwordHash,
       firstName,
       lastName,
@@ -109,7 +110,7 @@ export async function registerUser(
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
   if (!user) throw new AppError(401, 'Invalid email or password.');
 
   const valid = await verifyPassword(password, user.passwordHash);
@@ -166,7 +167,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
   const startedAt = Date.now();
   let dispatchEmail: (() => void) | undefined;
   try {
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
 
     const token = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
 
