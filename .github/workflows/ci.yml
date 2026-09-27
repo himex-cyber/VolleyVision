@@ -1,6 +1,7 @@
 # Runs on every push to main/develop and every pull request. CI never touches
-# a real database or deploys anything: deploys stay manual via deploy.ps1, and
-# migrations are applied by hand with `prisma migrate deploy`.
+# Supabase or deploys anything: deploys stay manual via deploy.ps1, and
+# migrations are applied to staging/prod by hand with `prisma migrate deploy`.
+# The db job uses its own throwaway Postgres service container.
 name: CI
 
 on:
@@ -42,6 +43,53 @@ jobs:
         run: npm test
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
+
+  # Proves the migrations build the schema from zero, that schema.prisma hasn't
+  # drifted from them, and runs the integration tests (authz matrix, RLS) against
+  # the real app. Postgres 17 matches prod.
+  db:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+      SHADOW_DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_shadow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Create the shadow database for the drift check
+        run: psql "$DATABASE_URL" -c 'CREATE DATABASE ci_shadow'
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Apply every migration from zero
+        run: npx prisma migrate deploy
+      # Exit code 2 on any difference. The one thing schema.prisma can't express,
+      # the partial unique index team_memberships_one_head_coach (migration
+      # 20260927130000), is ignored by Prisma 5.22's diff, so no allowlist is needed.
+      - name: Drift check (migrations vs schema.prisma)
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$SHADOW_DATABASE_URL" --exit-code
+      - name: Integration tests
+        run: npm run test:integration
 
   frontend:
     runs-on: ubuntu-latest

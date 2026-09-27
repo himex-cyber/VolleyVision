@@ -51,7 +51,9 @@ const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
-    environment: import.meta.env.MODE, // Vite's dev/production equivalent of NODE_ENV
+    // VITE_SENTRY_ENVIRONMENT=staging on the staging site, which builds in
+    // production mode; MODE (Vite's NODE_ENV equivalent) otherwise.
+    environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || import.meta.env.MODE,
     sendDefaultPii: false,
     // Free-tier Sentry quota; keep sampling low. See backend/src/instrument.ts.
     tracesSampleRate: 0.1,
