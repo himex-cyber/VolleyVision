@@ -195,6 +195,34 @@ Decisions confirmed by Karlos on 2026-09-27:
 - In the preview, the login page renders and `/leagues` redirects.
 - A full click-through was **not** possible, because the Supabase project is paused.
 
-## Changed (filled in per phase)
+## Changed
 
-_Nothing changed yet._
+### Phase 1B: security fixes (branch `fix/security`, stacked on `chore/remove-features`, 2026-09-27)
+
+| ID | Commit subject | What changed |
+|---|---|---|
+| H4 | fix(deps) ×2 | `npm audit fix` in both packages. Backend: 0 advisories left. Frontend: axios fixed. **Open:** react-router has a moderate advisory that needs the v7 major (Phase 3). |
+| C1 | scope member edit/remove | New `findTeamMembership(teamId, membershipId)` in `teamMembership.service.ts`; `updateMemberRole`, `updateMemberAccess` and `removeMember` now take `teamId` |
+| H1 | never return join codes | Prisma `previewFeatures = ["omitApi"]` plus a global `omit` in `lib/prisma.ts`. Verified offline from the generated query protocol. `GET /players/:id` also narrows its team select. **Drop the preview flag when upgrading to Prisma 6.** |
+| H2 | rate-limit auth | Login is limited to 10 per 15 min per email and 30 per IP; register to 5 per hour per IP; reset-password to 10 per 15 min per IP (`middleware/rateLimit.ts`) |
+| L1 | equalise login timing | Unknown emails are compared against a precomputed dummy bcrypt hash. The register 409 is kept as a documented accepted risk. |
+| L2 | logs | Removed the join code and email from the invitation warning and recipient addresses from the mailer logs; morgan logs `req.path` only |
+| M1 | player team from record | `routes/players.ts` `requireRosterAccess` returns 400 when `body.teamId` doesn't match |
+| M2 | player links | Also requires MANAGE_TEAM on the player's home team |
+| M3 | recordEvent | The player must belong to the match's team, either directly or through a link |
+| M4 | invite role cap | Adds `roleRank`/`canInviteRole` in `lib/rolePermissions.ts` with a test. HEAD_COACH can never be invited. |
+| M7 (part 1) | admin from DB | New `isGlobalAdmin()`, used by `requireAdmin`, the feedback attachment check and chat moderation. **Part 2** (`User.tokenVersion`) moves to Phase 2. |
+| M8 + L5 | consent and emails | Removed `POST /teams/:id/members`, `GET /users/search`, `searchUsers`, `userLookupRateLimit`, `useAddMember`/`useUserSearch` and `UserSearchResult`. The members card now shows "+ Invite staff" (staff code plus email invite). Emails are only returned to MANAGE_MEMBERS holders. |
+| L3 | self-approval | Blocked, except for the owner |
+| L4 | claim player | Only PLAYER-role members can claim, one linked record per team. There's no invitation-to-player link in the schema to match on. |
+| L6 | profile image | `lib/profileImage.ts` (with a test) only allows the Supabase host. The Profile page's free-text URL field was removed (there is no avatar upload yet). |
+
+M5 and M6 were resolved by Phase 1A (the code was deleted). H3 (email verification) is covered in Phase 2.
+
+**Found along the way, for later phases:**
+- Every async Express middleware (`requireTeamPermission`, `requireTeamAccess`, `requireAdmin`, …) has no try/catch. A database error leaves the request hanging until the Lambda times out instead of returning a 500. Fix it once, for every route (Phase 4).
+- Existing external `profileImage` values stay in the database and are still shown. Clear them in Phase 2's migration.
+- L4 edge case: a player who joined with a code already has an auto-created roster row, so they can't claim a separate, older coach-created row that holds their history. Merging the two would need a coach-side tool.
+- The Supabase project was **paused** on 2026-09-27, so the production API is down until it's restored.
+
+Verified at the end of Phase 1B: backend `tsc` is clean, all 15 test files pass (2 new), and the backend builds; frontend `tsc` is clean and `vite build` works.
