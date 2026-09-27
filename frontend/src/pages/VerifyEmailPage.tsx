@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useVerifyEmail, useResendVerification } from '../hooks';
+import { useResendVerification } from '../hooks';
+import { authApi } from '../lib/api';
 
 /**
  * Reached from the emailed verification link. Mirrors ResetPasswordPage's
@@ -14,7 +15,6 @@ export default function VerifyEmailPage() {
   const token = params.get('token') ?? '';
   const { user, refreshUser } = useAuth();
 
-  const verifyEmail = useVerifyEmail();
   const resend = useResendVerification();
 
   const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
@@ -28,16 +28,17 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     if (!token || ranRef.current) return;
     ranRef.current = true;
-    verifyEmail.mutate(token, {
-      onSuccess: async () => {
+    // A plain call, not useMutation: per-call mutate() callbacks are dropped when
+    // StrictMode remounts the component, which left the page stuck on "Verifying".
+    authApi.verifyEmail({ token })
+      .then(async () => {
         setStatus('success');
         if (user) await refreshUser();
-      },
-      onError: (err: any) => {
+      })
+      .catch((err: any) => {
         setStatus('error');
         setError(err?.response?.data?.error ?? 'This verification link is invalid or has expired.');
-      },
-    });
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
