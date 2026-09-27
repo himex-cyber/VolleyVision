@@ -1,0 +1,23 @@
+# Security headers for every response Netlify serves (the SPA and its assets).
+# Lives here rather than in netlify.toml, which is kept out of the repo; Vite
+# copies public/ into dist/, the publish directory. The API's own responses
+# also get helmet's headers from Express.
+#
+# Content-Security-Policy, source by source:
+#   script-src 'self'        the production build has no inline scripts
+#   style-src 'unsafe-inline' React style attributes (recharts, progress bars)
+#                             need it; plus the Google Fonts stylesheet
+#   font-src gstatic          Google Fonts files
+#   img-src                   data:/blob: for upload previews, supabase.co for
+#                             signed chat/feedback attachment URLs
+#   connect-src               the same-origin API, plus Sentry's ingest host
+#   frame-ancestors 'none'    nobody may embed the app (clickjacking)
+# Anything new that loads from another origin (a CDN, an embed, analytics)
+# must be added here or the browser will block it.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.ingest.us.sentry.io https://*.ingest.sentry.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
