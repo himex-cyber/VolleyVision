@@ -22,18 +22,49 @@ const handler = serverless(app);
 
 const FUNCTION_PREFIX = '/.netlify/functions/api';
 
+// Record ids are cuids. Folding them keeps "GET /api/v1/teams/:id" one
+// transaction in Sentry instead of one per team.
+const CUID_SEGMENT = /\/c[a-z0-9]{24}(?=\/|$)/g;
+
 exports.handler = async (event, context) => {
   if (event.path && event.path.startsWith(FUNCTION_PREFIX)) {
     event.path = event.path.slice(FUNCTION_PREFIX.length) || '/';
   }
-  const result = await handler(event, context);
-  // Netlify can freeze this function's execution environment for reuse the
-  // instant it returns, before Sentry's background transport has sent
-  // whatever it queued during the request; a just-captured error would
-  // otherwise vanish silently. Bounded to 2s so an unreachable Sentry never
-  // meaningfully adds to response latency. Requiring ../dist/index above
-  // already ran instrument.ts (index.ts's first import), so Sentry is
-  // initialized by now, or safely inert if SENTRY_DSN was unset.
-  await Sentry.flush(2000).catch(() => {});
-  return result;
+
+  // serverless-http hands each request straight to Express's app.handle(),
+  // with no http.Server in between, so Sentry's automatic request
+  // instrumentation never runs here: no per-request scope, no request data on
+  // errors, no transaction. This does its job by hand:
+  //   - a fresh isolation scope per invocation, so breadcrumbs from one request
+  //     can't ride along on the next request's error in a warm instance;
+  //   - the method and PATH on that scope, never the query string, which can
+  //     carry tokens (instrument.ts strips it again anyway);
+  //   - a root span, so Express's own spans have a parent and tracing works.
+  const method = event.httpMethod;
+  const path = event.path || '/';
+  const host = event.headers && event.headers.host;
+  try {
+    return await Sentry.withIsolationScope((scope) => {
+      scope.setSDKProcessingMetadata({
+        normalizedRequest: { method, url: host ? `https://${host}${path}` : path },
+      });
+      return Sentry.startSpan(
+        { name: `${method} ${path.replace(CUID_SEGMENT, '/:id')}`, op: 'http.server' },
+        async (span) => {
+          const result = await handler(event, context);
+          Sentry.setHttpStatus(span, result.statusCode);
+          return result;
+        },
+      );
+    });
+  } finally {
+    // Netlify can freeze this function's execution environment for reuse the
+    // instant it returns, before Sentry's background transport has sent
+    // whatever it queued during the request; a just-captured error would
+    // otherwise vanish silently. Bounded to 2s so an unreachable Sentry never
+    // meaningfully adds to response latency. Requiring ../dist/index above
+    // already ran instrument.ts (index.ts's first import), so Sentry is
+    // initialized by now, or safely inert if SENTRY_DSN was unset.
+    await Sentry.flush(2000).catch(() => {});
+  }
 };
