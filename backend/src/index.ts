@@ -90,10 +90,12 @@ Sentry.setupExpressErrorHandler(app);
 app.use(errorHandler);
 
 // Netlify runs this module inside a serverless function (see
-// backend/netlify-functions/api.js) instead of calling .listen() — Netlify
-// sets its own NETLIFY env var in build and function contexts, so skip the
-// local HTTP server in that case.
-if (!process.env.NETLIFY) {
+// backend/netlify-functions/api.js) instead of calling .listen(). NETLIFY is
+// only set during builds, not in the function at runtime, so the live function
+// was starting a pointless localhost:3001 server on every cold start (its log
+// line showed up in Sentry breadcrumbs). AWS_LAMBDA_FUNCTION_NAME is always
+// set inside the function.
+if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   app.listen(PORT, () => {
     console.log(`\n⚡ VolleyVision API running on http://localhost:${PORT}`);
     console.log(`   Health: http://localhost:${PORT}/health\n`);
