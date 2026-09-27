@@ -163,6 +163,8 @@ function App() {
               <Route path="/players/:playerId/dashboard" element={<PlayersDashboardPage />} />
             </Route>
           </Route>
+          {/* Unknown URLs, including bookmarks to removed features like /leagues */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
         </ViewModeProvider>
