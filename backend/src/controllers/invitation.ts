@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { isEmailAddress, normalizeEmail } from '../lib/email';
 import { AccessTier, ApprovalAction, TeamRole } from '@prisma/client';
 import { logAudit } from '../lib/audit';
 import {
@@ -19,6 +20,9 @@ export async function createTeamInvitation(req: Request, res: Response, next: Ne
     const { email, role } = req.body as { email: string; role: TeamRole };
     if (!email || !role) {
       return res.status(400).json({ error: 'email and role are required' });
+    }
+    if (typeof email !== 'string' || !isEmailAddress(normalizeEmail(email))) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
     }
     const userId = req.user!.userId;
 

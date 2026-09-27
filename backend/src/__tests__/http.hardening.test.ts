@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { db, resetDb } from '../testing/installFakePrisma';
 import { withServer, tokenFor, send } from '../testing/http';
+import { createTeamInvitation } from '../controllers/invitation';
 
 // "coach" owns team T; nobody else belongs to it.
 function world() {
@@ -61,11 +62,28 @@ async function chatIsNotFoundForOutsiders(base: string) {
   assert.equal(await send(base, 'DELETE', '/api/v1/messages/M', outsider), 404);
 }
 
+// A JSON body can carry any type. A non-string email reached .trim() and
+// became a 500; it's the caller's mistake, so 400.
+async function nonStringEmailIs400(base: string) {
+  world();
+  db.user.findUnique = async () => null;
+  assert.equal(await send(base, 'POST', '/api/v1/auth/login', undefined, { email: 123, password: 'x' }), 400);
+  assert.equal(await send(base, 'POST', '/api/v1/auth/forgot-password', undefined, { email: { $ne: '' } }), 400);
+  assert.equal(await send(base, 'POST', '/api/v1/auth/register', undefined, { email: ['a@b.co'], password: 'longenough1', firstName: 'A', lastName: 'B' }), 400);
+  assert.equal(await send(base, 'POST', '/api/v1/auth/register', undefined, { email: 'not-an-address', password: 'longenough1', firstName: 'A', lastName: 'B' }), 400);
+  // Invitations: called directly, since the HTTP route's budget is spent above.
+  let status = 0;
+  const res: any = { status: (c: number) => { status = c; return res; }, json: () => res };
+  await createTeamInvitation({ params: { id: 'T' }, body: { email: 42, role: 'PLAYER' }, user: { userId: 'coach' } } as any, res, () => {});
+  assert.equal(status, 400);
+}
+
 async function main() {
   await withServer(async (base) => {
     await invitationsAreRateLimited(base);
     await eventWritesAreRateLimited(base);
     await chatIsNotFoundForOutsiders(base);
+    await nonStringEmailIs400(base);
   });
   console.log('http.hardening.test.ts passed');
 }
