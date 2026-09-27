@@ -32,9 +32,17 @@ function scrubUrls<T extends ScrubbableEvent>(event: T): T {
     delete event.request.query_string;
     if (event.request.url) event.request.url = pathOnly(event.request.url);
   }
+  // fetch/xhr breadcrumbs carry `url`; navigation breadcrumbs carry `from` and
+  // `to`. Scrubbing only `url` let a team join code from
+  // /redeem-invitation?code=... (or a reset/verify token) ride along on any
+  // later error in the same browser session.
   for (const crumb of event.breadcrumbs ?? []) {
-    const url = crumb.data?.url;
-    if (typeof url === 'string') crumb.data!.url = pathOnly(url);
+    const data = crumb.data;
+    if (!data) continue;
+    for (const key of ['url', 'from', 'to']) {
+      const value = data[key];
+      if (typeof value === 'string') data[key] = pathOnly(value);
+    }
   }
   return event;
 }
