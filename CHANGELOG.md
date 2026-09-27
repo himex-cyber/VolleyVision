@@ -2,6 +2,45 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## Unreleased — Audit Phase 1A: removed features
+
+Reset to a smaller, cleaner core before the February 2027 beta. Every feature
+that was built but switched off behind a flag has been **deleted**, not
+parked. They're recorded here, and in full in
+[docs/audit/AUDIT-LOG.md](docs/audit/AUDIT-LOG.md), because leagues and video
+are planned to come back much later. Git tag `pre-feature-removal` is the last
+commit that still has them.
+
+- **Removed: Leagues.** This covers league hub, seasons, standings, rankings,
+  fixtures, results, team profiles, match centre, and the team form's
+  "current league" field. The `leagues`, `league_seasons`, `league_teams` and
+  `league_matches` tables and `teams.league_season_id` are dropped. Several of
+  these routes were live on the server even though the UI hid them, and some
+  needed no login.
+- **Removed: Match video.** This covers YouTube linking, presigned and TUS
+  upload, match-time sync and clips. The `videos` and `video_clips` tables and
+  the `VideoStatus`, `VideoSource` and `ClipOrigin` enums are dropped, along
+  with the `tus-js-client` dependency and all `VIDEO_*` env vars.
+- **Removed: Assistant and the AI match summary.** The summary made an uncached,
+  unmetered paid Claude call on every page view. The `@anthropic-ai/sdk`
+  dependency and `ANTHROPIC_API_KEY` are gone.
+- **Removed: heat maps and zone detail, recommendations** (coaching, training,
+  player development, season intelligence, advanced metrics), **rotation
+  analytics, momentum chart, and opponent scouting reports.** The match
+  report is kept, and it still uses the momentum and rotation calculations
+  internally. Live scoring of opponent points is kept.
+- **Removed: manual harness scripts.** These are `smoke-*.ts`,
+  `supabase-smoke.ts`, `verify-chat*.ts`, `check-video-config.ts` and
+  `cleanup-pending-videos.ts`.
+- **Unknown URLs now redirect to the app** instead of rendering a blank page,
+  so old bookmarks to removed pages still land somewhere.
+- **Sentry scrubbing.** Query strings, which carry reset tokens and email
+  addresses, auth headers and span URLs are stripped before events are sent.
+
+About 14,500 lines deleted in total. Migration
+`20260927120000_remove_leagues_and_video` must be applied with
+`prisma migrate deploy`, after a database backup, before this is deployed.
+
 ## Unreleased — Match video: YouTube source, match-time sync, clips
 
 Adds a second video source and makes it the primary one. The presigned-upload
