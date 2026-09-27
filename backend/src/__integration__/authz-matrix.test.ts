@@ -100,6 +100,9 @@ const ROWS: Row[] = [
   { name: 'DELETE player team link', method: 'DELETE', path: (f) => `/api/v1/players/${f.p1.id}/team-links/${f.team.id}`, expect: STAFF, today: OUTSIDER_403 },
   { name: 'POST event', method: 'POST', path: () => '/api/v1/events', body: (f) => ({ matchId: f.match.id, playerId: f.p1.id, eventType: 'KILL', setNumber: 1 }), expect: STAFF, today: OUTSIDER_403 },
   { name: 'POST chat message', method: 'POST', path: (f) => `/api/v1/channels/${f.channel.id}/messages`, body: () => ({ body: 'hi' }), expect: { outsider: 404, viewer: 403, player: 201 }, today: OUTSIDER_403 },
+  // No files attached: the permission guard runs before multer, so a caller who
+  // passes it gets 400 for the empty upload, and one who doesn't never gets there.
+  { name: 'POST chat upload (no files)', method: 'POST', path: (f) => `/api/v1/channels/${f.channel.id}/messages/upload`, body: () => ({}), expect: { outsider: 404, viewer: 403, player: 400 }, today: OUTSIDER_403 },
   { name: 'PATCH message (not author)', method: 'PATCH', path: (f) => `/api/v1/messages/${f.message.id}`, body: () => ({ body: 'edited' }), expect: STAFF, today: OUTSIDER_403 },
   { name: 'DELETE message (not author)', method: 'DELETE', path: (f) => `/api/v1/messages/${f.message.id}`, expect: STAFF, today: OUTSIDER_403 },
   { name: 'POST approve request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/approve`, expect: STAFF, today: OUTSIDER_403 },

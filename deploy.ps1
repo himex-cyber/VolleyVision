@@ -49,6 +49,10 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $ProdUrl = 'https://volleyvision-app.netlify.app'
+# Prod identifiers a staging deploy must never point at (a copy-pasted
+# .env.staging would otherwise publish any branch straight to prod).
+$ProdSiteId = '7b2795e8-4722-40cf-bb35-b2fc4e17e813'
+$ProdProjectRef = 'rkkhrmhorgdqkxflipui'
 
 # Parses KEY=VALUE lines (comments and blanks skipped, one pair of surrounding
 # quotes stripped). Never prints values: the file holds staging secrets.
@@ -99,6 +103,11 @@ if ($Target -eq 'staging') {
       Write-Host "DEPLOY ABORTED: $required is missing from backend/.env.staging."
       exit 1
     }
+  }
+  if ($stagingVars['NETLIFY_STAGING_SITE_ID'] -eq $ProdSiteId -or $stagingVars['STAGING_URL'].TrimEnd('/') -eq $ProdUrl -or
+      $stagingVars['DATABASE_URL'].Contains($ProdProjectRef) -or $stagingVars['DIRECT_URL'].Contains($ProdProjectRef)) {
+    Write-Host "DEPLOY ABORTED: backend/.env.staging points at production (site id, URL or database). Fix it before deploying to staging."
+    exit 1
   }
 } else {
   $branch = git rev-parse --abbrev-ref HEAD

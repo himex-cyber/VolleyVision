@@ -37,6 +37,10 @@ if (testFiles.length === 0) {
 // login or Supabase key in that file from being used by a test run.
 const childEnv = {
   ...process.env,
+  // A dead local address: every test must go through installFakePrisma, and
+  // one that forgets fails here instead of reaching backend/.env's prod DB.
+  DATABASE_URL: 'postgresql://unit-tests@127.0.0.1:1/none',
+  DIRECT_URL: 'postgresql://unit-tests@127.0.0.1:1/none',
   NETLIFY: '1', // index.ts must not listen; http tests start their own server
   NODE_ENV: 'test', // in-memory rate limiter
   JWT_SECRET: process.env.JWT_SECRET || 'test-secret',
