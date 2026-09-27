@@ -1,5 +1,5 @@
 import { AccessTier, Prisma, TeamRole } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+import { prisma, runSerializable } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { defaultAccessTiers } from './permission.service';
 import { applyCreatePlayer } from './playerActions.service';
@@ -115,24 +115,16 @@ async function withRoleSlot<T>(
   excludeMembershipId: string | null,
   write: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const assistants = role === 'ASSISTANT_COACH'
-        ? await tx.teamMembership.count({
-            where: { teamId, role: 'ASSISTANT_COACH', ...(excludeMembershipId ? { NOT: { id: excludeMembershipId } } : {}) },
-          })
-        : 0;
-      const error = roleSlotError(role, assistants);
-      if (error) throw new AppError(409, error);
-      return write(tx);
-    }, { isolationLevel: 'Serializable' });
-  } catch (err) {
-    // P2034: Postgres aborted the loser of two racing transactions.
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
-      throw new AppError(409, "Someone else just changed this team's roles. Try again.");
-    }
-    throw err;
-  }
+  return runSerializable(async (tx) => {
+    const assistants = role === 'ASSISTANT_COACH'
+      ? await tx.teamMembership.count({
+          where: { teamId, role: 'ASSISTANT_COACH', ...(excludeMembershipId ? { NOT: { id: excludeMembershipId } } : {}) },
+        })
+      : 0;
+    const error = roleSlotError(role, assistants);
+    if (error) throw new AppError(409, error);
+    return write(tx);
+  });
 }
 
 /** Add a user to a team with a given role. */
@@ -187,13 +179,19 @@ export async function updateMemberRole(teamId: string, membershipId: string, rol
   if (membership.role === 'HEAD_COACH') {
     throw new AppError(409, 'The head coach is the team owner. Transfer ownership to change them.');
   }
-  const updated = await withRoleSlot(teamId, role, membershipId, (tx) =>
-    tx.teamMembership.update({
+  const updated = await withRoleSlot(teamId, role, membershipId, async (tx) => {
+    // Re-read inside the transaction: a concurrent ownership transfer may have
+    // just made this member the head coach, and the check above ran before it.
+    const current = await tx.teamMembership.findUniqueOrThrow({ where: { id: membershipId }, select: { role: true } });
+    if (current.role === 'HEAD_COACH') {
+      throw new AppError(409, 'The head coach is the team owner. Transfer ownership to change them.');
+    }
+    return tx.teamMembership.update({
       where: { id: membershipId },
       data: { role, ...defaultAccessTiers(role) },
       select: memberSelect,
-    }),
-  );
+    });
+  });
   // Promoted to player — put them on the roster. Safe to call unconditionally
   // for PLAYER updates since ensurePlayerForMember is idempotent.
   if (role === 'PLAYER') await ensurePlayerForMember(membership.teamId, membership.userId);
@@ -220,11 +218,16 @@ export async function updateMemberAccess(
 
 /** Remove a member from a team. */
 export async function removeMember(teamId: string, membershipId: string) {
-  const membership = await findTeamMembership(teamId, membershipId);
-  if (membership.role === 'HEAD_COACH') {
-    throw new AppError(409, 'Transfer ownership before removing the head coach.');
-  }
-  await prisma.teamMembership.delete({ where: { id: membershipId } });
+  await findTeamMembership(teamId, membershipId);
+  // Check and delete together, so a concurrent ownership transfer that makes
+  // this member head coach can't be followed by deleting them.
+  await runSerializable(async (tx) => {
+    const current = await tx.teamMembership.findUniqueOrThrow({ where: { id: membershipId }, select: { role: true } });
+    if (current.role === 'HEAD_COACH') {
+      throw new AppError(409, 'Transfer ownership before removing the head coach.');
+    }
+    await tx.teamMembership.delete({ where: { id: membershipId } });
+  });
 }
 
 /** Returns true if the user is a member of the team. */

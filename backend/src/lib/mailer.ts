@@ -1,4 +1,5 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import { escapeHtml } from './escapeHtml';
 
 /**
  * Email delivery over SMTP (Gmail by default). Configured via env:
@@ -78,7 +79,10 @@ interface InvitationEmailData {
 export async function sendInvitationEmail(inv: InvitationEmailData, joinCode: string): Promise<boolean> {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   const redeemUrl = `${clientUrl}/invitations/redeem?code=${encodeURIComponent(joinCode)}`;
-  const inviter = `${inv.invitedBy.firstName} ${inv.invitedBy.lastName}`.trim();
+  // roleLabel is derived from the TeamRole enum, not user input, so it's the
+  // one interpolated value below that doesn't need escaping.
+  const inviter = escapeHtml(`${inv.invitedBy.firstName} ${inv.invitedBy.lastName}`.trim());
+  const teamName = escapeHtml(inv.team.name);
   const roleLabel = inv.role.replace(/_/g, ' ').toLowerCase();
 
   const html = `
@@ -87,7 +91,7 @@ export async function sendInvitationEmail(inv: InvitationEmailData, joinCode: st
     <p style="color:#8FA0C4;font-size:13px;margin:0 0 24px;">See the game. Raise your game.</p>
     <p style="font-size:15px;line-height:1.5;">
       <strong>${inviter}</strong> invited you to join
-      <strong>${inv.team.name}</strong> as <strong>${roleLabel}</strong> on VolleyVision.
+      <strong>${teamName}</strong> as <strong>${roleLabel}</strong> on VolleyVision.
     </p>
     <div style="background:#1A2745;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
       <p style="color:#8FA0C4;font-size:12px;margin:0 0 6px;">Your join code</p>
@@ -129,7 +133,7 @@ export async function sendPasswordResetEmail(user: PasswordResetEmailData, token
     <h1 style="font-family:'Barlow Semi Condensed',sans-serif;color:#FFB81C;font-size:24px;margin:0 0 4px;">VolleyVision</h1>
     <p style="color:#8FA0C4;font-size:13px;margin:0 0 24px;">See the game. Raise your game.</p>
     <p style="font-size:15px;line-height:1.5;">
-      Hi ${user.firstName}, we received a request to reset your VolleyVision password.
+      Hi ${escapeHtml(user.firstName)}, we received a request to reset your VolleyVision password.
     </p>
     <a href="${resetUrl}" style="display:inline-block;background:#FFB81C;color:#111C36;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:15px;margin:16px 0;">Reset password</a>
     <p style="color:#8FA0C4;font-size:12px;line-height:1.5;margin:20px 0 0;">
@@ -157,7 +161,7 @@ export async function sendVerificationEmail(to: string, firstName: string, token
     <h1 style="font-family:'Barlow Semi Condensed',sans-serif;color:#FFB81C;font-size:24px;margin:0 0 4px;">VolleyVision</h1>
     <p style="color:#8FA0C4;font-size:13px;margin:0 0 24px;">See the game. Raise your game.</p>
     <p style="font-size:15px;line-height:1.5;">
-      Hi ${firstName}, please verify your email address to join teams on VolleyVision.
+      Hi ${escapeHtml(firstName)}, please verify your email address to join teams on VolleyVision.
     </p>
     <a href="${verifyUrl}" style="display:inline-block;background:#FFB81C;color:#111C36;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:15px;margin:16px 0;">Verify email</a>
     <p style="color:#8FA0C4;font-size:12px;line-height:1.5;margin:20px 0 0;">

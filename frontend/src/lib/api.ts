@@ -19,18 +19,25 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach stored JWT to every request automatically
+// Credential endpoints never get the stored JWT. Otherwise a mistyped password
+// on /auth/login, sent while a valid session is stored, comes back 401 *with*
+// an Authorization header, and the interceptor below mistakes it for a revoked
+// session and logs the user out.
+const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/auth/verify-email'];
+
+// Attach stored JWT to every other request automatically
 api.interceptors.request.use((config) => {
   const token = getToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const isPublicAuth = PUBLIC_AUTH_PATHS.some((p) => config.url?.startsWith(p));
+  if (token && !isPublicAuth) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 // Tokens are now revoked server-side after a password change, so a 401 can
 // happen mid-session on any authenticated request, not just at login. Only
 // treat it as a session revocation when the request actually carried a
-// token — a 401 from /auth/login (bad password) has no Authorization header
-// and must stay a normal per-form error instead of forcing a logout.
+// token; credential endpoints never do (see PUBLIC_AUTH_PATHS), so a bad
+// password stays a normal per-form error instead of forcing a logout.
 api.interceptors.response.use(
   (res) => res,
   (error) => {
@@ -48,7 +55,23 @@ api.interceptors.response.use(
 /** True when a request failed because the caller's email isn't verified yet
  *  (join-team endpoints: accept invitation, redeem join code, claim player). */
 export function isEmailNotVerifiedError(err: unknown): boolean {
-  return (err as any)?.response?.data?.code === 'EMAIL_NOT_VERIFIED';
+  return axios.isAxiosError(err) && err.response?.data?.code === 'EMAIL_NOT_VERIFIED';
+}
+
+/** True when a request failed because of our own rate limiting (429) —
+ *  used by resend-verification-email flows to show a distinct message. */
+export function isRateLimitedError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 429;
+}
+
+/** Every mutation in this app surfaces backend errors the same way: the
+ *  Express error middleware puts a user-facing string at response.data.error.
+ *  One shared extractor instead of an `any`-typed destructure at every call site. */
+export function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    return (err.response?.data as { error?: string } | undefined)?.error ?? fallback;
+  }
+  return fallback;
 }
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────

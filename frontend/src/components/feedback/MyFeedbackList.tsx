@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import { useMyFeedback } from '../../hooks';
-import { feedbackApi } from '../../lib/api';
+import { feedbackApi, getApiErrorMessage } from '../../lib/api';
 import type { Feedback, FeedbackStatus, FeedbackType } from '../../types/feedback';
 import { formatBytes } from '../chat/format';
 
 // The feedback views (submit, mine, admin triage) share this vocabulary, so it is
 // declared once here rather than copied into each of them.
+// eslint-disable-next-line react-refresh/only-export-components -- shared constant, deliberately colocated with the list that owns this vocabulary rather than split into its own file
 export const TYPE_LABELS: Record<FeedbackType, string> = {
   BUG: 'Bug report',
   FEATURE_REQUEST: 'Feature request',
   GENERAL: 'General',
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- see TYPE_LABELS above
 export const TYPE_BADGE: Record<FeedbackType, string> = {
   BUG: 'badge-error',
   FEATURE_REQUEST: 'badge-info',
   GENERAL: 'badge-neutral',
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- see TYPE_LABELS above
 export const STATUS_LABELS: Record<FeedbackStatus, string> = {
   OPEN: 'Open',
   IN_PROGRESS: 'In progress',
@@ -32,6 +35,7 @@ const STATUS_BADGE: Record<FeedbackStatus, string> = {
   WONT_FIX: 'badge-neutral',
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- see TYPE_LABELS above
 export const TYPE_OPTIONS: FeedbackType[] = ['BUG', 'FEATURE_REQUEST', 'GENERAL'];
 
 /** Fetch a short-lived signed URL and open the attachment in a new tab. */
@@ -39,8 +43,8 @@ async function openAttachment(feedbackId: string, attachmentId: string, onError:
   try {
     const url = await feedbackApi.getAttachmentUrl(feedbackId, attachmentId);
     window.open(url, '_blank', 'noopener');
-  } catch (err: any) {
-    onError(err?.response?.data?.error ?? "Couldn't open that attachment. Try again.");
+  } catch (err) {
+    onError(getApiErrorMessage(err, "Couldn't open that attachment. Try again."));
   }
 }
 

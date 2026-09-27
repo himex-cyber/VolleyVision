@@ -47,13 +47,12 @@ frontend/                 Vite + React SPA
 docs/design/               Design notes and mockups
 docs/audit/AUDIT-LOG.md    September 2026 audit log
 CHANGELOG.md               Release history, newest first
-netlify.toml                Build and redirect config
 deploy.ps1                  Production deploy script
 ```
 
 ## Local development
 
-Prerequisites: Node 22 (see `.nvmrc` and `netlify.toml`).
+Prerequisites: Node 22 (see `.nvmrc`).
 
 **Important:** `backend/.env` points at the production Supabase database. Any `prisma` command run from `backend/` (migrate, studio, db push) hits production — there is no separate local or staging database.
 
@@ -99,7 +98,7 @@ npm run db:seed          # prisma/seed.ts
 ```bash
 npm run dev              # vite, :5173
 npm run build            # tsc && vite build
-npm run lint             # eslint --max-warnings 0 (not yet configured; see CHANGELOG)
+npm run lint             # eslint 9 flat config, --max-warnings 0
 npm run preview          # vite preview
 ```
 
@@ -108,6 +107,8 @@ npm run preview          # vite preview
 Backend tests are plain `assert`-based TypeScript files at `backend/src/lib/*.test.ts`, run directly by `ts-node` via `npm test`. They must stay pure logic — importing anything that pulls in `lib/prisma` instantiates a `PrismaClient` at module load, which needs a platform-specific engine binary the test runner doesn't have. This is why the static role-permission map lives in `lib/rolePermissions.ts`, separate from `services/permission.service.ts`.
 
 There are no frontend tests yet.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`/`develop`. It runs `prisma validate`, type-checks, the backend tests, the frontend lint and build, and a production dependency audit for both packages. It never connects to a database or deploys.
 
 `backend/scripts/` holds the test runner, the import-cycle check and a few one-off maintenance scripts (`ensure-admin`, `backfill-team-join-codes`, `cleanup-orphaned-teams`). They are not part of `npm test`, and the database ones run against production.
 
@@ -143,7 +144,7 @@ From the repository root:
 .\deploy.ps1
 ```
 
-This builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
+The Netlify build and redirect config (`netlify.toml`) is kept on the maintainer's machine and is not committed. This builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
 
 ## Security
 

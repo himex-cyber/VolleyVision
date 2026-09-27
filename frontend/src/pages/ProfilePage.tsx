@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useProfile, useUpdateProfile, usePlayerBests, usePlayerDashboard } from '../hooks';
 import type { PlayerBestEntry, Position, DevelopmentPoint } from '../types';
 import { POSITION_FULL_LABELS } from '../types';
+import { getApiErrorMessage } from '../lib/api';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
 import TeamTrendChart from '../components/charts/TeamTrendChart';
 import PlayerRecordsManager from '../components/player/PlayerRecordsManager';
@@ -83,12 +84,12 @@ export default function ProfilePage() {
         heightCm: form.heightCm === '' ? null : Number(form.heightCm),
         weightKg: form.weightKg === '' ? null : Number(form.weightKg),
         preferredPosition: (form.preferredPosition || null) as Position | null,
-      } as any);
+      });
       setEditing(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
-      setSaveError(err?.response?.data?.error ?? "Couldn't save your profile. Check your connection and try again.");
+    } catch (err) {
+      setSaveError(getApiErrorMessage(err, "Couldn't save your profile. Check your connection and try again."));
     }
   }
 

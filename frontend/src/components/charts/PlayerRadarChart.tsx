@@ -26,6 +26,7 @@ interface Props {
  * so this takes `any` and narrows locally rather than fighting the signature.
  */
 function makeAxisTick(values: Record<string, number>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- recharts' tick renderer props type is too loose to narrow usefully; see comment above
   return function AxisTick(props: any) {
     const metric: string = props?.payload?.value ?? '';
     const textAnchor = props?.textAnchor as 'start' | 'middle' | 'end' | undefined;

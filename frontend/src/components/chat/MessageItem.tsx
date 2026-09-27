@@ -3,6 +3,7 @@ import type { ChatAttachment, ChatMessage } from '../../types';
 import { formatBytes } from './format';
 
 /** "just now" → "5m" → "3h" → "Tue 14:02" → "12 Jun" — courtside-glance sizes. */
+// eslint-disable-next-line react-refresh/only-export-components -- shared time formatter belongs next to the message bubble that uses it, not split into its own file
 export function formatMessageTime(iso: string): string {
   const then = new Date(iso);
   const diffMs = Date.now() - then.getTime();

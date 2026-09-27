@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import { prisma, runSerializable } from '../lib/prisma';
 import { EventType } from '@prisma/client';
 import { ownEventsOnly } from '../lib/eventFilters';
 import { assertTeamVisible } from '../lib/teamVisibility';
@@ -110,18 +110,24 @@ export async function linkPlayerToUser(playerId: string, userId: string) {
     );
   }
 
-  // One claimed player per user per team — Player.userId has no DB-level
-  // unique constraint (nullable, many players can share the same team), so
-  // enforce it here.
-  const existing = await prisma.player.findFirst({
-    where: { userId, teamId: player.teamId, NOT: { id: playerId } },
-    select: { id: true },
+  // One claimed player per user per team. Player.userId has no DB-level unique
+  // constraint, so the check and the claim run as one serializable
+  // transaction: a double-click can't claim two records, and two people can't
+  // both claim the same unclaimed one.
+  return runSerializable(async (tx) => {
+    const current = await tx.player.findUniqueOrThrow({ where: { id: playerId }, select: { userId: true } });
+    if (current.userId && current.userId !== userId) {
+      throw Object.assign(new Error('This player record is already linked to another account'), { statusCode: 409 });
+    }
+    const existing = await tx.player.findFirst({
+      where: { userId, teamId: player.teamId, NOT: { id: playerId } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw Object.assign(new Error('You already have a linked player record on this team'), { statusCode: 409 });
+    }
+    return tx.player.update({ where: { id: playerId }, data: { userId } });
   });
-  if (existing) {
-    throw Object.assign(new Error('You already have a linked player record on this team'), { statusCode: 409 });
-  }
-
-  return prisma.player.update({ where: { id: playerId }, data: { userId } });
 }
 
 export async function unlinkPlayer(playerId: string, userId: string) {
