@@ -153,7 +153,7 @@ From the repository root:
 .\deploy.ps1
 ```
 
-The Netlify build and redirect config (`netlify.toml`) is kept on the maintainer's machine and is not committed. This builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
+The Netlify build, function and redirect config is `netlify.toml` at the repo root. `deploy.ps1` builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
 
 ## Security
 

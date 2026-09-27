@@ -26,10 +26,8 @@ graphify-out/
 ruvector.db
 .swarm/
 
-# Local-only tooling and deploy config (Karlos, 2026-09-27): kept on disk,
-# never pushed. deploy.ps1 builds from the local netlify.toml.
+# Local-only Claude Code instructions (Karlos, 2026-09-27): kept on disk, never pushed.
 CLAUDE.md
-netlify.toml
 
 # Browser-automation tool logs
 .playwright-mcp/
