@@ -248,6 +248,29 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 - About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
 - Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
 
+### Audit closed (2026-09-27)
+
+Phases 0–4 are complete. **Phase 5 (the Ruflo trial) was dropped** at Karlos's decision: it was mostly about Ruflo, whose MCP server never connected in this session, and the audit didn't need it.
+
+**Final state:**
+- **Releases:** `v9.0.0` (Phases 1A, 1B, 2), `v9.1.0` (Phases 2.1, 3) and `v9.2.0` (Phase 4), all deployed.
+- **Code health:** CI runs on every PR, and both packages have 0 production vulnerabilities.
+- **Tests:** 31 backend test files, covering every audit security fix.
+- **Supabase advisors:**
+  - Security: 20 INFO findings, all the intended "RLS with no policies" default-deny. No action.
+  - Performance: 32 INFO "unused index" findings, expected with 2 users and 1 team. Keep them; they'll be used as data grows.
+
+- **Greptile:** it only ever reviewed #7 and #9, because its trial had ended before #4–#6 and #10–#13. All 11 findings from those two reviews are fixed (9 in #10, 2 in #13), so nothing urgent is outstanding.
+
+**Left for later:**
+- Express 5 upgrade (needs the `req.params` typing work).
+- Move `teamJoinCode` and `invitation` services from `Object.assign(new Error)` to `AppError`.
+- A full pass over the non-urgent Greptile comments.
+- A real avatar upload.
+- The Sentry test button, which belongs on the Feedback page.
+- Source-map upload, once Karlos sets `SENTRY_AUTH_TOKEN` as a local Windows user variable.
+- Karlos to re-authorize Netlify's GitHub access.
+
 ### Release v9.1.0 and Phase 4 (2026-09-27)
 
 **v9.1.0 release:**

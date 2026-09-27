@@ -2,7 +2,11 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## Unreleased — Audit Phase 4: tests and error handling
+## v9.2.0 — 2026-09-27
+
+The final release of the September 2026 audit. No migration.
+
+### Phase 4: tests and error handling
 
 - **Requests no longer hang when the database fails during a permission
   check.** Express 4 ignored rejected async middleware, so the request sat
