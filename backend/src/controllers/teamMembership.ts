@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AccessTier, TeamRole } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
-import { prisma } from '../lib/prisma';
 import {
   getTeamMembers,
   getUserTeams,
@@ -10,6 +9,7 @@ import {
   updateMemberAccess,
   removeMember,
   searchUsers,
+  findTeamMembership,
 } from '../services/teamMembership.service';
 
 const VALID_ROLES = new Set<string>([
@@ -62,11 +62,7 @@ export async function updateMember(req: Request, res: Response, next: NextFuncti
     const hasTierChange = rosterAccess !== undefined || invitationAccess !== undefined || matchAccess !== undefined;
 
     if (hasTierChange) {
-      const membership = await prisma.teamMembership.findUnique({
-        where: { id: req.params.memberId },
-        select: { userId: true },
-      });
-      if (!membership) throw new AppError(404, 'Membership not found.');
+      const membership = await findTeamMembership(req.params.id, req.params.memberId);
       if (membership.userId === req.user!.userId) {
         throw new AppError(403, 'You cannot change your own access tiers.');
       }
@@ -74,11 +70,11 @@ export async function updateMember(req: Request, res: Response, next: NextFuncti
 
     // Role change re-seeds tiers to defaults; apply explicit tier overrides after.
     let member = role !== undefined
-      ? await updateMemberRole(req.params.memberId, parseRole(role))
+      ? await updateMemberRole(req.params.id, req.params.memberId, parseRole(role))
       : null;
 
     if (hasTierChange) {
-      member = await updateMemberAccess(req.params.memberId, {
+      member = await updateMemberAccess(req.params.id, req.params.memberId, {
         ...(rosterAccess !== undefined ? { rosterAccess: parseTier(rosterAccess) } : {}),
         ...(invitationAccess !== undefined ? { invitationAccess: parseTier(invitationAccess) } : {}),
         ...(matchAccess !== undefined ? { matchAccess: parseTier(matchAccess) } : {}),
@@ -93,7 +89,7 @@ export async function updateMember(req: Request, res: Response, next: NextFuncti
 /** DELETE /api/v1/teams/:id/members/:memberId */
 export async function deleteMember(req: Request, res: Response, next: NextFunction) {
   try {
-    await removeMember(req.params.memberId);
+    await removeMember(req.params.id, req.params.memberId);
     res.status(204).send();
   } catch (err) { next(err); }
 }

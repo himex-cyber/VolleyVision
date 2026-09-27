@@ -126,13 +126,24 @@ export async function addMember(teamId: string, userId: string, role: TeamRole) 
 }
 
 /**
+ * Every member mutation arrives as /teams/:id/members/:memberId, and the route
+ * guard only checks the caller's permission on :id. Scoping the lookup to that
+ * same team is what stops the owner of any team (and anyone can create one)
+ * editing or removing a membership that belongs to a different team.
+ */
+export async function findTeamMembership(teamId: string, membershipId: string) {
+  const membership = await prisma.teamMembership.findFirst({ where: { id: membershipId, teamId } });
+  if (!membership) throw new AppError(404, 'Membership not found.');
+  return membership;
+}
+
+/**
  * Update a member's role. Changing the role re-seeds the three access tiers to
  * that role's defaults — a role change is a coarse action, and this avoids a
  * demoted member silently keeping elevated access. A coach can then fine-tune.
  */
-export async function updateMemberRole(membershipId: string, role: TeamRole) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+export async function updateMemberRole(teamId: string, membershipId: string, role: TeamRole) {
+  const membership = await findTeamMembership(teamId, membershipId);
   const updated = await prisma.teamMembership.update({
     where: { id: membershipId },
     data: { role, ...defaultAccessTiers(role) },
@@ -146,11 +157,11 @@ export async function updateMemberRole(membershipId: string, role: TeamRole) {
 
 /** Update one or more of a member's access tiers, leaving role untouched. */
 export async function updateMemberAccess(
+  teamId: string,
   membershipId: string,
   tiers: { rosterAccess?: AccessTier; invitationAccess?: AccessTier; matchAccess?: AccessTier },
 ) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+  await findTeamMembership(teamId, membershipId);
   return prisma.teamMembership.update({
     where: { id: membershipId },
     data: {
@@ -163,9 +174,8 @@ export async function updateMemberAccess(
 }
 
 /** Remove a member from a team. */
-export async function removeMember(membershipId: string) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+export async function removeMember(teamId: string, membershipId: string) {
+  await findTeamMembership(teamId, membershipId);
   await prisma.teamMembership.delete({ where: { id: membershipId } });
 }
 
