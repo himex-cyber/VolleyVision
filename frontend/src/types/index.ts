@@ -22,7 +22,7 @@ export interface TeamMember {
     id: string;
     firstName: string;
     lastName: string;
-    email: string;
+    email?: string; // only sent to members who can manage the roster
     role: UserRole;
     profileImage: string | null;
   };
@@ -44,13 +44,6 @@ export interface UserTeamMembership {
 
 // No `role`: the add-member lookup deliberately does not disclose a
 // stranger's platform role, and nothing rendered it.
-export interface UserSearchResult {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
 // ─── Profile (Phase 5 Sprint 5) ───────────────────────────────────────────────
 
 export interface UserProfile {

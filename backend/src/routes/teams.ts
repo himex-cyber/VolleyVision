@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getTeams, getTeam, createTeam, updateTeam, deleteTeam } from '../controllers/teams';
 import { myTeams, transferTeam, teamOwner } from '../controllers/teamOwnership';
-import { listMembers, createMember, updateMember, deleteMember } from '../controllers/teamMembership';
+import { listMembers, updateMember, deleteMember } from '../controllers/teamMembership';
 import { createTeamInvitation, listTeamInvitations } from '../controllers/invitation';
 import { listTeamJoinCodes, regenerateTeamJoinCode } from '../controllers/teamJoinCode';
 import { listTeamApprovalRequests } from '../controllers/approval';
@@ -44,7 +44,6 @@ router.post('/:id/transfer', requireAuth, requireTeamPermission(Permission.TRANS
 
 // Membership management
 router.get('/:id/members', optionalAuth, visibleByTeamParam('id'), listMembers);
-router.post('/:id/members',   requireAuth, requireTeamPermission(Permission.MANAGE_MEMBERS), createMember);
 router.patch('/:id/members/:memberId', requireAuth, requireTeamPermission(Permission.MANAGE_MEMBERS), updateMember);
 router.delete('/:id/members/:memberId', requireAuth, requireTeamPermission(Permission.MANAGE_MEMBERS), deleteMember);
 
