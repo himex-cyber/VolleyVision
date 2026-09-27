@@ -6,6 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { assertTeamVisible } from '../lib/teamVisibility';
 import { getOrCreateTeamChannel } from '../services/teamChannel.service';
 import {
   listMessages,
@@ -86,19 +87,25 @@ export async function uploadChannelMessage(req: Request, res: Response, next: Ne
 }
 
 /** Resolve the team a message belongs to (404 if the message doesn't exist). */
-async function getMessageTeamId(messageId: string): Promise<string> {
+/**
+ * The message's team, once the caller is known to be able to see it: a
+ * non-member gets the same 404 as for a message that doesn't exist, so a
+ * message id never confirms anything to an outsider.
+ */
+async function getVisibleMessageTeamId(messageId: string, userId: string): Promise<string> {
   const message = await prisma.message.findUnique({
     where: { id: messageId },
     select: { channel: { select: { teamId: true } } },
   });
   if (!message) throw new AppError(404, 'Message not found.');
+  await assertTeamVisible(message.channel.teamId, userId);
   return message.channel.teamId;
 }
 
 export async function updateMessage(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.user) throw new AppError(401, 'Authentication required.');
-    const teamId = await getMessageTeamId(req.params.messageId);
+    const teamId = await getVisibleMessageTeamId(req.params.messageId, req.user.userId);
     // Editing is a form of posting — a member removed from the team (or demoted
     // to VIEWER) loses it immediately, even for their own old messages.
     const allowed = await hasTeamPermission(req.user.userId, teamId, Permission.POST_MESSAGE);
@@ -113,7 +120,7 @@ export async function updateMessage(req: Request, res: Response, next: NextFunct
 export async function deleteMessage(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.user) throw new AppError(401, 'Authentication required.');
-    const teamId = await getMessageTeamId(req.params.messageId);
+    const teamId = await getVisibleMessageTeamId(req.params.messageId, req.user.userId);
     const isModerator = await canModerateChannel(req.user.userId, teamId);
     if (!isModerator) {
       // Author self-delete still requires live team membership.

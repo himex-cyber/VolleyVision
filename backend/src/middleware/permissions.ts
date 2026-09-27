@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { asyncHandler } from './asyncHandler';
 import { prisma } from '../lib/prisma';
+import { assertTeamVisible } from '../lib/teamVisibility';
 import { Permission, hasTeamPermission, canActInCategory, AccessCategory, isGlobalAdmin } from '../services/permission.service';
 
 const FORBIDDEN = { error: 'You do not have permission to perform this action.' };
@@ -78,6 +79,8 @@ export function requireChannelPermission(permission: Permission) {
       select: { teamId: true },
     });
     if (!channel) { res.status(404).json({ error: 'Channel not found.' }); return; }
+    // Visibility first: a non-member gets 404, as if the channel didn't exist.
+    await assertTeamVisible(channel.teamId, req.user.userId);
     const allowed = await hasTeamPermission(req.user.userId, channel.teamId, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();

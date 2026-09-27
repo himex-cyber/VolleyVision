@@ -48,10 +48,24 @@ async function eventWritesAreRateLimited(base: string) {
   assert.notEqual(await send(base, 'POST', '/api/v1/events', tokenFor('other'), {}), 429, 'per user, not global');
 }
 
+// Chat answered non-members 403, which confirms the channel or message exists.
+// Everything team-scoped answers an outsider 404.
+async function chatIsNotFoundForOutsiders(base: string) {
+  world();
+  db.channel.findUnique = async () => ({ id: 'C', teamId: 'T' });
+  db.message.findUnique = async () => ({ id: 'M', senderId: 'coach', channel: { teamId: 'T' }, channelId: 'C' });
+  const outsider = tokenFor('outsider');
+  assert.equal(await send(base, 'GET', '/api/v1/channels/C/messages', outsider), 404);
+  assert.equal(await send(base, 'POST', '/api/v1/channels/C/messages', outsider, { body: 'hi' }), 404);
+  assert.equal(await send(base, 'PATCH', '/api/v1/messages/M', outsider, { body: 'edited' }), 404);
+  assert.equal(await send(base, 'DELETE', '/api/v1/messages/M', outsider), 404);
+}
+
 async function main() {
   await withServer(async (base) => {
     await invitationsAreRateLimited(base);
     await eventWritesAreRateLimited(base);
+    await chatIsNotFoundForOutsiders(base);
   });
   console.log('http.hardening.test.ts passed');
 }
