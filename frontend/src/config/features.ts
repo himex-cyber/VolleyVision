@@ -1,32 +1,10 @@
 // Feature flags — refocus VolleyVision on its core (coaches and players seeing
-// team and personal stats). Advanced modules remain in the codebase but are
-// hidden from the UI until re-enabled here. Flip a flag to bring one back.
+// team and personal stats). Leagues, video, assistant, scouting, heat maps,
+// recommendations, rotation analytics and momentum were removed entirely
+// (not just hidden) — see CHANGELOG. Flip teamChat off only if the polled
+// channel needs to be pulled temporarily.
 
 export const features = {
-  // League Intelligence: leagues, seasons, fixtures, standings, rankings, match centre.
-  leagues: false,
-
-  // Match video upload + timestamp tagging.
-  video: false,
-
-  // Natural-language analytics assistant.
-  assistant: false,
-
-  // Opponent scouting reports.
-  opponentScouting: false,
-
-  // Court heat maps / zone breakdowns.
-  heatMaps: false,
-
-  // Coaching + training recommendation engines.
-  recommendations: false,
-
-  // Rotation analytics panels.
-  rotationAnalytics: false,
-
-  // Match momentum timeline charts.
-  momentum: false,
-
   // Team chat — one shared channel per team (polled).
   teamChat: true,
 } as const;

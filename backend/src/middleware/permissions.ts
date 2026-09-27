@@ -8,35 +8,14 @@ const FORBIDDEN = { error: 'You do not have permission to perform this action.' 
 
 /**
  * Requires the authenticated user to have UserRole.ADMIN.
- * Use for system-level operations (creating leagues, seasons) that are not
- * scoped to a specific team. All team-level permissions continue to use
- * hasTeamPermission — this is purely a global-role check.
+ * Use for system-level operations that are not scoped to a specific team.
+ * All team-level permissions continue to use hasTeamPermission — this is
+ * purely a global-role check.
  */
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
   if (req.user.role !== 'ADMIN') { res.status(403).json(FORBIDDEN); return; }
   next();
-}
-
-/**
- * Guard for league creation.
- *
- * INTERIM (2026-07): coaches can create leagues alongside admins. Planned to
- * revert to admin-only once real/social leagues ship — see Karlos.
- *
- * Kept as a single isolated check (not scattered inline conditionals) so the
- * revert is one edit: allow ADMIN, or any user who owns a team or holds a
- * HEAD_COACH / MANAGER membership on one.
- */
-export async function requireLeagueCreator(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-  if (req.user.role === 'ADMIN') { next(); return; }
-  const [owned, staffed] = await Promise.all([
-    prisma.team.count({ where: { ownerId: req.user.userId } }),
-    prisma.teamMembership.count({ where: { userId: req.user.userId, role: { in: ['HEAD_COACH', 'MANAGER'] } } }),
-  ]);
-  if (owned > 0 || staffed > 0) { next(); return; }
-  res.status(403).json(FORBIDDEN);
 }
 
 // ─── Team-context middleware ──────────────────────────────────────────────────

@@ -3,9 +3,8 @@ import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-do
 import { useAuth } from '../../context/AuthContext';
 import { useViewMode } from '../../context/ViewModeContext';
 import { useMyInvitations } from '../../hooks';
-import { features } from '../../config/features';
 import {
-  GridIcon, TeamIcon, SparkIcon, MailIcon, UserIcon,
+  GridIcon, TeamIcon, MailIcon, UserIcon,
   BellIcon, ChevronIcon, MenuIcon, LogoutIcon, FeedbackIcon,
 } from './icons';
 import PageLoadingFallback from './PageLoadingFallback';
@@ -34,7 +33,6 @@ type NavItem = {
 const NAV_AUTH: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: GridIcon },
   { to: '/teams', label: 'Teams', icon: TeamIcon },
-  ...(features.leagues ? [{ to: '/leagues', label: 'League Hub', icon: SparkIcon }] : []),
   { to: '/invitations', label: 'Invitations', icon: MailIcon, badge: true },
   { to: '/profile', label: 'Profile', icon: UserIcon },
 ];

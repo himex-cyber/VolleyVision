@@ -17,6 +17,28 @@ import PageLoadingFallback from './components/ui/PageLoadingFallback';
 // Replay stays off on purpose: this app shows match footage and chat that
 // can include minors, and DOM/video capture is exactly the second copy of
 // that data Sentry must not become.
+// Drop query strings from anything Sentry is about to send. Only the fields
+// touched are described, so this needs no type that @sentry/react does not
+// export.
+type ScrubbableEvent = {
+  request?: { url?: string; query_string?: unknown };
+  breadcrumbs?: Array<{ data?: Record<string, unknown> }>;
+};
+
+const pathOnly = (url: string) => url.split('?')[0];
+
+function scrubUrls<T extends ScrubbableEvent>(event: T): T {
+  if (event.request) {
+    delete event.request.query_string;
+    if (event.request.url) event.request.url = pathOnly(event.request.url);
+  }
+  for (const crumb of event.breadcrumbs ?? []) {
+    const url = crumb.data?.url;
+    if (typeof url === 'string') crumb.data!.url = pathOnly(url);
+  }
+  return event;
+}
+
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {
   Sentry.init({
@@ -25,6 +47,19 @@ if (sentryDsn) {
     sendDefaultPii: false,
     // Free-tier Sentry quota; keep sampling low. See backend/src/instrument.ts.
     tracesSampleRate: 0.1,
+    // sendDefaultPii: false is NOT "attach nothing" in SDK v10 - it switches
+    // the SDK to a deny-list that filters by KEY NAME. The page URL is not
+    // filtered at all, and this app puts live secrets in query strings:
+    // /reset-password?token=<a working password-reset token>, and
+    // /redeem-invitation?...  A JS error on either page would otherwise ship
+    // that token to Sentry, where it stays readable until it expires.
+    //
+    // Breadcrumbs carry the same thing from the other side: the SDK records
+    // every fetch, and the add-member lookup is GET /users/search?q=<a full
+    // email address>. Path only, on both. See backend/src/instrument.ts for
+    // the server half and the SDK source this is based on.
+    beforeSend: scrubUrls,
+    beforeSendTransaction: scrubUrls,
   });
 }
 
@@ -53,14 +88,6 @@ const TeamDashboardPage = lazy(() => import('./pages/TeamDashboardPage'));
 const PlayersDashboardPage = lazy(() => import('./pages/PlayersDashboardPage'));
 const OnboardingCoachPage = lazy(() => import('./pages/OnboardingCoachPage'));
 const OnboardingPlayerPage = lazy(() => import('./pages/OnboardingPlayerPage'));
-const LeagueHubPage = lazy(() => import('./pages/LeagueHubPage'));
-const LeagueSeasonPage = lazy(() => import('./pages/LeagueSeasonPage'));
-const LeagueSeasonStandingsPage = lazy(() => import('./pages/LeagueSeasonStandingsPage'));
-const FixturesPage = lazy(() => import('./pages/FixturesPage'));
-const ResultsPage = lazy(() => import('./pages/ResultsPage'));
-const LeagueTeamProfilePage = lazy(() => import('./pages/LeagueTeamProfilePage'));
-const LeagueSeasonRankingsPage = lazy(() => import('./pages/LeagueSeasonRankingsPage'));
-const MatchCentrePage = lazy(() => import('./pages/MatchCentrePage'));
 const TeamChatPage = lazy(() => import('./pages/TeamChatPage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 
@@ -134,21 +161,10 @@ function App() {
               <Route path="/matches/:matchId/track" element={<TrackingPage />} />
               <Route path="/matches/:matchId/watch" element={<MatchWatchPage />} />
               <Route path="/players/:playerId/dashboard" element={<PlayersDashboardPage />} />
-
-              {features.leagues && (
-                <>
-                  <Route path="/leagues" element={<LeagueHubPage />} />
-                  <Route path="/leagues/seasons/:seasonId" element={<LeagueSeasonPage />} />
-                  <Route path="/leagues/seasons/:seasonId/standings" element={<LeagueSeasonStandingsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/fixtures" element={<FixturesPage />} />
-                  <Route path="/leagues/seasons/:seasonId/results" element={<ResultsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/rankings" element={<LeagueSeasonRankingsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/match-centre" element={<MatchCentrePage />} />
-                  <Route path="/leagues/league-teams/:leagueTeamId/profile" element={<LeagueTeamProfilePage />} />
-                </>
-              )}
             </Route>
           </Route>
+          {/* Unknown URLs, including bookmarks to removed features like /leagues */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
         </ViewModeProvider>
