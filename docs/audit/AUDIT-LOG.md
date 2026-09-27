@@ -248,6 +248,32 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 - About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
 - Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
 
+### Release v9.1.0 and Phase 4 (2026-09-27)
+
+**v9.1.0 release:**
+- #10 was merged (its branch kept), then #11 was retargeted to `develop` and merged, then #12 took `develop` to `main`. Tag `v9.1.0` is on `4cfb687`. Tag `v9.0.0` was added on `2bc83eb`, the earlier release.
+- Deployed with the fixed `deploy.ps1`.
+- Live checks: API healthy, all 6 security headers served, no CSP violations on the login page, and Karlos's screenshots of the dashboard charts and tables render correctly. No source maps are public.
+- Sentry now reports to `volleyvision` (test issue VOLLEYVISION-1 arrived).
+
+**The Sentry source-map upload fails with 401. Root cause:** the Netlify CLI passes secret env vars to local builds as a literal `*******`, and that masked value even overrides the shell. So `deploy.ps1` can never receive a Netlify-stored secret. The fix, done by Karlos: delete `SENTRY_AUTH_TOKEN` from Netlify and set it as a Windows user environment variable.
+
+**Supabase security advisor:** 20 INFO findings, all "RLS enabled, no policies". This is intentional. RLS with no policies means default-deny for the Supabase Data API, and the backend connects as the owner role, so it isn't affected.
+
+**Phase 4 (branch `test/phase4`):**
+
+| Item | Change |
+|---|---|
+| Hanging requests | Adds `middleware/asyncHandler.ts`, applied to the 8 guards in `permissions.ts` plus `requireCreateMatch`, `requireManageLinkedTeam`, `requireRosterAccess` and `requireTrackForBodyTeam`. `visibility.ts` and `teamOwner.ts` already caught their own errors. An Express 5 upgrade was tried and reverted: `@types/express` 5 types every `req.params` value as `string | string[]`, which produced 129 type errors. |
+| Error handling | Adds `lib/mapError.ts` (`mapErrorToResponse`, with a test), used by `errorHandler`. It honours `statusCode` and `code` on any Error. The 11 shortcut catches in the invitation, playerPortal, profile and teamJoinCode controllers are now `next(err)`. |
+| Test harness | Adds `src/testing/fakePrisma.ts` (a Proxy with explicit stubs and call recording) and `installFakePrisma.ts` (a `require.cache` swap). `run-tests.js` also runs `src/__tests__`. |
+| Tests | 10 new files, 31 total. The mutation check passed: dropping `teamId` from `findTeamMembership`'s where makes the C1 test fail. |
+| Greptile minors | The verify page runs once per token, and a refresh failure after success is ignored. Role pickers are filtered by `canInviteRole` (frontend mirror in `lib/teamRoles.ts`). The README clarifies the second terminal for the frontend. |
+
+**Later:**
+- Upgrade to Express 5 (it needs the `req.params` typing work).
+- `teamJoinCode.service` and `invitation.service` throw plain `Object.assign(new Error, {statusCode})` instead of `AppError`. They work, but it's inconsistent.
+
 ### Phase 3: tooling (branch `chore/tooling`, stacked on `fix/greptile-findings`, 2026-09-27)
 
 | Item | What changed |
