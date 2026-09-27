@@ -78,12 +78,26 @@ async function nonStringEmailIs400(base: string) {
   assert.equal(status, 400);
 }
 
+// ?limit=abc became take: NaN, which Prisma rejects: a 500. Clamp to 1..200,
+// defaulting to 50 for anything that isn't a number.
+async function auditLimitIsClamped(base: string) {
+  world();
+  const takes: unknown[] = [];
+  db.auditLog.findMany = async (args: any) => { takes.push(args.take); return []; };
+  const token = tokenFor('coach');
+  for (const limit of ['abc', '0', '-5', '1000', '25']) {
+    assert.equal(await send(base, 'GET', `/api/v1/audit?limit=${limit}`, token), 200);
+  }
+  assert.deepEqual(takes, [50, 50, 1, 200, 25]); // 0 isn't a usable limit, so it's the default
+}
+
 async function main() {
   await withServer(async (base) => {
     await invitationsAreRateLimited(base);
     await eventWritesAreRateLimited(base);
     await chatIsNotFoundForOutsiders(base);
     await nonStringEmailIs400(base);
+    await auditLimitIsClamped(base);
   });
   console.log('http.hardening.test.ts passed');
 }
