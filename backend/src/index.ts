@@ -25,7 +25,6 @@ import auditRoutes from './routes/audit';
 import channelRoutes from './routes/channels';
 import feedbackRoutes from './routes/feedback';
 import approvalRoutes from './routes/approvals';
-import trainingSessionRoutes from './routes/trainingSessions';
 import { errorHandler } from './middleware/errorHandler';
 import { prisma } from './lib/prisma';
 import { checkDatabase } from './lib/dbHealth';
@@ -69,7 +68,6 @@ app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1', channelRoutes);
 app.use('/api/v1', feedbackRoutes);
 app.use('/api/v1/approval-requests', approvalRoutes);
-app.use('/api/v1/training-sessions', trainingSessionRoutes);
 
 // Health check for the uptime monitor and deploy checks. It touches the
 // database because the likeliest outage is Supabase pausing the project, and a

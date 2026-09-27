@@ -2,6 +2,15 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.4.0 — 2026-09-28
+
+Phase 0 of the rebuild roadmap: removes an unused API. No migration.
+
+- **Removed: the training-session API.** Two endpoints under
+  `/api/v1/training-sessions` were live but no screen ever used them, so
+  they're gone. The `training_sessions` table stays, and training events stay
+  out of match statistics. No migration.
+
 ## v9.3.2 — 2026-09-28
 
 - **Open tabs recover after a deploy.** A tab left open across a deploy
