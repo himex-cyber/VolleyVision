@@ -22,7 +22,7 @@ export interface TeamMember {
     id: string;
     firstName: string;
     lastName: string;
-    email: string;
+    email?: string; // only sent to members who can manage the roster
     role: UserRole;
     profileImage: string | null;
   };
@@ -38,19 +38,12 @@ export interface UserTeamMembership {
     division?: string;
     season: string;
     ownerId?: string | null;
-    leagueSeasonId?: string | null;
     _count?: { players: number; matches: number };
   };
 }
 
-export interface UserSearchResult {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: UserRole;
-}
-
+// No `role`: the add-member lookup deliberately does not disclose a
+// stranger's platform role, and nothing rendered it.
 // ─── Profile (Phase 5 Sprint 5) ───────────────────────────────────────────────
 
 export interface UserProfile {
@@ -204,6 +197,7 @@ export interface User {
   role: UserRole;
   profileImage: string | null;
   signupIntent?: SignupIntent | null;
+  emailVerified: boolean;
   createdAt?: string;
 }
 
@@ -314,27 +308,11 @@ export interface Team {
   // accepted members, or a global ADMIN. There is no public-team concept.
   ownerId: string;
   owner?: TeamOwner | null;
-  // Iteration 3 — the team's current league season (nullable). New matches
-  // default their competition from it.
-  leagueSeasonId?: string | null;
-  leagueSeason?: TeamLeagueSeason | null;
   createdAt: string;
   updatedAt: string;
   _count?: { players: number; matches: number };
   players?: Player[];
   matches?: Match[];
-}
-
-export interface TeamLeagueSeason {
-  id: string;
-  name: string;
-  league: { id: string; name: string; division: string | null };
-}
-
-/** Display label for a team's current league, e.g. "Coastal League · Div 1". */
-export function leagueLabel(ls: TeamLeagueSeason | null | undefined): string | null {
-  if (!ls) return null;
-  return ls.league.division ? `${ls.league.name} · ${ls.league.division}` : ls.league.name;
 }
 
 // ─── Approval queue (Stabilization Pass 2) ───────────────────────────────────
@@ -408,20 +386,6 @@ export interface SetScore {
   away: number;
 }
 
-export type HeatmapData = Record<'attack' | 'serve' | 'pass' | 'block' | 'defence' | 'all', Record<string, number>>;
-export type ZoneCounts = Record<string, number>;
-
-export interface ZoneAttack  { kills: number; errors: number; attempts: number; hittingPct: number | null }
-export interface ZoneServe   { aces: number; errors: number; serveIn: number; attempts: number; efficiency: number | null }
-export interface ZonePass    { pass3: number; pass2: number; pass1: number; pass0: number; attempts: number; rating: number | null }
-export interface ZoneDefence { digs: number; soloBlocks: number; blockAssists: number; total: number }
-export interface DetailedHeatmapData {
-  attack:  Record<string, ZoneAttack>;
-  serve:   Record<string, ZoneServe>;
-  pass:    Record<string, ZonePass>;
-  defence: Record<string, ZoneDefence>;
-}
-
 export interface MatchReport {
   generatedAt: string;
   result: {
@@ -468,84 +432,6 @@ export interface MatchReport {
     net: number;
     efficiency: number | null;
   } | null;
-}
-
-export interface AdvancedMetrics {
-  sideOut: {
-    attempts: number;
-    qualityPasses: number;
-    efficiencyPct: number | null;
-    perfectPassRate: number | null;
-    pass3: number;
-    pass2: number;
-    pass1: number;
-    pass0: number;
-  };
-  serve: {
-    attempts: number;
-    aces: number;
-    errors: number;
-    aceRate: number | null;
-    errorRate: number | null;
-    positiveRate: number | null;
-  };
-  attack: {
-    attempts: number;
-    kills: number;
-    errors: number;
-    killRate: number | null;
-    hittingPct: number | null;
-  };
-  blocking: {
-    soloBlocks: number;
-    blockAssists: number;
-    totalBlocks: number;
-    blocksPerSet: number | null;
-  };
-  setsPlayed: number;
-}
-
-export interface RotationStat {
-  rotation: number;
-  won: number;
-  lost: number;
-  total: number;
-  net: number;
-  efficiency: number | null;
-}
-
-export interface RotationData {
-  rotations: RotationStat[];
-  insights: {
-    best: RotationStat | null;
-    worst: RotationStat | null;
-    highestSideOut: RotationStat | null;
-    lowestSideOut: RotationStat | null;
-  };
-}
-
-export interface MomentumPoint {
-  pointNumber: number;
-  scorer: 'home' | 'away';
-  homeScore: number;
-  awayScore: number;
-  lead: number;
-  setNumber: number;
-  runLength: number;
-}
-
-export interface MomentumData {
-  timeline: MomentumPoint[];
-  stats: {
-    totalPoints: number;
-    longestHomeRun: number;
-    longestAwayRun: number;
-    longestRun: number;
-    leadChanges: number;
-    largestHomeLead: number;
-    largestAwayLead: number;
-  };
-  significantRuns: { team: 'home' | 'away'; length: number; startPoint: number }[];
 }
 
 export interface Event {
@@ -638,64 +524,6 @@ export interface TeamInsight {
   message: string;
 }
 
-// ─── Coaching Recommendations (Phase 6 Sprint 1) ─────────────────────────────
-
-export interface Recommendation {
-  category: 'attack' | 'serve' | 'pass' | 'defence' | 'rotation';
-  priority: 'high' | 'medium' | 'low';
-  message: string;
-}
-
-// ─── Player Development (Phase 6 Sprint 2) ───────────────────────────────────
-
-export interface PlayerDevelopmentReport {
-  strengths:      string[];
-  weaknesses:     string[];
-  mostImproved:   { category: string; change: string } | null;
-  needsAttention: { category: string; change: string } | null;
-  trend:          'improving' | 'declining' | 'stable' | 'insufficient_data';
-}
-
-// ─── Season Intelligence (Phase 6 Sprint 4) ──────────────────────────────────
-
-export interface SeasonInsight {
-  category: 'kills' | 'aces' | 'blocks' | 'digs' | 'hittingPercentage';
-  message: string;
-  direction: 'positive' | 'negative';
-}
-
-export interface SeasonIntelligenceReport {
-  seasonAverages: {
-    kills: number;
-    aces: number;
-    blocks: number;
-    digs: number;
-    hittingPercentage: number | null;
-  };
-  insights: SeasonInsight[];
-  trajectory: 'improving' | 'declining' | 'mixed' | 'insufficient_data';
-}
-
-// ─── Phase 7 — Video upload & timestamp tagging ──────────────────────────────
-
-export interface Video {
-  id:               string;
-  matchId:          string;
-  filename:         string;
-  filePath:         string;
-  mimeType:         string;
-  uploadedAt:       string;
-  uploadedByUserId: string;
-}
-
-export interface VideoTimestamp {
-  id:               string;
-  videoId:          string;
-  timestampSeconds: number;
-  label:            string;
-  eventId:          string | null;
-}
-
 // ─── Phase 7 — Multi-team player links ───────────────────────────────────────
 
 export interface TeamSummary {
@@ -714,20 +542,6 @@ export interface PlayerTeamLink {
 export interface PlayerTeamsResponse {
   homeTeam:    TeamSummary;
   linkedTeams: PlayerTeamLink[];
-}
-
-// ─── Phase 6 Sprint 5 — Training Recommendations ─────────────────────────────
-
-export interface TrainingRecommendation {
-  focus:         string;
-  category:      'attack' | 'serve' | 'pass' | 'defence' | 'rotation' | 'player_development';
-  allocationPct: number;
-  rationale:     string;
-}
-
-export interface AssistantAnswer {
-  matchedIntent: string | null;
-  answer:        string;
 }
 
 // ─── Event metadata (UI helpers) ─────────────────────────────────────────────
@@ -840,253 +654,3 @@ export interface Invitation {
   invitedBy?: { id: string; firstName: string; lastName: string; email: string };
 }
 
-// ─── Opponent Scouting (Phase 6 Sprint 3) ────────────────────────────────────
-
-export interface JerseyTally {
-  jerseyNumber: number;
-  kills: number;
-  aces: number;
-  errors: number;
-}
-
-export interface OpponentScoutingReport {
-  insufficientData: false;
-  totalEvents: number;
-  zoneBreakdown: {
-    attack: Record<string, { kills: number; errors: number; attempts: number; hittingPct: number | null }>;
-    serve: Record<string, { aces: number; errors: number; serveIn: number; attempts: number; efficiency: number | null }>;
-    pass: Record<string, { pass3: number; pass2: number; pass1: number; pass0: number; attempts: number; rating: number | null }>;
-    defence: Record<string, { digs: number; soloBlocks: number; blockAssists: number; total: number }>;
-  };
-  dominantErrorType: string | null;
-  dominantErrorCount: number;
-  jerseyTallies: JerseyTally[] | null;
-}
-
-export interface OpponentScoutingInsufficient {
-  insufficientData: true;
-  totalEvents: number;
-}
-
-export type OpponentScoutingResult = OpponentScoutingReport | OpponentScoutingInsufficient;
-
-// ─── Phase 7 Sprint 1 — League Intelligence ───────────────────────────────────
-
-export interface LeagueTeamSummary {
-  id: string;
-  teamId: string;
-  team: { id: string; name: string; division?: string; season: string };
-}
-
-export interface MatchSummary {
-  id: string;
-  matchDate: string;
-  homeScore: number;
-  awayScore: number;
-  homeSetsWon: number;
-  awaySetsWon: number;
-  status: MatchStatus;
-}
-
-export interface LeagueMatch {
-  id: string;
-  leagueSeasonId: string;
-  scheduledDate: string;
-  homeLeagueTeam: LeagueTeamSummary;
-  awayLeagueTeam: LeagueTeamSummary;
-  homeMatchId: string | null;
-  awayMatchId: string | null;
-  homeMatch: MatchSummary | null;
-  awayMatch: MatchSummary | null;
-  createdAt: string;
-}
-
-export interface LeagueSeasonSummary {
-  id: string;
-  leagueId: string;
-  name: string;
-  startDate: string;
-  endDate: string | null;
-  createdAt: string;
-  _count: { teams: number; fixtures: number };
-}
-
-export interface League {
-  id: string;
-  name: string;
-  division: string | null;
-  createdByUserId: string;
-  createdAt: string;
-  seasons: LeagueSeasonSummary[];
-}
-
-// Resolved result for a single fixture — encapsulates the home/away-naming translation.
-export interface ResolvedFixtureResult {
-  fixtureId: string;
-  played: boolean;
-  /** Sets won by the *fixture's* home LeagueTeam (not the Match owner) */
-  homeSetsWon: number;
-  /** Sets won by the *fixture's* away LeagueTeam */
-  awaySetsWon: number;
-  hasDiscrepancy: boolean;
-}
-
-export interface FixtureFilters {
-  teamId?: string;
-  from?: string;
-  to?: string;
-  status?: 'upcoming' | 'pending' | 'completed';
-}
-
-export interface StandingsRow {
-  leagueTeamId: string;
-  teamId: string;
-  teamName: string;
-  matchesPlayed: number;
-  wins: number;
-  losses: number;
-  setsWon: number;
-  setsLost: number;
-  setDifferential: number;
-  points: number;
-}
-
-export interface LeagueTeamRecentResult {
-  fixtureId: string;
-  scheduledDate: string;
-  opponentName: string;
-  result: 'W' | 'L';
-  homeSetsWon: number;
-  awaySetsWon: number;
-  isHome: boolean;
-  hasDiscrepancy: boolean;
-}
-
-export interface LeagueTeamUpcomingFixture {
-  fixtureId: string;
-  scheduledDate: string;
-  opponentName: string;
-  isHome: boolean;
-}
-
-export interface PrivateIntel {
-  heatmapUrl: string;
-  recentMatchReports: Array<{
-    matchId: string;
-    matchDate: string;
-    opponent: string;
-    reportUrl: string;
-    narrativeUrl: string;
-  }>;
-}
-
-export interface LeagueTeamProfile {
-  leagueTeamId: string;
-  teamId: string;
-  teamName: string;
-  division: string | null;
-  season: string;
-  standing: StandingsRow | null;
-  winLossTrend: ('W' | 'L')[];
-  recentResults: LeagueTeamRecentResult[];
-  upcomingFixtures: LeagueTeamUpcomingFixture[];
-  privateIntel?: PrivateIntel;
-}
-
-// ─── Match Centre ──────────────────────────────────────────────────────────────
-
-export interface LiveFixture {
-  fixtureId: string;
-  isLive: true;
-  scheduledDate: string;
-  homeTeam: string;
-  awayTeam: string;
-  homeLeagueTeamId: string;
-  awayLeagueTeamId: string;
-  currentSet: number;
-  homeSetScore: number;
-  awaySetScore: number;
-  homeSetsWon: number;
-  awaySetsWon: number;
-  sourceMatchId: string | null;
-}
-
-export interface RecentlyFinishedFixture {
-  fixtureId: string;
-  scheduledDate: string;
-  homeTeam: string;
-  awayTeam: string;
-  homeLeagueTeamId: string;
-  awayLeagueTeamId: string;
-  homeSetsWon: number;
-  awaySetsWon: number;
-  hasDiscrepancy: boolean;
-}
-
-export interface UpcomingFixtureSummary {
-  fixtureId: string;
-  scheduledDate: string;
-  homeTeam: string;
-  awayTeam: string;
-  homeLeagueTeamId: string;
-  awayLeagueTeamId: string;
-}
-
-export interface MatchCentreData {
-  live: LiveFixture[];
-  recentlyFinished: RecentlyFinishedFixture[];
-  upcoming: UpcomingFixtureSummary[];
-}
-
-export interface TeamRankingEntry {
-  leagueTeamId: string;
-  teamName: string;
-  value: number;
-  matchesPlayed: number;
-}
-
-export interface PlayerLeaderboardEntry {
-  playerId: string;
-  playerName: string;
-  teamName: string;
-  value: number;
-}
-
-export interface LeagueRankings {
-  teamRankings: {
-    attackEfficiency: TeamRankingEntry[];
-    serveEfficiency: TeamRankingEntry[];
-    blocking: TeamRankingEntry[];
-    defense: TeamRankingEntry[];
-  };
-  playerLeaderboards: {
-    kills: PlayerLeaderboardEntry[];
-    aces: PlayerLeaderboardEntry[];
-    blocks: PlayerLeaderboardEntry[];
-    digs: PlayerLeaderboardEntry[];
-    assists: PlayerLeaderboardEntry[];
-  };
-}
-
-export interface StandingsResult {
-  standings: StandingsRow[];
-  fixtureResults: Array<{
-    fixtureId: string;
-    played: boolean;
-    homeSetsWon: number;
-    awaySetsWon: number;
-    hasDiscrepancy: boolean;
-  }>;
-}
-
-export interface LeagueSeason {
-  id: string;
-  leagueId: string;
-  league: { id: string; name: string; division: string | null };
-  name: string;
-  startDate: string;
-  endDate: string | null;
-  teams: LeagueTeamSummary[];
-  _count: { fixtures: number; teams: number };
-  createdAt: string;
-}

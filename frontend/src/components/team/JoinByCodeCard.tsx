@@ -1,7 +1,9 @@
 import { useState, FormEvent } from 'react';
 import { useLookupCode, useRedeemTeamCode, useRedeemInvitation } from '../../hooks';
+import { isEmailNotVerifiedError } from '../../lib/api';
 import type { CodeLookupResult } from '../../lib/api';
 import type { TeamRole } from '../../types';
+import ResendVerificationNotice from '../ui/ResendVerificationNotice';
 
 const STAFF_ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
   { value: 'ASSISTANT_COACH', label: 'Assistant Coach' },
@@ -24,13 +26,14 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
   const [found, setFound] = useState<CodeLookupResult | null>(null);
   const [role, setRole] = useState<TeamRole>('ASSISTANT_COACH');
   const [error, setError] = useState('');
+  const [notVerified, setNotVerified] = useState(false);
   const [joinedTeam, setJoinedTeam] = useState<string | null>(null);
 
   const busy = lookup.isPending || redeemTeamCode.isPending || redeemInvitation.isPending;
 
   async function handleLookup(e: FormEvent) {
     e.preventDefault();
-    setError('');
+    setError(''); setNotVerified(false);
     const trimmed = code.trim();
     if (!trimmed) { setError('Enter a join code.'); return; }
     try {
@@ -46,7 +49,7 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
   }
 
   async function handleConfirm() {
-    setError('');
+    setError(''); setNotVerified(false);
     try {
       if (found?.kind === 'EMAIL_INVITE') {
         const inv = await redeemInvitation.mutateAsync(code.trim());
@@ -59,13 +62,18 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
         setJoinedTeam(result.team.name);
       }
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't redeem that code. Check it and try again.");
+      if (isEmailNotVerifiedError(err)) {
+        setNotVerified(true);
+      } else {
+        setError(err?.response?.data?.error ?? "Couldn't redeem that code. Check it and try again.");
+      }
     }
   }
 
   function reset() {
     setFound(null);
     setError('');
+    setNotVerified(false);
     setCode('');
     setJoinedTeam(null);
   }
@@ -121,6 +129,7 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
         </div>
       )}
 
+      {notVerified && <ResendVerificationNotice />}
       {error && <p className="text-error text-xs">{error}</p>}
     </div>
   );

@@ -11,10 +11,16 @@
 
 generator client {
   provider      = "prisma-client-js"
-  // Netlify Functions run on Amazon Linux; "native" covers local/dev, the
-  // rhel targets cover the Lambda runtime so the query engine binary that
-  // ships with the deployed function actually works in production.
-  binaryTargets = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x"]
+  // "native" covers local/dev; the rhel target is the query engine binary that
+  // ships inside the deployed Netlify Function. Netlify's Node 20+ Lambda
+  // runtime is Amazon Linux 2023, which has OpenSSL 3.x — so 3.0.x is the only
+  // target that runtime can load. rhel-openssl-1.0.x was for the older Amazon
+  // Linux 2 (Node 18) runtime and is dropped: it was dead weight in a ~74 MB
+  // bundle. Revisit if NODE_VERSION (netlify.toml) ever drops below 20.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  // omitApi: lets lib/prisma.ts hide Team join codes from every query that does
+  // not explicitly select them. GA in Prisma 6; drop this line when upgrading.
+  previewFeatures = ["omitApi"]
 }
 
 datasource db {
@@ -214,6 +220,18 @@ model User {
   passwordResetTokenHash String?   @map("password_reset_token_hash")
   passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
 
+  // Email verification — same token scheme as password reset (only a sha256 of
+  // the mailed token is stored; single use). Null emailVerifiedAt = unverified.
+  // Accounts that existed before this column start unverified on purpose: many
+  // users are minors, and an unverified address may not belong to its holder.
+  emailVerifiedAt            DateTime? @map("email_verified_at")
+  emailVerificationTokenHash String?   @map("email_verification_token_hash")
+  emailVerificationExpiresAt DateTime? @map("email_verification_expires_at")
+
+  // Carried in every JWT and compared on each request. Bumping it (password
+  // reset/change) is the only way to revoke a stateless 7-day token.
+  tokenVersion Int @default(0) @map("token_version")
+
   profileImage String?  @map("profile_image")
 
   // Iteration 3 — the athlete's own stated position preference, independent of
@@ -228,9 +246,6 @@ model User {
 
   // Phase 5 Sprint 3 — Team Memberships
   memberships  TeamMembership[]
-
-  // Phase 7 Sprint 1 — League Intelligence
-  createdLeagues League[]
 
   // Phase 5 Sprint 4 — Invitations
   sentInvitations Invitation[]
@@ -280,12 +295,6 @@ model Team {
   ownerId   String   @map("owner_id")
   owner     User     @relation(fields: [ownerId], references: [id])
 
-  // Iteration 3 — the team's current league season (nullable). Set from the
-  // team create/edit form; new matches default their competition from it. Kept
-  // in sync with a LeagueTeam join row so League Hub sees the same association.
-  leagueSeasonId String?       @map("league_season_id")
-  leagueSeason   LeagueSeason? @relation("TeamCurrentSeason", fields: [leagueSeasonId], references: [id], onDelete: SetNull)
-
   players     Player[]
   matches     Match[]
 
@@ -297,9 +306,6 @@ model Team {
 
   // Phase 7 — multi-team player links
   playerLinks PlayerTeamLink[]
-
-  // Phase 7 Sprint 1 — League Intelligence
-  leagueTeams LeagueTeam[]
 
   // Phase 5 Sprint 4 — Invitations
   invitations Invitation[]
@@ -319,7 +325,6 @@ model Team {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([leagueSeasonId])
   @@index([ownerId])
   @@map("teams")
 }
@@ -345,6 +350,10 @@ model TeamMembership {
   joinedAt DateTime @default(now()) @map("joined_at")
 
   @@unique([userId, teamId])
+  // Also enforced in the database, not expressible in Prisma: a partial unique
+  // index "team_memberships_one_head_coach" on (team_id) WHERE role =
+  // 'HEAD_COACH' (migration 20260927130000). The 2-assistant cap is app-level
+  // only — see lib/roleSlots.ts.
   @@index([teamId])
   @@index([userId])
 
@@ -507,12 +516,7 @@ model Match {
   teamId      String      @map("team_id")
 
   events      Event[]
-  videos      Video[]
   scoreAdjustments ScoreAdjustment[]
-
-  // Phase 7 Sprint 1 — League Intelligence (nullable FKs on LeagueMatch, set by each side)
-  homeLeagueMatches LeagueMatch[] @relation("LeagueMatchHome")
-  awayLeagueMatches LeagueMatch[] @relation("LeagueMatchAway")
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -543,38 +547,6 @@ model ScoreAdjustment {
 
   @@index([matchId])
   @@map("score_adjustments")
-}
-
-// Phase 7 — Video upload & timestamp tagging
-model Video {
-  id               String           @id @default(cuid())
-  matchId          String           @map("match_id")
-  filename         String
-  filePath         String           @map("file_path")
-  mimeType         String           @map("mime_type")
-  uploadedAt       DateTime         @default(now()) @map("uploaded_at")
-  uploadedByUserId String           @map("uploaded_by_user_id")
-
-  match            Match            @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  timestamps       VideoTimestamp[]
-
-  @@index([matchId])
-  @@map("videos")
-}
-
-model VideoTimestamp {
-  id               String  @id @default(cuid())
-  videoId          String  @map("video_id")
-  timestampSeconds Int     @map("timestamp_seconds")
-  label            String
-  eventId          String? @map("event_id")
-
-  video            Video   @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  event            Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
-
-  @@index([videoId])
-  @@index([eventId])
-  @@map("video_timestamps")
 }
 
 // Event is the central fact table. Every analytics calculation in Phases 2–5
@@ -615,8 +587,6 @@ model Event {
   // undo can't replay the timeline and reverses this event directly instead —
   // the same lost-baseline problem as ScoreAdjustment.completedSet.
   completedSet Boolean @default(false) @map("completed_set")
-
-  videoTimestamps VideoTimestamp[]
 
   recordedAt  DateTime  @default(now()) @db.Timestamptz(3) @map("recorded_at")
 
@@ -702,6 +672,8 @@ model Message {
   // Edit + soft-delete audit trail.
   editedAt        DateTime? @map("edited_at")
   deletedAt       DateTime? @map("deleted_at")
+  // Intentionally a plain column, no User relation — audit-trail field kept
+  // denormalized to avoid cascade coupling.
   deletedByUserId String?   @map("deleted_by_user_id")  // author OR a moderator
 
   // Duplicate-send protection (slice 5). The client mints a key per composed
@@ -730,7 +702,7 @@ model MessageAttachment {
   kind      AttachmentKind
 
   // Supabase Storage object path (NOT a public URL). Signed URLs are minted on
-  // read. Mirrors the existing Video model's filePath/mimeType convention.
+  // read.
   storagePath String       @map("storage_path")
   fileName    String       @map("file_name")   // original filename for display/download
   mimeType    String       @map("mime_type")
@@ -838,99 +810,39 @@ model FeedbackAttachment {
   @@map("feedback_attachments")
 }
 
-// ─── Phase 7 Sprint 1 — League Intelligence ───────────────────────────────────
+// ─── Rate limiting (2026-09) ──────────────────────────────────────────────────
 
-// A League is a competition container (e.g. "Regional Volleyball Association").
-// Only ADMIN users can create leagues; coaches join via LeagueTeam.
-model League {
-  id              String         @id @default(cuid())
-  name            String
-  division        String?
+// One shared token bucket per limiter key. Production runs as a single Netlify
+// Function, so each invocation gets its own module state: in-memory buckets
+// start empty on every cold start and concurrent invocations never see each
+// other's spend. The bucket has to live somewhere every invocation can reach or
+// the limit does not limit anything.
+//
+// Written only through raw SQL (src/lib/postgresRateLimit.ts): the debit must
+// be one atomic lock-read-write per key, which a read-then-write through the
+// generated client cannot express. This model exists so migrations and drift
+// detection know the table is ours.
+model RateLimitBucket {
+  // The limiter key itself ("forgot:ip:1.2.3.4", a user id, ...). The natural
+  // primary key rather than a surrogate id: it makes two invocations racing on
+  // a key's first use collide on the index instead of inserting two rows and
+  // each granting itself a full bucket.
+  key       String   @id
 
-  createdByUserId String         @map("created_by_user_id")
-  createdBy       User           @relation(fields: [createdByUserId], references: [id])
+  // Fractional on purpose — a bucket refills continuously at max/windowMs per
+  // millisecond, so a partial token is the normal state between requests.
+  tokens    Float
 
-  seasons         LeagueSeason[]
+  // Timestamptz, and always written from the database clock: buckets are shared
+  // across Function instances whose clocks drift independently, and one stamped
+  // by a fast clock would read as "in the future" to a slow one.
+  updatedAt DateTime @db.Timestamptz(3) @map("updated_at")
 
-  createdAt       DateTime       @default(now())
+  // The instant this bucket refills to capacity. Past it the row is
+  // indistinguishable from one that never existed, so cleanup is a single
+  // indexed range scan that needs no idea which limiter owns the row.
+  fullAt    DateTime @db.Timestamptz(3) @map("full_at")
 
-  @@index([createdByUserId])
-  @@map("leagues")
-}
-
-// A single season within a league (e.g. "2026 Winter").
-model LeagueSeason {
-  id        String        @id @default(cuid())
-  leagueId  String        @map("league_id")
-  league    League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-
-  name      String
-  startDate DateTime      @map("start_date")
-  endDate   DateTime?     @map("end_date")
-
-  teams     LeagueTeam[]
-  fixtures  LeagueMatch[]
-
-  // Iteration 3 — teams that point at this season as their current league
-  // (Team.leagueSeasonId). Distinct from `teams` (the LeagueTeam join used by
-  // fixtures/standings); this is the lightweight "current league" pointer.
-  currentTeams Team[]     @relation("TeamCurrentSeason")
-
-  createdAt DateTime      @default(now())
-
-  @@index([leagueId])
-  @@map("league_seasons")
-}
-
-// Links an independently-owned Team into a LeagueSeason.
-// MANAGE_TEAM on the target team is required to create this link.
-model LeagueTeam {
-  id             String        @id @default(cuid())
-  leagueSeasonId String        @map("league_season_id")
-  leagueSeason   LeagueSeason  @relation(fields: [leagueSeasonId], references: [id], onDelete: Cascade)
-
-  teamId         String        @map("team_id")
-  team           Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  joinedAt       DateTime      @default(now()) @map("joined_at")
-
-  homeFixtures   LeagueMatch[] @relation("HomeLeagueTeam")
-  awayFixtures   LeagueMatch[] @relation("AwayLeagueTeam")
-
-  @@unique([leagueSeasonId, teamId])
-  @@index([teamId])
-  @@map("league_teams")
-}
-
-// A scheduled fixture between two LeagueTeams.
-// homeMatchId / awayMatchId are set independently by each team's coach — each side links
-// their own already-owned Match record. Either or both may be null until linked.
-model LeagueMatch {
-  id             String       @id @default(cuid())
-  leagueSeasonId String       @map("league_season_id")
-  leagueSeason   LeagueSeason @relation(fields: [leagueSeasonId], references: [id], onDelete: Cascade)
-
-  homeLeagueTeamId String     @map("home_league_team_id")
-  homeLeagueTeam   LeagueTeam @relation("HomeLeagueTeam", fields: [homeLeagueTeamId], references: [id])
-
-  awayLeagueTeamId String     @map("away_league_team_id")
-  awayLeagueTeam   LeagueTeam @relation("AwayLeagueTeam", fields: [awayLeagueTeamId], references: [id])
-
-  scheduledDate    DateTime   @map("scheduled_date")
-
-  // Each side links their own Match independently. Null = not yet linked.
-  homeMatchId      String?    @map("home_match_id")
-  homeMatch        Match?     @relation("LeagueMatchHome", fields: [homeMatchId], references: [id], onDelete: SetNull)
-
-  awayMatchId      String?    @map("away_match_id")
-  awayMatch        Match?     @relation("LeagueMatchAway", fields: [awayMatchId], references: [id], onDelete: SetNull)
-
-  createdAt        DateTime   @default(now())
-
-  @@index([leagueSeasonId])
-  @@index([homeLeagueTeamId])
-  @@index([awayLeagueTeamId])
-  @@index([homeMatchId])
-  @@index([awayMatchId])
-  @@map("league_matches")
+  @@index([fullAt])
+  @@map("rate_limit_buckets")
 }

@@ -1,6 +1,9 @@
 import { prisma } from '../lib/prisma';
 import { EventType } from '@prisma/client';
 import { ownEventsOnly } from '../lib/eventFilters';
+import { assertTeamVisible } from '../lib/teamVisibility';
+import { getUserTeamRole } from './permission.service';
+import { assertEmailVerified } from './emailVerification.service';
 
 // Reuses the same stat derivation logic as the existing analytics engine
 function deriveStats(events: { eventType: EventType }[]) {
@@ -63,9 +66,61 @@ export async function getLinkedPlayers(userId: string) {
   });
 }
 
+/**
+ * Claim a roster entry as your own player record.
+ *
+ * Both guards below were missing entirely: this checked that the player existed
+ * and then wrote `userId`. Any authenticated user could POST any playerId and
+ * take the record, because `Player.userId` is not unique — the update silently
+ * overwrote whoever was linked before. Everything downstream reads
+ * `where: { userId }`, so claiming a stranger's record handed over their career
+ * stats, per-match development data and team, and cut the real user's link.
+ *
+ * Visibility first, and it throws the same 404 as a missing player on purpose:
+ * a caller who may not see the team must not be able to tell "no such player"
+ * from "player you may not touch". `unlinkPlayer` below has always had the
+ * ownership half of this; the two belong together.
+ *
+ * 409 rather than 404 for an already-claimed record: by then the caller can
+ * already see the team, so the conflict is not a disclosure — and it is the
+ * answer they need, since silently stealing the link is the bug being fixed.
+ */
 export async function linkPlayerToUser(playerId: string, userId: string) {
+  await assertEmailVerified(userId);
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player) throw Object.assign(new Error('Player not found'), { statusCode: 404 });
+  await assertTeamVisible(player.teamId, userId);
+
+  // L4: any team member could claim any unclaimed player record — a coach or
+  // statistician could attach a roster entry (and its stats) to their own
+  // account. Only a PLAYER-role member of the team may claim one.
+  // (There is no data-model link from an Invitation/join-code to a specific
+  // Player row — Invitation only carries email + team + role for account
+  // creation — so matching by that isn't possible; role + team membership is
+  // the closest available signal.)
+  const { role } = await getUserTeamRole(userId, player.teamId);
+  if (role !== 'PLAYER') {
+    throw Object.assign(new Error('Only a player-role team member may claim a roster record'), { statusCode: 403 });
+  }
+
+  if (player.userId && player.userId !== userId) {
+    throw Object.assign(
+      new Error('This player record is already linked to another account'),
+      { statusCode: 409 },
+    );
+  }
+
+  // One claimed player per user per team — Player.userId has no DB-level
+  // unique constraint (nullable, many players can share the same team), so
+  // enforce it here.
+  const existing = await prisma.player.findFirst({
+    where: { userId, teamId: player.teamId, NOT: { id: playerId } },
+    select: { id: true },
+  });
+  if (existing) {
+    throw Object.assign(new Error('You already have a linked player record on this team'), { statusCode: 409 });
+  }
+
   return prisma.player.update({ where: { id: playerId }, data: { userId } });
 }
 

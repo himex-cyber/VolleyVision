@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, videosApi, leagueApi, approvalApi, feedbackApi } from '../lib/api';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, approvalApi, feedbackApi, authApi } from '../lib/api';
 import type { TeamJoinCodeKind } from '../lib/api';
 import type { CreateTeamInput } from '../lib/api';
 import type { Player, Match, TeamRole, TeamMember, ApprovalStatus } from '../types';
@@ -8,10 +8,23 @@ import type { FeedbackStatus } from '../types/feedback';
 import { useViewMode } from '../context/ViewModeContext';
 import { PLAYER_VIEW_PERMISSIONS } from '../lib/teamRoles';
 
+// ─── Email verification ──────────────────────────────────────────────────────
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => authApi.resendVerification(),
+  });
+}
+
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
 
 export function useMyFeedback() {
-  return useQuery({ queryKey: ['feedback', 'mine'], queryFn: feedbackApi.listMine });
+  return useInfiniteQuery({
+    queryKey: ['feedback', 'mine'],
+    queryFn: ({ pageParam }) => feedbackApi.listMine(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
 }
 
 export function useCreateFeedback() {
@@ -24,9 +37,11 @@ export function useCreateFeedback() {
 
 /** Admin panel only — the endpoint 403s for non-admins. */
 export function useAllFeedback(filters: { status?: string; type?: string }, enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['feedback', 'all', filters],
-    queryFn: () => feedbackApi.listAll(filters),
+    queryFn: ({ pageParam }) => feedbackApi.listAll(filters, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
   });
 }
@@ -342,204 +357,11 @@ export function useTeamTrends(teamId: string) {
   });
 }
 
-export function useMatchHeatmap(matchId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'heatmap', 'match', matchId],
-    queryFn: () => analyticsApi.matchHeatmap(matchId),
-    enabled: !!matchId,
-  });
-}
-
-export function useTeamHeatmap(teamId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'heatmap', 'team', teamId],
-    queryFn: () => analyticsApi.teamHeatmap(teamId),
-    enabled: !!teamId,
-  });
-}
-
-export function usePlayerHeatmap(playerId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'heatmap', 'player', playerId],
-    queryFn: () => analyticsApi.playerHeatmap(playerId),
-    enabled: !!playerId,
-  });
-}
-
-export function useMatchZoneDetail(matchId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'zones', 'match', matchId],
-    queryFn: () => analyticsApi.matchZoneDetail(matchId),
-    enabled: !!matchId,
-  });
-}
-
-export function useTeamZoneDetail(teamId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'zones', 'team', teamId],
-    queryFn: () => analyticsApi.teamZoneDetail(teamId),
-    enabled: !!teamId,
-  });
-}
-
-export function usePlayerZoneDetail(playerId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'zones', 'player', playerId],
-    queryFn: () => analyticsApi.playerZoneDetail(playerId),
-    enabled: !!playerId,
-  });
-}
-
-export function useMatchMomentum(matchId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'momentum', matchId],
-    queryFn: () => analyticsApi.matchMomentum(matchId),
-    enabled: !!matchId,
-  });
-}
-
 export function useMatchReport(matchId: string) {
   return useQuery({
     queryKey: ['analytics', 'report', matchId],
     queryFn: () => analyticsApi.matchReport(matchId),
     enabled: !!matchId,
-  });
-}
-
-export function useMatchReportNarrative(matchId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'report', 'narrative', matchId],
-    queryFn: () => analyticsApi.matchReportNarrative(matchId),
-    enabled: !!matchId,
-    retry: false,
-  });
-}
-
-export function useTeamRecommendations(teamId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'recommendations', 'team', teamId],
-    queryFn: () => analyticsApi.teamRecommendations(teamId),
-    enabled: !!teamId,
-  });
-}
-
-export function usePlayerDevelopmentReport(playerId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'development', 'player', playerId],
-    queryFn: () => analyticsApi.playerDevelopmentReport(playerId),
-    enabled: !!playerId,
-  });
-}
-
-export function useSeasonIntelligence(teamId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'season-intelligence', 'team', teamId],
-    queryFn: () => analyticsApi.seasonIntelligence(teamId),
-    enabled: !!teamId,
-  });
-}
-
-export function useTeamTrainingRecommendations(teamId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'training-recommendations', 'team', teamId],
-    queryFn: () => analyticsApi.teamTrainingRecommendations(teamId),
-    enabled: !!teamId,
-  });
-}
-
-export function useAskAssistant(teamId: string) {
-  return useMutation({
-    mutationFn: (question: string) => analyticsApi.askAssistant(teamId, question),
-  });
-}
-
-export function useOpponentScoutingReport(matchId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'opponent-report', 'match', matchId],
-    queryFn: () => analyticsApi.opponentScoutingReport(matchId),
-    enabled: !!matchId,
-  });
-}
-
-// ─── Videos (Phase 7) ─────────────────────────────────────────────────────────
-export function useMatchVideos(matchId: string) {
-  return useQuery({
-    queryKey: ['videos', 'match', matchId],
-    queryFn: () => videosApi.listByMatch(matchId),
-    enabled: !!matchId,
-  });
-}
-
-export function useUploadVideo(matchId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (file: File) => videosApi.upload(matchId, file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] }),
-  });
-}
-
-export function useDeleteVideo(matchId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (videoId: string) => videosApi.delete(videoId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['videos', 'match', matchId] }),
-  });
-}
-
-export function useVideoTimestamps(videoId: string) {
-  return useQuery({
-    queryKey: ['timestamps', videoId],
-    queryFn: () => videosApi.listTimestamps(videoId),
-    enabled: !!videoId,
-  });
-}
-
-export function useCreateTimestamp(videoId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { timestampSeconds: number; label: string; eventId?: string }) =>
-      videosApi.createTimestamp(videoId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['timestamps', videoId] }),
-  });
-}
-
-export function useDeleteTimestamp(videoId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (timestampId: string) => videosApi.deleteTimestamp(timestampId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['timestamps', videoId] }),
-  });
-}
-
-export function useMatchAdvanced(matchId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'advanced', 'match', matchId],
-    queryFn: () => analyticsApi.matchAdvanced(matchId),
-    enabled: !!matchId,
-  });
-}
-
-export function useTeamAdvanced(teamId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'advanced', 'team', teamId],
-    queryFn: () => analyticsApi.teamAdvanced(teamId),
-    enabled: !!teamId,
-  });
-}
-
-export function useMatchRotations(matchId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'rotations', 'match', matchId],
-    queryFn: () => analyticsApi.matchRotations(matchId),
-    enabled: !!matchId,
-  });
-}
-
-export function useTeamRotations(teamId: string) {
-  return useQuery({
-    queryKey: ['analytics', 'rotations', 'team', teamId],
-    queryFn: () => analyticsApi.teamRotations(teamId),
-    enabled: !!teamId,
   });
 }
 
@@ -550,20 +372,6 @@ export function useTeamMembers(teamId: string) {
     queryKey: ['members', teamId],
     queryFn: () => membershipsApi.listByTeam(teamId),
     enabled: !!teamId,
-  });
-}
-
-export function useAddMember(teamId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { userId: string; role: TeamRole }) =>
-      membershipsApi.add(teamId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['members', teamId] });
-      // Adding someone as PLAYER also creates their roster row server-side —
-      // refresh the team so the Roster card picks it up without a reload.
-      qc.invalidateQueries({ queryKey: ['teams', teamId] });
-    },
   });
 }
 
@@ -610,14 +418,6 @@ export function useMyMemberships() {
   });
 }
 
-export function useUserSearch(q: string) {
-  return useQuery({
-    queryKey: ['users', 'search', q],
-    queryFn: () => membershipsApi.searchUsers(q),
-    enabled: q.trim().length >= 2,
-  });
-}
-
 // ─── Ownership (Phase 5 Sprint 2) ────────────────────────────────────────────
 
 export function useMyTeams() {
@@ -627,8 +427,8 @@ export function useMyTeams() {
 export function useTransferOwnership() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ teamId, newOwnerId }: { teamId: string; newOwnerId: string }) =>
-      teamsApi.transfer(teamId, newOwnerId),
+    mutationFn: ({ teamId, newOwnerEmail }: { teamId: string; newOwnerEmail: string }) =>
+      teamsApi.transfer(teamId, newOwnerEmail),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['teams'] });
       qc.invalidateQueries({ queryKey: ['teams', vars.teamId] });
@@ -813,116 +613,3 @@ export function useHasPermission(teamId: string, permission: string) {
   return data?.permissions.includes(permission) ?? false;
 }
 
-// ─── League Intelligence (Phase 7 Sprint 1) ───────────────────────────────────
-
-export function useLeagues() {
-  return useQuery({ queryKey: ['leagues'], queryFn: leagueApi.list });
-}
-
-export function useMyLeagueSeasons() {
-  return useQuery({ queryKey: ['leagues', 'my'], queryFn: leagueApi.listMy });
-}
-
-export function useLeague(leagueId: string) {
-  return useQuery({ queryKey: ['leagues', leagueId], queryFn: () => leagueApi.get(leagueId), enabled: !!leagueId });
-}
-
-export function useLeagueSeason(seasonId: string) {
-  return useQuery({ queryKey: ['leagues', 'seasons', seasonId], queryFn: () => leagueApi.getSeason(seasonId), enabled: !!seasonId });
-}
-
-export function useSeasonFixtures(seasonId: string, filters?: import('../types').FixtureFilters) {
-  return useQuery({
-    queryKey: ['leagues', 'seasons', seasonId, 'fixtures', filters ?? {}],
-    queryFn: () => leagueApi.listFixtures(seasonId, filters),
-    enabled: !!seasonId,
-  });
-}
-
-export function useCreateLeague() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { name: string; division?: string }) => leagueApi.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['leagues'] }),
-  });
-}
-
-export function useCreateSeason() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ leagueId, ...data }: { leagueId: string; name: string; startDate: string; endDate?: string }) =>
-      leagueApi.createSeason(leagueId, data),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ['leagues', vars.leagueId] });
-      qc.invalidateQueries({ queryKey: ['leagues'] });
-    },
-  });
-}
-
-export function useAddTeamToSeason() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ seasonId, teamId }: { seasonId: string; teamId: string }) => leagueApi.addTeam(seasonId, teamId),
-    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ['leagues', 'seasons', vars.seasonId] }),
-  });
-}
-
-export function useCreateFixture() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ seasonId, ...data }: { seasonId: string; homeLeagueTeamId: string; awayLeagueTeamId: string; scheduledDate: string }) =>
-      leagueApi.createFixture(seasonId, data),
-    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ['leagues', 'seasons', vars.seasonId, 'fixtures'] }),
-  });
-}
-
-export function useLinkMatch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ fixtureId, matchId, side }: { fixtureId: string; matchId: string; side: 'home' | 'away' }) =>
-      leagueApi.linkMatch(fixtureId, matchId, side),
-    onSuccess: (data) => qc.invalidateQueries({ queryKey: ['leagues', 'seasons', data.leagueSeasonId, 'fixtures'] }),
-  });
-}
-
-export function useLeagueTeamProfile(leagueTeamId: string) {
-  return useQuery({
-    queryKey: ['leagues', 'team-profile', leagueTeamId],
-    queryFn: () => leagueApi.getTeamProfile(leagueTeamId),
-    enabled: !!leagueTeamId,
-  });
-}
-
-export function useMatchCentre(seasonId: string) {
-  return useQuery({
-    queryKey: ['leagues', 'seasons', seasonId, 'match-centre'],
-    queryFn: () => leagueApi.getMatchCentre(seasonId),
-    enabled: !!seasonId,
-    refetchInterval: 20_000, // Poll every 20s — responsive without hammering the backend
-  });
-}
-
-export function useSeasonRankings(seasonId: string) {
-  return useQuery({
-    queryKey: ['leagues', 'seasons', seasonId, 'rankings'],
-    queryFn: () => leagueApi.getRankings(seasonId),
-    enabled: !!seasonId,
-  });
-}
-
-export function useSeasonStandings(seasonId: string) {
-  return useQuery({
-    queryKey: ['leagues', 'seasons', seasonId, 'standings'],
-    queryFn: () => leagueApi.getStandings(seasonId),
-    enabled: !!seasonId,
-  });
-}
-
-export function useUnlinkMatch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ fixtureId, side }: { fixtureId: string; side: 'home' | 'away' }) =>
-      leagueApi.unlinkMatch(fixtureId, side),
-    onSuccess: (data) => qc.invalidateQueries({ queryKey: ['leagues', 'seasons', data.leagueSeasonId, 'fixtures'] }),
-  });
-}

@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { getToken } from './tokenStorage';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, HeatmapData, ZoneCounts, MomentumData, RotationData, AdvancedMetrics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, UserSearchResult, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, DetailedHeatmapData, Recommendation, PlayerDevelopmentReport, SeasonIntelligenceReport, TrainingRecommendation, AssistantAnswer, PlayerTeamsResponse, Video, VideoTimestamp, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import { getToken, clearToken } from './tokenStorage';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -26,6 +26,31 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Tokens are now revoked server-side after a password change, so a 401 can
+// happen mid-session on any authenticated request, not just at login. Only
+// treat it as a session revocation when the request actually carried a
+// token — a 401 from /auth/login (bad password) has no Authorization header
+// and must stay a normal per-form error instead of forcing a logout.
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const hadAuth = !!error.config?.headers?.Authorization;
+    if (error.response?.status === 401 && hadAuth) {
+      clearToken();
+      if (window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+/** True when a request failed because the caller's email isn't verified yet
+ *  (join-team endpoints: accept invitation, redeem join code, claim player). */
+export function isEmailNotVerifiedError(err: unknown): boolean {
+  return (err as any)?.response?.data?.code === 'EMAIL_NOT_VERIFIED';
+}
+
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
   register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) =>
@@ -38,6 +63,11 @@ export const authApi = {
     api.post<{ message: string }>('/auth/forgot-password', data).then((r) => r.data),
   resetPassword: (data: { token: string; password: string }) =>
     api.post<{ message: string }>('/auth/reset-password', data).then((r) => r.data),
+  verifyEmail: (data: { token: string }) =>
+    api.post<{ verified: true }>('/auth/verify-email', data).then((r) => r.data),
+  // 204 (sent) comes back with empty body; 200 means already verified.
+  resendVerification: () =>
+    api.post<{ verified: true } | ''>('/auth/resend-verification').then((r) => r.data),
 };
 
 // ─── Teams ────────────────────────────────────────────────────────────────────
@@ -46,8 +76,6 @@ export type CreateTeamInput = {
   name: string;
   season: string;
   division?: string;
-  /** The team's current league season (Iteration 3). `null` clears it. */
-  leagueSeasonId?: string | null;
 };
 
 export const teamsApi = {
@@ -61,8 +89,8 @@ export const teamsApi = {
   // Phase 5 Sprint 2 — ownership
   myTeams: () => api.get<Team[]>('/teams/my-teams').then((r) => r.data),
   owner: (id: string) => api.get<TeamOwner | null>(`/teams/${id}/owner`).then((r) => r.data),
-  transfer: (id: string, newOwnerId: string) =>
-    api.post<Team>(`/teams/${id}/transfer`, { newOwnerId }).then((r) => r.data),
+  transfer: (id: string, newOwnerEmail: string) =>
+    api.post<Team>(`/teams/${id}/transfer`, { newOwnerEmail }).then((r) => r.data),
 };
 
 // ─── Players ──────────────────────────────────────────────────────────────────
@@ -155,88 +183,8 @@ export const analyticsApi = {
   trends: (teamId: string) =>
     api.get<TeamTrend[]>(`/analytics/teams/${teamId}/trends`).then((r) => r.data),
 
-  matchZones: (matchId: string, category?: string) =>
-    api.get<ZoneCounts>(`/analytics/matches/${matchId}/zones`, {
-      params: category ? { category } : {},
-    }).then((r) => r.data),
-
-  matchHeatmap: (matchId: string) =>
-    api.get<HeatmapData>(`/analytics/matches/${matchId}/heatmap`).then((r) => r.data),
-
-  teamHeatmap: (teamId: string) =>
-    api.get<HeatmapData>(`/analytics/teams/${teamId}/heatmap`).then((r) => r.data),
-
-  playerHeatmap: (playerId: string) =>
-    api.get<HeatmapData>(`/analytics/players/${playerId}/heatmap`).then((r) => r.data),
-
-  matchMomentum: (matchId: string) =>
-    api.get<MomentumData>(`/analytics/matches/${matchId}/momentum`).then((r) => r.data),
-
-  matchRotations: (matchId: string) =>
-    api.get<RotationData>(`/analytics/matches/${matchId}/rotations`).then((r) => r.data),
-
-  teamRotations: (teamId: string) =>
-    api.get<RotationData>(`/analytics/teams/${teamId}/rotations`).then((r) => r.data),
-
-  matchAdvanced: (matchId: string) =>
-    api.get<AdvancedMetrics>(`/analytics/matches/${matchId}/advanced`).then((r) => r.data),
-
-  teamAdvanced: (teamId: string) =>
-    api.get<AdvancedMetrics>(`/analytics/teams/${teamId}/advanced`).then((r) => r.data),
-
   matchReport: (matchId: string) =>
     api.get<MatchReport>(`/analytics/matches/${matchId}/report`).then((r) => r.data),
-
-  matchZoneDetail: (matchId: string) =>
-    api.get<DetailedHeatmapData>(`/analytics/matches/${matchId}/heatmap/zones`).then((r) => r.data),
-
-  teamZoneDetail: (teamId: string) =>
-    api.get<DetailedHeatmapData>(`/analytics/teams/${teamId}/heatmap/zones`).then((r) => r.data),
-
-  playerZoneDetail: (playerId: string) =>
-    api.get<DetailedHeatmapData>(`/analytics/players/${playerId}/heatmap/zones`).then((r) => r.data),
-
-  matchReportNarrative: (matchId: string) =>
-    api.get<string>(`/analytics/matches/${matchId}/report/narrative`).then((r) => r.data),
-
-  teamRecommendations: (teamId: string) =>
-    api.get<Recommendation[]>(`/analytics/teams/${teamId}/recommendations`).then((r) => r.data),
-
-  playerDevelopmentReport: (playerId: string) =>
-    api.get<PlayerDevelopmentReport>(`/analytics/players/${playerId}/development`).then((r) => r.data),
-
-  seasonIntelligence: (teamId: string) =>
-    api.get<SeasonIntelligenceReport>(`/analytics/teams/${teamId}/season-intelligence`).then((r) => r.data),
-
-  teamTrainingRecommendations: (teamId: string) =>
-    api.get<TrainingRecommendation[]>(`/analytics/teams/${teamId}/training-recommendations`).then((r) => r.data),
-
-  askAssistant: (teamId: string, question: string) =>
-    api.post<AssistantAnswer>(`/analytics/teams/${teamId}/ask`, { question }).then((r) => r.data),
-
-  opponentScoutingReport: (matchId: string) =>
-    api.get<import('../types').OpponentScoutingResult>(`/analytics/matches/${matchId}/opponent-report`).then((r) => r.data),
-};
-
-// ─── Videos (Phase 7) ─────────────────────────────────────────────────────────
-export const videosApi = {
-  listByMatch: (matchId: string) =>
-    api.get<Video[]>(`/matches/${matchId}/videos`).then((r) => r.data),
-  upload: (matchId: string, file: File) => {
-    const fd = new FormData();
-    fd.append('video', file);
-    return api.post<Video>(`/matches/${matchId}/videos`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then((r) => r.data);
-  },
-  delete: (videoId: string) => api.delete(`/videos/${videoId}`),
-  fileUrl: (videoId: string) => `/api/v1/videos/${videoId}/file`,
-
-  listTimestamps: (videoId: string) =>
-    api.get<VideoTimestamp[]>(`/videos/${videoId}/timestamps`).then((r) => r.data),
-  createTimestamp: (videoId: string, data: { timestampSeconds: number; label: string; eventId?: string }) =>
-    api.post<VideoTimestamp>(`/videos/${videoId}/timestamps`, data).then((r) => r.data),
-  deleteTimestamp: (timestampId: string) => api.delete(`/timestamps/${timestampId}`),
 };
 
 // ─── Team Chat (foundation) ───────────────────────────────────────────────────
@@ -281,7 +229,7 @@ export const chatApi = {
 };
 
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
-import type { Feedback, FeedbackStatus } from '../types/feedback';
+import type { Feedback, FeedbackPage, FeedbackStatus } from '../types/feedback';
 
 export const feedbackApi = {
   create: (data: {
@@ -303,13 +251,15 @@ export const feedbackApi = {
       .post<Feedback>('/feedback', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       .then((r) => r.data);
   },
-  listMine: () => api.get<Feedback[]>('/feedback/mine').then((r) => r.data),
+  listMine: (cursor?: string) =>
+    api.get<FeedbackPage>('/feedback/mine', { params: cursor ? { cursor } : undefined }).then((r) => r.data),
   // Admin-only — 403 for everyone else.
-  listAll: (filters?: { status?: string; type?: string }) => {
+  listAll: (filters?: { status?: string; type?: string }, cursor?: string) => {
     const params: Record<string, string> = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.type) params.type = filters.type;
-    return api.get<Feedback[]>('/feedback', { params }).then((r) => r.data);
+    if (cursor) params.cursor = cursor;
+    return api.get<FeedbackPage>('/feedback', { params }).then((r) => r.data);
   },
   updateStatus: (id: string, data: { status?: FeedbackStatus; adminNotes?: string | null }) =>
     api.patch<Feedback>(`/feedback/${id}`, data).then((r) => r.data),
@@ -322,8 +272,6 @@ export const feedbackApi = {
 export const membershipsApi = {
   listByTeam: (teamId: string) =>
     api.get<TeamMember[]>(`/teams/${teamId}/members`).then((r) => r.data),
-  add: (teamId: string, data: { userId: string; role: TeamRole }) =>
-    api.post<TeamMember>(`/teams/${teamId}/members`, data).then((r) => r.data),
   updateRole: (teamId: string, memberId: string, role: TeamRole) =>
     api.patch<TeamMember>(`/teams/${teamId}/members/${memberId}`, { role }).then((r) => r.data),
   // Iteration 3 — patch one or more access tiers, leaving role untouched.
@@ -335,8 +283,6 @@ export const membershipsApi = {
   remove: (teamId: string, memberId: string) =>
     api.delete(`/teams/${teamId}/members/${memberId}`),
   myTeams: () => api.get<UserTeamMembership[]>('/users/me/teams').then((r) => r.data),
-  searchUsers: (q: string) =>
-    api.get<UserSearchResult[]>('/users/search', { params: { q } }).then((r) => r.data),
 };
 
 // ─── Permissions (Phase 5 Sprint 6) ──────────────────────────────────────────
@@ -435,60 +381,6 @@ export const approvalApi = {
     api.post<ApprovalRequest>(`/approval-requests/${id}/approve`).then((r) => r.data),
   reject: (id: string) =>
     api.post<ApprovalRequest>(`/approval-requests/${id}/reject`).then((r) => r.data),
-};
-
-// ─── League Intelligence (Phase 7 Sprints 1-3) ───────────────────────────────
-import type { League, LeagueSeason, LeagueMatch, StandingsResult, FixtureFilters, LeagueTeamProfile, LeagueRankings, MatchCentreData } from '../types';
-
-export const leagueApi = {
-  list: () =>
-    api.get<League[]>('/leagues').then((r) => r.data),
-  listMy: () =>
-    api.get<LeagueSeason[]>('/leagues/my').then((r) => r.data),
-  create: (data: { name: string; division?: string }) =>
-    api.post<League>('/leagues', data).then((r) => r.data),
-  get: (leagueId: string) =>
-    api.get<League>(`/leagues/${leagueId}`).then((r) => r.data),
-
-  createSeason: (leagueId: string, data: { name: string; startDate: string; endDate?: string }) =>
-    api.post<LeagueSeason>(`/leagues/${leagueId}/seasons`, data).then((r) => r.data),
-  getSeason: (seasonId: string) =>
-    api.get<LeagueSeason>(`/leagues/seasons/${seasonId}`).then((r) => r.data),
-
-  addTeam: (seasonId: string, teamId: string) =>
-    api.post(`/leagues/seasons/${seasonId}/teams`, { teamId }).then((r) => r.data),
-  removeTeam: (seasonId: string, leagueTeamId: string) =>
-    api.delete(`/leagues/seasons/${seasonId}/teams/${leagueTeamId}`),
-
-  listFixtures: (seasonId: string, filters?: FixtureFilters) => {
-    const params: Record<string, string> = {};
-    if (filters?.teamId) params.teamId = filters.teamId;
-    if (filters?.from)   params.from   = filters.from;
-    if (filters?.to)     params.to     = filters.to;
-    if (filters?.status) params.status = filters.status;
-    return api.get<LeagueMatch[]>(`/leagues/seasons/${seasonId}/fixtures`, { params }).then((r) => r.data);
-  },
-  createFixture: (seasonId: string, data: { homeLeagueTeamId: string; awayLeagueTeamId: string; scheduledDate: string }) =>
-    api.post<LeagueMatch>(`/leagues/seasons/${seasonId}/fixtures`, data).then((r) => r.data),
-  getFixture: (fixtureId: string) =>
-    api.get<LeagueMatch>(`/leagues/fixtures/${fixtureId}`).then((r) => r.data),
-
-  linkMatch: (fixtureId: string, matchId: string, side: 'home' | 'away') =>
-    api.patch<LeagueMatch>(`/leagues/fixtures/${fixtureId}/link`, { matchId, side }).then((r) => r.data),
-  unlinkMatch: (fixtureId: string, side: 'home' | 'away') =>
-    api.patch<LeagueMatch>(`/leagues/fixtures/${fixtureId}/unlink`, { side }).then((r) => r.data),
-
-  getStandings: (seasonId: string) =>
-    api.get<StandingsResult>(`/leagues/seasons/${seasonId}/standings`).then((r) => r.data),
-
-  getTeamProfile: (leagueTeamId: string) =>
-    api.get<LeagueTeamProfile>(`/leagues/league-teams/${leagueTeamId}/profile`).then((r) => r.data),
-
-  getRankings: (seasonId: string) =>
-    api.get<LeagueRankings>(`/leagues/seasons/${seasonId}/rankings`).then((r) => r.data),
-
-  getMatchCentre: (seasonId: string) =>
-    api.get<MatchCentreData>(`/leagues/seasons/${seasonId}/match-centre`).then((r) => r.data),
 };
 
 export default api;

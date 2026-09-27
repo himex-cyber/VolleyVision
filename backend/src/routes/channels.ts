@@ -1,12 +1,11 @@
-// Team Chat routes. Mounted at /api/v1 (paths here carry their own prefixes,
-// like routes/videos.ts) because the surface spans three resources: the
-// team-scoped channel getter, channel-scoped messages, and message-scoped
-// edit/delete.
+// Team Chat routes. Mounted at /api/v1 (paths here carry their own prefixes)
+// because the surface spans three resources: the team-scoped channel getter,
+// channel-scoped messages, and message-scoped edit/delete.
 
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
-import { chatPostRateLimit } from '../middleware/chatRateLimit';
+import { chatPostRateLimit } from '../middleware/rateLimit';
 import { requireChannelPermission, requireTeamPermission } from '../middleware/permissions';
 import { Permission } from '../services/permission.service';
 import { MAX_ATTACHMENTS_PER_MESSAGE, MAX_FILE_BYTES } from '../services/chatStorage.service';

@@ -13,7 +13,9 @@ import {
   serializeMessage,
   SerializedMessage,
 } from './chat';
-import { Permission, roleHasPermission } from '../services/permission.service';
+// Imported from lib/ rather than permission.service — the service pulls in
+// lib/prisma, which instantiates a PrismaClient at module load.
+import { Permission, roleHasPermission } from './rolePermissions';
 
 // ─── validateMessageBody ──────────────────────────────────────────────────────
 

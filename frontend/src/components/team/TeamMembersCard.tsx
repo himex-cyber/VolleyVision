@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  useTeamMembers, useAddMember, useUpdateMemberRole, useUpdateMemberAccess,
-  useRemoveMember, useUserSearch, useTeamRole, useHasPermission,
+  useTeamMembers, useUpdateMemberRole, useUpdateMemberAccess,
+  useRemoveMember, useTeamRole, useHasPermission,
 } from '../../hooks';
 import type { TeamRole, TeamMember, AccessTier, AccessCategory } from '../../types';
 import { ROLE_OPTIONS, ROLE_LABELS, ROLE_BADGE, TIER_OPTIONS, ACCESS_CATEGORIES } from '../../lib/teamRoles';
@@ -17,7 +17,6 @@ interface Props {
 
 export default function TeamMembersCard({ teamId }: Props) {
   const { data: members, isLoading } = useTeamMembers(teamId);
-  const addMember       = useAddMember(teamId);
   const updateRole      = useUpdateMemberRole(teamId);
   const updateAccess    = useUpdateMemberAccess(teamId);
   const removeMember    = useRemoveMember(teamId);
@@ -29,24 +28,24 @@ export default function TeamMembersCard({ teamId }: Props) {
   // 403s without it, so the inline invite block is gated separately.
   const canInvite = useHasPermission(teamId, 'INVITE_USERS');
 
-  const [showAdd, setShowAdd]     = useState(false);
-  const [searchQ, setSearchQ]     = useState('');
-  const [addRole, setAddRole]     = useState<TeamRole>('PLAYER');
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [addError, setAddError]   = useState('');
+  // People join only by accepting an invite or redeeming a code — there is no
+  // way to put someone on a team without their consent.
+  const [showInvite, setShowInvite] = useState(false);
 
-  const { data: searchResults } = useUserSearch(searchQ);
+  // A team may have at most 2 assistant coaches (backend-enforced, 409 if
+  // violated) — tracked here so the role picker can disable the option before
+  // the round-trip. Keyed by memberId so only the row that failed shows it.
+  const [roleError, setRoleError] = useState<{ id: string; message: string } | null>(null);
+  const assistantCoachCount = members?.filter((m) => m.role === 'ASSISTANT_COACH').length ?? 0;
 
-  async function handleAdd() {
-    setAddError('');
-    if (!selectedUserId) { setAddError('Select a user first.'); return; }
+  async function handleRoleChange(memberId: string, role: TeamRole): Promise<boolean> {
+    setRoleError(null);
     try {
-      await addMember.mutateAsync({ userId: selectedUserId, role: addRole });
-      setShowAdd(false);
-      setSearchQ('');
-      setSelectedUserId('');
+      await updateRole.mutateAsync({ memberId, role });
+      return true;
     } catch (err: any) {
-      setAddError(err?.response?.data?.error ?? "Couldn't add that member. Try again.");
+      setRoleError({ id: memberId, message: err?.response?.data?.error ?? "Couldn't change role. Try again." });
+      return false;
     }
   }
 
@@ -56,80 +55,26 @@ export default function TeamMembersCard({ teamId }: Props) {
         <h2 className="font-semibold text-grey-900">Team Members</h2>
         <div className="flex items-center gap-3">
           <span className="text-xs text-grey-600 tabular-nums">{members?.length ?? 0} members</span>
-          {canManage && (
+          {canInvite && (
             <button
-              className={`${showAdd ? 'btn-ghost' : 'btn-primary'} text-sm px-3 py-1.5`}
-              onClick={() => setShowAdd(!showAdd)}
+              className={`${showInvite ? 'btn-ghost' : 'btn-primary'} text-sm px-3 py-1.5`}
+              onClick={() => setShowInvite(!showInvite)}
             >
-              {showAdd ? 'Cancel' : '+ Add member'}
+              {showInvite ? 'Cancel' : '+ Invite staff'}
             </button>
           )}
         </div>
       </div>
 
-      {/* Add member panel */}
-      {showAdd && canManage && (
-        <div className="px-5 py-4 border-b border-grey-200 bg-grey-50 space-y-3">
-          <div className="space-y-2">
-            <label className="block text-xs text-grey-600 font-medium">Search user</label>
-            <input
-              className="input text-sm"
-              placeholder="Name or email…"
-              value={searchQ}
-              onChange={(e) => { setSearchQ(e.target.value); setSelectedUserId(''); }}
-            />
-            {searchResults && searchResults.length > 0 && !selectedUserId && (
-              <div className="bg-white border border-grey-200 rounded-xl overflow-hidden">
-                {searchResults.map((u) => (
-                  <button
-                    key={u.id}
-                    className="w-full text-left px-4 py-2.5 hover:bg-grey-50 transition-colors border-b border-grey-200 last:border-0"
-                    onClick={() => { setSelectedUserId(u.id); setSearchQ(`${u.firstName} ${u.lastName} — ${u.email}`); }}
-                  >
-                    <span className="text-grey-900 text-sm font-medium">{u.firstName} {u.lastName}</span>
-                    <span className="text-grey-600 text-xs ml-2">{u.email}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {searchQ.trim().length >= 2 && searchResults?.length === 0 && !selectedUserId && (
-              <p className="text-grey-600 text-xs px-1">No users found.</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-xs text-grey-600 font-medium">Role</label>
-            <select
-              className="input text-sm"
-              value={addRole}
-              onChange={(e) => setAddRole(e.target.value as TeamRole)}
-            >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {addError && <p className="text-error text-xs">{addError}</p>}
-
-          <button className="btn-primary text-sm" onClick={handleAdd} disabled={addMember.isPending || !selectedUserId}>
-            {addMember.isPending ? 'Adding…' : 'Add member'}
-          </button>
-
-          {/* The search above only finds people who already have an account. */}
-          {canInvite && (
-            <div className="border-t border-grey-200 pt-4 mt-1 space-y-2">
-              <p className="text-xs text-grey-600">
-                Inviting someone who doesn't have an account yet? Share the staff code, or send an email invite:
-              </p>
-              <TeamJoinCodes teamId={teamId} only="STAFF" />
-              <QuickEmailInvite
-                teamId={teamId}
-                roles={['ASSISTANT_COACH', 'MANAGER', 'STATISTICIAN']}
-                defaultRole="ASSISTANT_COACH"
-              />
-            </div>
-          )}
+      {showInvite && canInvite && (
+        <div className="px-5 py-4 border-b border-grey-200 bg-grey-50 space-y-2">
+          <p className="text-xs text-grey-600">Share the staff code, or send an email invite:</p>
+          <TeamJoinCodes teamId={teamId} only="STAFF" />
+          <QuickEmailInvite
+            teamId={teamId}
+            roles={['ASSISTANT_COACH', 'MANAGER', 'STATISTICIAN']}
+            defaultRole="ASSISTANT_COACH"
+          />
         </div>
       )}
 
@@ -146,7 +91,11 @@ export default function TeamMembersCard({ teamId }: Props) {
               member={m}
               canManage={canManage}
               isSelf={m.user.id === user?.id}
-              onRoleChange={(role) => updateRole.mutate({ memberId: m.id, role })}
+              // Other members already holding ASSISTANT_COACH — excludes this
+              // row itself, so a current assistant coach can still be re-saved.
+              otherAssistantCoachCount={m.role === 'ASSISTANT_COACH' ? assistantCoachCount - 1 : assistantCoachCount}
+              roleError={roleError?.id === m.id ? roleError.message : null}
+              onRoleChange={(role) => handleRoleChange(m.id, role)}
               onAccessChange={(category, tier) =>
                 updateAccess.mutate({ memberId: m.id, tiers: { [category]: tier } })}
               onRemove={() => {
@@ -166,18 +115,25 @@ interface MemberRowProps {
   member: TeamMember;
   canManage: boolean;
   isSelf: boolean;
-  onRoleChange: (role: TeamRole) => void;
+  otherAssistantCoachCount: number;
+  roleError: string | null;
+  onRoleChange: (role: TeamRole) => Promise<boolean>;
   onAccessChange: (category: AccessCategory, tier: AccessTier) => void;
   onRemove: () => void;
 }
 
-function MemberRow({ member, canManage, isSelf, onRoleChange, onAccessChange, onRemove }: MemberRowProps) {
+function MemberRow({
+  member, canManage, isSelf, otherAssistantCoachCount, roleError, onRoleChange, onAccessChange, onRemove,
+}: MemberRowProps) {
   const [editing, setEditing] = useState(false);
   const [role, setRole] = useState<TeamRole>(member.role);
+  const [saving, setSaving] = useState(false);
 
-  function saveRole() {
-    onRoleChange(role);
-    setEditing(false);
+  async function saveRole() {
+    setSaving(true);
+    const ok = await onRoleChange(role);
+    setSaving(false);
+    if (ok) setEditing(false);
   }
 
   // Access tiers are only meaningful for staff roles (players/viewers can't
@@ -197,7 +153,7 @@ function MemberRow({ member, canManage, isSelf, onRoleChange, onAccessChange, on
             {member.user.firstName} {member.user.lastName}
             {isSelf && <span className="text-grey-400 font-normal text-xs ml-1.5">(you)</span>}
           </p>
-          <p className="text-grey-600 text-xs truncate">{member.user.email}</p>
+          {member.user.email && <p className="text-grey-600 text-xs truncate">{member.user.email}</p>}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -234,9 +190,17 @@ function MemberRow({ member, canManage, isSelf, onRoleChange, onAccessChange, on
               value={role}
               onChange={(e) => setRole(e.target.value as TeamRole)}
             >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
+              {ROLE_OPTIONS.map((r) => {
+                // At most 2 assistant coaches per team (409 from the backend
+                // otherwise) — disable before the round-trip once full, unless
+                // this member already holds the role (re-saving is a no-op).
+                const full = r.value === 'ASSISTANT_COACH' && otherAssistantCoachCount >= 2 && member.role !== 'ASSISTANT_COACH';
+                return (
+                  <option key={r.value} value={r.value} disabled={full}>
+                    {r.label}{full ? ' (2 max — full)' : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -263,9 +227,13 @@ function MemberRow({ member, canManage, isSelf, onRoleChange, onAccessChange, on
             </div>
           )}
 
+          {roleError && <p className="text-error text-xs">{roleError}</p>}
+
           <div className="flex items-center justify-between gap-2 pt-1">
             <div className="flex gap-2">
-              <button className="btn-primary text-sm px-3 py-1.5" onClick={saveRole}>Save Changes</button>
+              <button className="btn-primary text-sm px-3 py-1.5" onClick={saveRole} disabled={saving}>
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
               <button
                 className="btn-ghost text-sm px-3 py-1.5"
                 onClick={() => { setEditing(false); setRole(member.role); }}

@@ -1,8 +1,9 @@
-import { AccessTier, TeamRole } from '@prisma/client';
+import { AccessTier, Prisma, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { defaultAccessTiers } from './permission.service';
-import { applyCreatePlayer } from './teamActions.service';
+import { applyCreatePlayer } from './playerActions.service';
+import { roleSlotError } from '../lib/roleSlots';
 
 const memberSelect = {
   id: true,
@@ -50,7 +51,6 @@ export async function getUserTeams(userId: string) {
           division: true,
           season: true,
           ownerId: true,
-          leagueSeasonId: true,
           _count: { select: { players: true, matches: true } },
         },
       },
@@ -102,6 +102,39 @@ export async function ensurePlayerForMember(teamId: string, userId: string) {
   });
 }
 
+/**
+ * Check the role's slot is free (lib/roleSlots.ts), then write — both inside
+ * one SERIALIZABLE transaction, so two people joining at the same moment can't
+ * each see one assistant and both take the last slot. Every path that sets a
+ * role (invitations, staff join codes, member edits) comes through addMember or
+ * updateMemberRole, so this is the single place the limits are enforced.
+ */
+async function withRoleSlot<T>(
+  teamId: string,
+  role: TeamRole,
+  excludeMembershipId: string | null,
+  write: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const assistants = role === 'ASSISTANT_COACH'
+        ? await tx.teamMembership.count({
+            where: { teamId, role: 'ASSISTANT_COACH', ...(excludeMembershipId ? { NOT: { id: excludeMembershipId } } : {}) },
+          })
+        : 0;
+      const error = roleSlotError(role, assistants);
+      if (error) throw new AppError(409, error);
+      return write(tx);
+    }, { isolationLevel: 'Serializable' });
+  } catch (err) {
+    // P2034: Postgres aborted the loser of two racing transactions.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+      throw new AppError(409, "Someone else just changed this team's roles. Try again.");
+    }
+    throw err;
+  }
+}
+
 /** Add a user to a team with a given role. */
 export async function addMember(teamId: string, userId: string, role: TeamRole) {
   const [team, user] = await Promise.all([
@@ -116,12 +149,26 @@ export async function addMember(teamId: string, userId: string, role: TeamRole) 
   });
   if (existing) throw new AppError(409, 'User is already a member of this team.');
 
-  const membership = await prisma.teamMembership.create({
-    data: { teamId, userId, role, ...defaultAccessTiers(role) },
-    select: memberSelect,
-  });
+  const membership = await withRoleSlot(teamId, role, null, (tx) =>
+    tx.teamMembership.create({
+      data: { teamId, userId, role, ...defaultAccessTiers(role) },
+      select: memberSelect,
+    }),
+  );
   // Added straight in as a player — put them on the roster too.
   if (role === 'PLAYER') await ensurePlayerForMember(teamId, userId);
+  return membership;
+}
+
+/**
+ * Every member mutation arrives as /teams/:id/members/:memberId, and the route
+ * guard only checks the caller's permission on :id. Scoping the lookup to that
+ * same team is what stops the owner of any team (and anyone can create one)
+ * editing or removing a membership that belongs to a different team.
+ */
+export async function findTeamMembership(teamId: string, membershipId: string) {
+  const membership = await prisma.teamMembership.findFirst({ where: { id: membershipId, teamId } });
+  if (!membership) throw new AppError(404, 'Membership not found.');
   return membership;
 }
 
@@ -130,14 +177,23 @@ export async function addMember(teamId: string, userId: string, role: TeamRole) 
  * that role's defaults — a role change is a coarse action, and this avoids a
  * demoted member silently keeping elevated access. A coach can then fine-tune.
  */
-export async function updateMemberRole(membershipId: string, role: TeamRole) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
-  const updated = await prisma.teamMembership.update({
-    where: { id: membershipId },
-    data: { role, ...defaultAccessTiers(role) },
-    select: memberSelect,
-  });
+export async function updateMemberRole(teamId: string, membershipId: string, role: TeamRole) {
+  const membership = await findTeamMembership(teamId, membershipId);
+  // Re-saving the same role is a no-op. It used to re-seed the tiers, which
+  // silently wiped a coach's custom access settings on an unchanged "Save".
+  if (membership.role === role) {
+    return prisma.teamMembership.findUniqueOrThrow({ where: { id: membershipId }, select: memberSelect });
+  }
+  if (membership.role === 'HEAD_COACH') {
+    throw new AppError(409, 'The head coach is the team owner. Transfer ownership to change them.');
+  }
+  const updated = await withRoleSlot(teamId, role, membershipId, (tx) =>
+    tx.teamMembership.update({
+      where: { id: membershipId },
+      data: { role, ...defaultAccessTiers(role) },
+      select: memberSelect,
+    }),
+  );
   // Promoted to player — put them on the roster. Safe to call unconditionally
   // for PLAYER updates since ensurePlayerForMember is idempotent.
   if (role === 'PLAYER') await ensurePlayerForMember(membership.teamId, membership.userId);
@@ -146,11 +202,11 @@ export async function updateMemberRole(membershipId: string, role: TeamRole) {
 
 /** Update one or more of a member's access tiers, leaving role untouched. */
 export async function updateMemberAccess(
+  teamId: string,
   membershipId: string,
   tiers: { rosterAccess?: AccessTier; invitationAccess?: AccessTier; matchAccess?: AccessTier },
 ) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+  await findTeamMembership(teamId, membershipId);
   return prisma.teamMembership.update({
     where: { id: membershipId },
     data: {
@@ -163,9 +219,11 @@ export async function updateMemberAccess(
 }
 
 /** Remove a member from a team. */
-export async function removeMember(membershipId: string) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+export async function removeMember(teamId: string, membershipId: string) {
+  const membership = await findTeamMembership(teamId, membershipId);
+  if (membership.role === 'HEAD_COACH') {
+    throw new AppError(409, 'Transfer ownership before removing the head coach.');
+  }
   await prisma.teamMembership.delete({ where: { id: membershipId } });
 }
 
@@ -199,22 +257,4 @@ export async function syncOwnerMembership(teamId: string, ownerId: string) {
       data: { teamId, userId: ownerId, role: 'HEAD_COACH' },
     });
   }
-}
-
-/** Search users by name or email fragment — used for the add-member lookup. */
-export async function searchUsers(query: string) {
-  const q = query.trim();
-  if (q.length < 2) return [];
-  return prisma.user.findMany({
-    where: {
-      OR: [
-        { email: { contains: q, mode: 'insensitive' } },
-        { firstName: { contains: q, mode: 'insensitive' } },
-        { lastName: { contains: q, mode: 'insensitive' } },
-      ],
-    },
-    select: { id: true, firstName: true, lastName: true, email: true, role: true },
-    take: 20,
-    orderBy: { firstName: 'asc' },
-  });
 }

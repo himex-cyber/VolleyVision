@@ -1,13 +1,27 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useViewMode } from '../../context/ViewModeContext';
 import { useMyInvitations } from '../../hooks';
-import { features } from '../../config/features';
 import {
-  GridIcon, TeamIcon, SparkIcon, MailIcon, UserIcon,
+  GridIcon, TeamIcon, MailIcon, UserIcon,
   BellIcon, ChevronIcon, MenuIcon, LogoutIcon, FeedbackIcon,
 } from './icons';
+import PageLoadingFallback from './PageLoadingFallback';
+import EmailVerificationBanner from './EmailVerificationBanner';
+
+/**
+ * Page components are code-split (see main.tsx), so the routed child suspends
+ * while its chunk downloads. Boundary sits here, inside the chrome, so the top
+ * nav stays mounted instead of the whole shell blanking on first navigation.
+ */
+function SuspendedOutlet() {
+  return (
+    <Suspense fallback={<PageLoadingFallback />}>
+      <Outlet />
+    </Suspense>
+  );
+}
 
 type NavItem = {
   to: string;
@@ -20,7 +34,6 @@ type NavItem = {
 const NAV_AUTH: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: GridIcon },
   { to: '/teams', label: 'Teams', icon: TeamIcon },
-  ...(features.leagues ? [{ to: '/leagues', label: 'League Hub', icon: SparkIcon }] : []),
   { to: '/invitations', label: 'Invitations', icon: MailIcon, badge: true },
   { to: '/profile', label: 'Profile', icon: UserIcon },
 ];
@@ -185,7 +198,7 @@ function PublicShell() {
         </div>
       </header>
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-6">
-        <Outlet />
+        <SuspendedOutlet />
       </main>
     </div>
   );
@@ -200,7 +213,7 @@ export default function Layout() {
   const isTracking = location.pathname.startsWith('/track/');
 
   // The tracking screen is chrome-free and tablet-optimised — never wrapped.
-  if (isTracking) return <Outlet />;
+  if (isTracking) return <SuspendedOutlet />;
   if (!user) return <PublicShell />;
 
   const pendingCount = invitations?.length ?? 0;
@@ -257,8 +270,10 @@ export default function Layout() {
         </div>
       </header>
 
+      <EmailVerificationBanner />
+
       <main className="flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6">
-        <Outlet />
+        <SuspendedOutlet />
       </main>
     </div>
   );

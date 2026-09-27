@@ -8,9 +8,10 @@ import {
   getTeamInvitations,
   getUserInvitations,
 } from '../services/invitation.service';
-import { getAccessTier } from '../services/permission.service';
+import { getAccessTier, getUserTeamRole } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreateInvitation } from '../services/teamActions.service';
+import { canInviteRole } from '../lib/rolePermissions';
 
 export async function createTeamInvitation(req: Request, res: Response, next: NextFunction) {
   try {
@@ -20,6 +21,14 @@ export async function createTeamInvitation(req: Request, res: Response, next: Ne
       return res.status(400).json({ error: 'email and role are required' });
     }
     const userId = req.user!.userId;
+
+    // M4: an inviter could previously set any role, including HEAD_COACH or a
+    // role outranking their own. Cap the invited role to the inviter's own
+    // authority; HEAD_COACH is never invitable (only ownership transfer sets it).
+    const { role: inviterRole } = await getUserTeamRole(userId, teamId);
+    if (!inviterRole || !canInviteRole(inviterRole, role)) {
+      return res.status(403).json({ error: 'You cannot invite a member at that role.' });
+    }
 
     // Invitation access tier decides immediate vs queued (VIEW_ONLY/non-member
     // already 403'd by the route guard).
@@ -42,7 +51,7 @@ export async function createTeamInvitation(req: Request, res: Response, next: Ne
 
 export async function listTeamInvitations(req: Request, res: Response, next: NextFunction) {
   try {
-    const invitations = await getTeamInvitations(req.params.id);
+    const invitations = await getTeamInvitations(req.params.id, req.user!.userId);
     res.json(invitations);
   } catch (err) {
     next(err);
@@ -55,7 +64,10 @@ export async function acceptInvitationHandler(req: Request, res: Response, next:
     logAudit(req.user!.userId, 'ACCEPT_INVITATION', 'invitation', result.id);
     res.json(result);
   } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    // .code (e.g. EMAIL_NOT_VERIFIED) must survive this shortcut path exactly
+    // like it does through the shared errorHandler — dropping it here would
+    // silently downgrade the response to a plain { error } for this route only.
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     next(err);
   }
 }
@@ -68,7 +80,7 @@ export async function redeemInvitationHandler(req: Request, res: Response, next:
     logAudit(req.user!.userId, 'REDEEM_INVITATION', 'invitation', result.id);
     res.json(result);
   } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     next(err);
   }
 }

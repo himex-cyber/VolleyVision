@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlayerDashboard, useLinkPlayer, useUnlinkPlayer, useTeams, useTeam } from '../../hooks';
+import { isEmailNotVerifiedError } from '../../lib/api';
 import type { PlayerRecord } from '../../types';
+import ResendVerificationNotice from '../ui/ResendVerificationNotice';
 
 // Account-linking management — which roster entries this user account is tied to.
 // Moved here from the Player Dashboard (Iteration 3 Task 8): it's a Profile/account
@@ -31,18 +33,23 @@ function LinkPlayerPanel() {
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [selectedPlayerId, setSelectedPlayerId] = useState('');
   const [error, setError] = useState('');
+  const [notVerified, setNotVerified] = useState(false);
 
   const { data: selectedTeam } = useTeam(selectedTeamId);
 
   async function handleLink() {
-    setError('');
+    setError(''); setNotVerified(false);
     if (!selectedPlayerId) { setError('Select a player first.'); return; }
     try {
       await linkPlayer.mutateAsync(selectedPlayerId);
       setSelectedTeamId('');
       setSelectedPlayerId('');
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't link that player. Try again.");
+      if (isEmailNotVerifiedError(err)) {
+        setNotVerified(true);
+      } else {
+        setError(err?.response?.data?.error ?? "Couldn't link that player. Try again.");
+      }
     }
   }
 
@@ -83,6 +90,7 @@ function LinkPlayerPanel() {
         </div>
       </div>
 
+      {notVerified && <ResendVerificationNotice />}
       {error && <p className="text-error text-xs">{error}</p>}
 
       <button className="btn-primary text-sm" onClick={handleLink} disabled={linkPlayer.isPending || !selectedPlayerId}>

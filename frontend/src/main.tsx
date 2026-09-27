@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as Sentry from '@sentry/react';
 import './index.css';
 
 import { AuthProvider } from './context/AuthContext';
@@ -9,37 +10,86 @@ import { ViewModeProvider } from './context/ViewModeContext';
 import { features } from './config/features';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import RedeemInvitationPage from './pages/RedeemInvitationPage';
-import InvitationsPage from './pages/InvitationsPage';
-import DashboardPage from './pages/DashboardPage';
-import ProfilePage from './pages/ProfilePage';
-import PlayerPortalPage from './pages/PlayerPortalPage';
-import CoachDashboardPage from './pages/CoachDashboardPage';
-import TeamsPage from './pages/TeamsPage';
-import TeamDetailPage from './pages/TeamDetailPage';
-import MatchesPage from './pages/MatchesPage';
-import TrackingPage from './pages/TrackingPage';
-import MatchDashboardPage from './pages/MatchDashboardPage';
-import MatchEventsPage from './pages/MatchEventsPage';
-import MatchWatchPage from './pages/MatchWatchPage';
-import TeamDashboardPage from './pages/TeamDashboardPage';
-import PlayersDashboardPage from './pages/PlayersDashboardPage';
-import OnboardingCoachPage from './pages/OnboardingCoachPage';
-import OnboardingPlayerPage from './pages/OnboardingPlayerPage';
-import LeagueHubPage from './pages/LeagueHubPage';
-import LeagueSeasonPage from './pages/LeagueSeasonPage';
-import LeagueSeasonStandingsPage from './pages/LeagueSeasonStandingsPage';
-import FixturesPage from './pages/FixturesPage';
-import ResultsPage from './pages/ResultsPage';
-import LeagueTeamProfilePage from './pages/LeagueTeamProfilePage';
-import LeagueSeasonRankingsPage from './pages/LeagueSeasonRankingsPage';
-import MatchCentrePage from './pages/MatchCentrePage';
-import TeamChatPage from './pages/TeamChatPage';
-import FeedbackPage from './pages/FeedbackPage';
+import PageLoadingFallback from './components/ui/PageLoadingFallback';
+
+// Fail-soft: unset VITE_SENTRY_DSN is normal in local dev (see
+// backend/src/instrument.ts for the equivalent backend guard). Session
+// Replay stays off on purpose: this app shows match footage and chat that
+// can include minors, and DOM/video capture is exactly the second copy of
+// that data Sentry must not become.
+// Drop query strings from anything Sentry is about to send. Only the fields
+// touched are described, so this needs no type that @sentry/react does not
+// export.
+type ScrubbableEvent = {
+  request?: { url?: string; query_string?: unknown };
+  breadcrumbs?: Array<{ data?: Record<string, unknown> }>;
+};
+
+const pathOnly = (url: string) => url.split('?')[0];
+
+function scrubUrls<T extends ScrubbableEvent>(event: T): T {
+  if (event.request) {
+    delete event.request.query_string;
+    if (event.request.url) event.request.url = pathOnly(event.request.url);
+  }
+  for (const crumb of event.breadcrumbs ?? []) {
+    const url = crumb.data?.url;
+    if (typeof url === 'string') crumb.data!.url = pathOnly(url);
+  }
+  return event;
+}
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE, // Vite's dev/production equivalent of NODE_ENV
+    sendDefaultPii: false,
+    // Free-tier Sentry quota; keep sampling low. See backend/src/instrument.ts.
+    tracesSampleRate: 0.1,
+    // sendDefaultPii: false is NOT "attach nothing" in SDK v10 - it switches
+    // the SDK to a deny-list that filters by KEY NAME. The page URL is not
+    // filtered at all, and this app puts live secrets in query strings:
+    // /reset-password?token=<a working password-reset token>, and
+    // /redeem-invitation?...  A JS error on either page would otherwise ship
+    // that token to Sentry, where it stays readable until it expires.
+    //
+    // Breadcrumbs carry the same thing from the other side: the SDK records
+    // every fetch, and any query string on it. Path only, on both. See backend/src/instrument.ts for
+    // the server half and the SDK source this is based on.
+    beforeSend: scrubUrls,
+    beforeSendTransaction: scrubUrls,
+  });
+}
+
+// Pages are lazy-loaded so a visitor downloads only the route they landed on
+// rather than all 31 screens up front. Layout / RequireAuth / the providers
+// above stay eagerly imported — they're small and needed on every route, so
+// splitting them would only add a request waterfall.
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
+const RedeemInvitationPage = lazy(() => import('./pages/RedeemInvitationPage'));
+const InvitationsPage = lazy(() => import('./pages/InvitationsPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const PlayerPortalPage = lazy(() => import('./pages/PlayerPortalPage'));
+const CoachDashboardPage = lazy(() => import('./pages/CoachDashboardPage'));
+const TeamsPage = lazy(() => import('./pages/TeamsPage'));
+const TeamDetailPage = lazy(() => import('./pages/TeamDetailPage'));
+const MatchesPage = lazy(() => import('./pages/MatchesPage'));
+const TrackingPage = lazy(() => import('./pages/TrackingPage'));
+const MatchDashboardPage = lazy(() => import('./pages/MatchDashboardPage'));
+const MatchEventsPage = lazy(() => import('./pages/MatchEventsPage'));
+const MatchWatchPage = lazy(() => import('./pages/MatchWatchPage'));
+const TeamDashboardPage = lazy(() => import('./pages/TeamDashboardPage'));
+const PlayersDashboardPage = lazy(() => import('./pages/PlayersDashboardPage'));
+const OnboardingCoachPage = lazy(() => import('./pages/OnboardingCoachPage'));
+const OnboardingPlayerPage = lazy(() => import('./pages/OnboardingPlayerPage'));
+const TeamChatPage = lazy(() => import('./pages/TeamChatPage'));
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 
 // Backward-compat redirect: live tracking moved under the shared match shell at
 // /matches/:matchId/track. Old bookmarks to /track/:matchId land here.
@@ -62,6 +112,11 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ViewModeProvider>
+        {/* Outer boundary covers the standalone routes (auth, onboarding) that
+            render outside Layout. Routes nested under Layout suspend against
+            Layout's own inner boundary instead, so the nav chrome stays put
+            while a page chunk loads. */}
+        <Suspense fallback={<PageLoadingFallback />}>
         <Routes>
           {/* Auth pages — standalone, no Layout chrome */}
           <Route path="/login" element={<LoginPage />} />
@@ -69,6 +124,8 @@ function App() {
           {/* Password reset — public; the emailed token is the credential */}
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Email verification — reached from the emailed link, works logged in or out */}
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           {/* Invitation redemption — public so brand-new / logged-out invitees can join */}
           <Route path="/invitations/redeem" element={<RedeemInvitationPage />} />
           {/* Post-registration onboarding nudges — one-time, intent-driven */}
@@ -106,22 +163,12 @@ function App() {
               <Route path="/matches/:matchId/track" element={<TrackingPage />} />
               <Route path="/matches/:matchId/watch" element={<MatchWatchPage />} />
               <Route path="/players/:playerId/dashboard" element={<PlayersDashboardPage />} />
-
-              {features.leagues && (
-                <>
-                  <Route path="/leagues" element={<LeagueHubPage />} />
-                  <Route path="/leagues/seasons/:seasonId" element={<LeagueSeasonPage />} />
-                  <Route path="/leagues/seasons/:seasonId/standings" element={<LeagueSeasonStandingsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/fixtures" element={<FixturesPage />} />
-                  <Route path="/leagues/seasons/:seasonId/results" element={<ResultsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/rankings" element={<LeagueSeasonRankingsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/match-centre" element={<MatchCentrePage />} />
-                  <Route path="/leagues/league-teams/:leagueTeamId/profile" element={<LeagueTeamProfilePage />} />
-                </>
-              )}
             </Route>
           </Route>
+          {/* Unknown URLs, including bookmarks to removed features like /leagues */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
         </ViewModeProvider>
       </AuthProvider>
     </BrowserRouter>

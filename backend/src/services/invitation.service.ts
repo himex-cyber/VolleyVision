@@ -1,9 +1,13 @@
 import { randomUUID } from 'crypto';
 import { InvitationStatus, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { generateUniqueCode } from '../lib/joinCode';
+import { generateUniqueCode, normalizeCode } from '../lib/joinCode';
 import { addMember, isMember } from './teamMembership.service';
+import { canActInCategory } from './permission.service';
+import { AppError } from '../middleware/errorHandler';
 import { sendInvitationEmail } from '../lib/mailer';
+import { normalizeEmail } from '../lib/email';
+import { assertEmailVerified } from './emailVerification.service';
 
 const EXPIRY_DAYS = 7;
 
@@ -39,7 +43,7 @@ export async function createInvitation(
   const expiresAt = new Date(Date.now() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
   const invitation = await prisma.invitation.create({
-    data: { email, teamId, invitedById, role, token, joinCode, expiresAt },
+    data: { email: normalizeEmail(email), teamId, invitedById, role, token, joinCode, expiresAt },
     include: { team: { select: { id: true, name: true } }, invitedBy: { select: { id: true, firstName: true, lastName: true, email: true } } },
   });
 
@@ -50,7 +54,10 @@ export async function createInvitation(
   let emailSent = false;
   try {
     emailSent = await sendInvitationEmail(invitation, joinCode);
-    if (!emailSent) console.warn(`[invitation] Email not sent for invitation ${invitation.id} (${email}) — code ${joinCode}`);
+    // No email/join code in the log — the code is a bearer credential for the
+    // invite and the id alone is enough to look the row up if this needs
+    // investigating.
+    if (!emailSent) console.warn(`[invitation] Email not sent for invitation ${invitation.id}`);
   } catch (err) {
     console.error(`[invitation] Unexpected error sending email for invitation ${invitation.id}:`, err);
   }
@@ -59,6 +66,7 @@ export async function createInvitation(
 }
 
 export async function acceptInvitation(token: string, userId: string) {
+  await assertEmailVerified(userId);
   const inv = await prisma.invitation.findUnique({ where: { token } });
   if (!inv) throw Object.assign(new Error('Invitation not found'), { statusCode: 404 });
   if (inv.status !== InvitationStatus.PENDING) {
@@ -72,7 +80,7 @@ export async function acceptInvitation(token: string, userId: string) {
   // Verify the authenticated user's email matches the invitation
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
+  if (normalizeEmail(user.email) !== normalizeEmail(inv.email)) {
     throw Object.assign(new Error('This invitation was sent to a different email address'), { statusCode: 403 });
   }
 
@@ -97,7 +105,8 @@ export async function acceptInvitation(token: string, userId: string) {
  * the invited address.
  */
 export async function redeemInvitationByCode(joinCode: string, userId: string) {
-  const inv = await prisma.invitation.findUnique({ where: { joinCode: joinCode.trim().toUpperCase() } });
+  await assertEmailVerified(userId);
+  const inv = await prisma.invitation.findUnique({ where: { joinCode: normalizeCode(joinCode) } });
   if (!inv) throw Object.assign(new Error('Invalid or unknown join code'), { statusCode: 404 });
   if (inv.status !== InvitationStatus.PENDING) {
     throw Object.assign(new Error(`Invitation is ${inv.status.toLowerCase()}`), { statusCode: 409 });
@@ -109,7 +118,7 @@ export async function redeemInvitationByCode(joinCode: string, userId: string) {
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
+  if (normalizeEmail(user.email) !== normalizeEmail(inv.email)) {
     throw Object.assign(new Error('This invitation was sent to a different email address'), { statusCode: 403 });
   }
 
@@ -136,7 +145,7 @@ export async function declineInvitation(token: string, userId: string) {
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  if (user.email.toLowerCase() !== inv.email.toLowerCase()) {
+  if (normalizeEmail(user.email) !== normalizeEmail(inv.email)) {
     throw Object.assign(new Error('This invitation was sent to a different email address'), { statusCode: 403 });
   }
 
@@ -154,7 +163,16 @@ export async function expireStaleInvitations() {
   });
 }
 
-export async function getTeamInvitations(teamId: string) {
+/**
+ * Invitee emails + inviting-staff identities — team-private. The route guard
+ * (requireTeamAccess('invitation')) is the primary gate; this second check is
+ * defence in depth so a future caller that skips the middleware can't leak the
+ * list.
+ */
+export async function getTeamInvitations(teamId: string, userId: string) {
+  if (!(await canActInCategory(userId, teamId, 'invitation'))) {
+    throw new AppError(403, 'You do not have permission to view this team’s invitations.');
+  }
   await expireStaleInvitations();
   return prisma.invitation.findMany({
     where: { teamId },

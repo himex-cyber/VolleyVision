@@ -51,7 +51,9 @@ export async function linkPlayerHandler(req: Request, res: Response, next: NextF
     const player = await linkPlayerToUser(playerId, req.user!.userId);
     res.json(player);
   } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    // .code (e.g. EMAIL_NOT_VERIFIED) must survive this shortcut path exactly
+    // like it does through the shared errorHandler.
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     next(err);
   }
 }

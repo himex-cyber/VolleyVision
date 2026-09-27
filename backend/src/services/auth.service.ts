@@ -4,13 +4,37 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { sendPasswordResetEmail } from '../lib/mailer';
+import { normalizeEmail } from '../lib/email';
+import {
+  CONSUMED_RESET_FIELDS,
+  RESET_TOKEN_BYTES,
+  hashResetToken,
+  resetTokenExpiry,
+  usableResetTokenWhere,
+} from '../lib/passwordReset';
+import { issueVerificationEmail } from './emailVerification.service';
 
 const SALT_ROUNDS = 12;
+
+/**
+ * Hashed once at module load, compared against on every login with an unknown
+ * email. Without this, an unknown-email response returns as soon as the
+ * findUnique misses, while a known-email/wrong-password response waits on a
+ * bcrypt.compare — the response-time gap is itself an account-enumeration
+ * oracle even though both branches return the same 401 body.
+ */
+// Precomputed (cost 12, same as SALT_ROUNDS) rather than hashSync at load:
+// that would add ~250 ms to every Netlify Function cold start.
+const DUMMY_PASSWORD_HASH = '$2b$12$8kEnWXiVftUN3DWYnK3NfODyDjlqvMPF2Vkoq4TLE1SY3JXHsI9tW';
 
 export interface AuthPayload {
   userId: string;
   email: string;
   role: string;
+  // Token-revocation version (audit M7 part 2). Optional on the decoded side
+  // only: a token minted before this shipped carries no `tv` at all, and
+  // requireAuth/optionalAuth treat that as tv 0 — see lib/tokenVersion.ts.
+  tv?: number;
 }
 
 export interface AuthResponse {
@@ -23,6 +47,7 @@ export interface AuthResponse {
     role: string;
     profileImage: string | null;
     signupIntent: string | null;
+    emailVerified: boolean;
   };
 }
 
@@ -65,7 +90,12 @@ export async function registerUser(
     throw new AppError(400, 'Password must be at least 8 characters.');
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  // Accepted risk: this 409 is an account-enumeration oracle, but
+  // registerUser logs the caller in on success (see the token below) — the
+  // response has to shape-diverge from "you're now logged in" somehow, so
+  // hiding existence here would require redesigning signup into a confirm-only
+  // flow. Out of scope for this fix; rate-limited via registerRateLimit.
+  const existing = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
   if (existing) throw new AppError(409, 'An account with that email already exists.');
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -76,7 +106,7 @@ export async function registerUser(
 
   const user = await prisma.user.create({
     data: {
-      email: email.toLowerCase(),
+      email: normalizeEmail(email),
       passwordHash,
       firstName,
       lastName,
@@ -84,8 +114,14 @@ export async function registerUser(
     },
   });
 
-  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role };
+  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role, tv: user.tokenVersion };
   const token = generateToken(payload);
+
+  // Every account must verify, including this brand-new one.
+  // issueVerificationEmail already swallows a failed *send* (logged, not
+  // thrown) so registration succeeds either way; only its own DB write is
+  // awaited here.
+  await issueVerificationEmail(user);
 
   return {
     token,
@@ -97,18 +133,22 @@ export async function registerUser(
       role: user.role,
       profileImage: user.profileImage,
       signupIntent: user.signupIntent ?? null,
+      emailVerified: user.emailVerifiedAt != null,
     },
   };
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user) throw new AppError(401, 'Invalid email or password.');
+  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
+  if (!user) {
+    await verifyPassword(password, DUMMY_PASSWORD_HASH); // pad timing, see DUMMY_PASSWORD_HASH
+    throw new AppError(401, 'Invalid email or password.');
+  }
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) throw new AppError(401, 'Invalid email or password.');
 
-  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role };
+  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role, tv: user.tokenVersion };
   const token = generateToken(payload);
 
   return {
@@ -121,18 +161,32 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
       role: user.role,
       profileImage: user.profileImage,
       signupIntent: user.signupIntent ?? null,
+      emailVerified: user.emailVerifiedAt != null,
     },
   };
 }
 
 // ── Forgot password ───────────────────────────────────────────────────────────
 
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+/**
+ * Floor on how long requestPasswordReset takes, whichever branch it runs.
+ *
+ * The identical success message is pointless if the response *time* still says
+ * whether the address is registered. Only work that fits inside the floor can
+ * be padded away, and an SMTP send does not: a real TLS handshake + AUTH + DATA
+ * routinely runs past a second, so awaiting it made the registered branch
+ * overshoot while the unknown branch landed on the floor — the oracle, restored.
+ * The send is therefore dispatched *after* the floor and never awaited; only
+ * the DB work each branch does is inside the budget.
+ *
+ * ponytail: a fixed floor, not constant-time crypto — a pathologically slow DB
+ * could still overshoot it. The rate limit on this route (5 per 15 min per IP
+ * and per email) is what makes exploiting any residual difference across a
+ * meaningful number of addresses impractical.
+ */
+const FORGOT_PASSWORD_FLOOR_MS = 1200;
 
-/** Only the hash is ever stored, so a DB leak can't be replayed as a reset link. */
-function hashResetToken(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Issues a single-use reset link. Silent no-op for an unknown email: the
@@ -143,22 +197,47 @@ function hashResetToken(token: string): string {
  * one — there is at most one live reset token per user.
  */
 export async function requestPasswordReset(email: string): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user) return;
+  const startedAt = Date.now();
+  let dispatchEmail: (() => void) | undefined;
+  try {
+    const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
 
-  const token = crypto.randomBytes(32).toString('hex');
+    const token = crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      passwordResetTokenHash: hashResetToken(token),
-      passwordResetExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
-    },
-  });
+    if (!user) {
+      // Not shape-matched to the known branch — that one does a DB update and no
+      // bcrypt at all. This is only a CPU-time pad so an unknown address isn't
+      // near-instant should the floor below ever be removed; the floor, not this,
+      // is what actually equalises the two branches. No email is sent for an
+      // address that has no account.
+      await bcrypt.hash(token, SALT_ROUNDS);
+      return;
+    }
 
-  // Fire-and-forget by design: sendPasswordResetEmail never throws, and a
-  // delivery failure must not change the response the caller sees.
-  await sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetTokenHash: hashResetToken(token),
+        passwordResetExpiresAt: resetTokenExpiry(),
+      },
+    });
+
+    // Deferred to after the floor and deliberately not awaited: an SMTP round
+    // trip inside the measured response is exactly the timing signal the floor
+    // exists to remove, and a delivery failure must not change the response the
+    // caller sees. sendPasswordResetEmail swallows send errors today and returns
+    // false, but nothing awaits this promise any more — the .catch is what keeps
+    // a rejection it ever grows from becoming an unhandled one.
+    dispatchEmail = () => {
+      void sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token).catch(
+        (err) => console.error('Password reset email failed to send:', err),
+      );
+    };
+  } finally {
+    const remaining = FORGOT_PASSWORD_FLOOR_MS - (Date.now() - startedAt);
+    if (remaining > 0) await sleep(remaining);
+    dispatchEmail?.();
+  }
 }
 
 /**
@@ -170,12 +249,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
     throw new AppError(400, 'Password must be at least 8 characters.');
   }
 
-  const user = await prisma.user.findFirst({
-    where: {
-      passwordResetTokenHash: hashResetToken(token),
-      passwordResetExpiresAt: { gt: new Date() },
-    },
-  });
+  const user = await prisma.user.findFirst({ where: usableResetTokenWhere(token) });
   if (!user) {
     throw new AppError(400, 'This reset link is invalid or has expired. Request a new one.');
   }
@@ -184,8 +258,10 @@ export async function resetPassword(token: string, newPassword: string): Promise
     where: { id: user.id },
     data: {
       passwordHash: await bcrypt.hash(newPassword, SALT_ROUNDS),
-      passwordResetTokenHash: null,
-      passwordResetExpiresAt: null,
+      ...CONSUMED_RESET_FIELDS,
+      // Revoke every other outstanding session (M7 part 2) — a password reset
+      // is exactly the moment a stolen token should stop working.
+      tokenVersion: { increment: 1 },
     },
   });
 }
@@ -202,8 +278,10 @@ export async function getCurrentUser(userId: string) {
       profileImage: true,
       signupIntent: true,
       createdAt: true,
+      emailVerifiedAt: true,
     },
   });
   if (!user) throw new AppError(404, 'User not found.');
-  return user;
+  const { emailVerifiedAt, ...rest } = user;
+  return { ...rest, emailVerified: emailVerifiedAt != null };
 }

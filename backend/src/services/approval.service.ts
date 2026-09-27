@@ -1,10 +1,10 @@
 import { ApprovalAction, ApprovalStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { isApprovalAuthority } from './permission.service';
+import { isApprovalAuthority, getUserTeamRole } from './permission.service';
 import { onApprovalRequestCreated, onApprovalResolved } from './approvalNotifications';
+import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from './playerActions.service';
 import {
-  applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer,
   applyCreateMatch, applyUpdateMatch, applyDeleteMatch,
   applyCreateInvitation,
 } from './teamActions.service';
@@ -70,6 +70,16 @@ async function loadResolvable(requestId: string, resolverId: string) {
   }
   const allowed = await isApprovalAuthority(resolverId, request.teamId);
   if (!allowed) throw new AppError(403, 'Only an owner, head coach, or manager can resolve approval requests.');
+
+  // L3: an approver could resolve their own request — self-approval. Block it
+  // unless the resolver is the team owner. This can't deadlock a team: the
+  // owner always has FULL_ACCESS (see getAccessTier), so a request is only
+  // ever queued for a non-owner approval authority, and the owner can always
+  // step in to resolve it.
+  if (request.requestedById === resolverId) {
+    const { isOwner } = await getUserTeamRole(resolverId, request.teamId);
+    if (!isOwner) throw new AppError(403, 'You cannot resolve your own approval request.');
+  }
   return request;
 }
 

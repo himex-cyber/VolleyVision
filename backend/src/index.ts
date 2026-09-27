@@ -1,8 +1,14 @@
+// Must be the first import: Sentry.init() (in ./instrument) has to run
+// before express and the route modules load.
+import './instrument';
+
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import * as Sentry from '@sentry/node';
 
 import teamRoutes from './routes/teams';
 import playerRoutes from './routes/players';
@@ -16,10 +22,8 @@ import profileRoutes from './routes/profile';
 import playerPortalRoutes from './routes/playerPortal';
 import coachPortalRoutes from './routes/coachPortal';
 import auditRoutes from './routes/audit';
-import videoRoutes from './routes/videos';
 import channelRoutes from './routes/channels';
 import feedbackRoutes from './routes/feedback';
-import leagueRoutes from './routes/league';
 import approvalRoutes from './routes/approvals';
 import trainingSessionRoutes from './routes/trainingSessions';
 import { errorHandler } from './middleware/errorHandler';
@@ -31,7 +35,17 @@ const PORT = process.env.PORT || 3001;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(helmet());
+// Compress JSON responses (brotli where the client supports it, else gzip).
+// Safe under serverless-http, which runs this app on Netlify: it treats a
+// response as binary when Content-Encoding is gzip/deflate/br, so the compressed
+// body is base64'd rather than mangled through a utf8 round-trip.
+app.use(compression());
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+// Override morgan's built-in :url token (req.originalUrl) with req.path —
+// reset tokens, join codes, etc. sometimes ride in a query string, and that
+// string would otherwise land in plaintext request logs. 'dev' still uses this
+// token internally, so its coloring/format is unchanged.
+morgan.token('url', (req: express.Request) => req.path);
 app.use(morgan('dev'));
 app.use(express.json());
 
@@ -50,10 +64,8 @@ app.use('/api/v1/players', playerRoutes);
 app.use('/api/v1/matches', matchRoutes);
 app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
-app.use('/api/v1', videoRoutes);
 app.use('/api/v1', channelRoutes);
 app.use('/api/v1', feedbackRoutes);
-app.use('/api/v1/leagues', leagueRoutes);
 app.use('/api/v1/approval-requests', approvalRoutes);
 app.use('/api/v1/training-sessions', trainingSessionRoutes);
 
@@ -62,12 +74,24 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'VolleyVision API', version: '1.0.0' });
 });
 
+// After every route so Sentry observes them all, before errorHandler so
+// its captured stack still reflects the original error. Safe to call
+// unconditionally: Sentry.captureException no-ops when instrument.ts
+// skipped Sentry.init() (no SENTRY_DSN).
+Sentry.setupExpressErrorHandler(app);
+
 // ─── Error Handler ────────────────────────────────────────────────────────────
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`\n⚡ VolleyVision API running on http://localhost:${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health\n`);
-});
+// Netlify runs this module inside a serverless function (see
+// backend/netlify-functions/api.js) instead of calling .listen() — Netlify
+// sets its own NETLIFY env var in build and function contexts, so skip the
+// local HTTP server in that case.
+if (!process.env.NETLIFY) {
+  app.listen(PORT, () => {
+    console.log(`\n⚡ VolleyVision API running on http://localhost:${PORT}`);
+    console.log(`   Health: http://localhost:${PORT}/health\n`);
+  });
+}
 
 export default app;

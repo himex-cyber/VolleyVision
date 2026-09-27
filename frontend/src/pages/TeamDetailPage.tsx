@@ -231,16 +231,17 @@ export default function TeamDetailPage() {
             onSubmit={async (e) => {
               e.preventDefault();
               if (!transferEmail.trim()) return;
-              // Look up user by email via /api/v1/auth/me isn't suitable — we need
-              // the new owner's userId. For now accept userId directly in the field.
-              await transferOwnership.mutateAsync({ teamId: team.id, newOwnerId: transferEmail.trim() });
+              // The backend resolves the email against this team's members, so the
+              // coach never has to know the new owner's internal id.
+              await transferOwnership.mutateAsync({ teamId: team.id, newOwnerEmail: transferEmail.trim() });
               setShowTransfer(false);
               setTransferEmail('');
             }}
           >
             <input
               className="input flex-1 text-sm"
-              placeholder="New owner user ID"
+              type="email"
+              placeholder="New owner's email (must already be a team member)"
               value={transferEmail}
               onChange={(e) => setTransferEmail(e.target.value)}
               required

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useTeam, useMatches, useCreateMatch, useUpdateMatch, useDeleteMatch, useHasPermission } from '../hooks';
-import { isPendingApproval, leagueLabel, type Match, type MatchStatus } from '../types';
+import { isPendingApproval, type Match, type MatchStatus } from '../types';
 import TeamSubNav from '../components/ui/TeamSubNav';
 import { PencilIcon } from '../components/ui/icons';
 
@@ -50,9 +50,8 @@ export default function MatchesPage() {
     { matchDate: '', opponent: '', competition: '', venue: '', status: 'SCHEDULED' }
   );
 
-  // Competition defaults to the team's current league (Task 2), still editable.
   function openForm() {
-    setForm((f) => ({ ...f, competition: f.competition || leagueLabel(team?.leagueSeason) || '' }));
+    setForm((f) => ({ ...f, competition: f.competition || '' }));
     setShowForm(true);
   }
 
@@ -173,9 +172,7 @@ export default function MatchesPage() {
               <input className="input" placeholder="e.g. Wellington Wolves" value={form.opponent} onChange={(e) => setForm({ ...form, opponent: e.target.value })} required />
             </div>
             <div>
-              <label className="block text-xs text-grey-600 mb-1">
-                Competition{team?.leagueSeason ? ' (from your league)' : ''}
-              </label>
+              <label className="block text-xs text-grey-600 mb-1">Competition</label>
               <input className="input" placeholder="e.g. National League" value={form.competition} onChange={(e) => setForm({ ...form, competition: e.target.value })} />
             </div>
             <div>

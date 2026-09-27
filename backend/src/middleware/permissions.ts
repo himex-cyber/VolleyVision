@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
-import { Permission, hasTeamPermission, canActInCategory, AccessCategory } from '../services/permission.service';
+import { Permission, hasTeamPermission, canActInCategory, AccessCategory, isGlobalAdmin } from '../services/permission.service';
 
 const FORBIDDEN = { error: 'You do not have permission to perform this action.' };
 
@@ -8,35 +8,14 @@ const FORBIDDEN = { error: 'You do not have permission to perform this action.' 
 
 /**
  * Requires the authenticated user to have UserRole.ADMIN.
- * Use for system-level operations (creating leagues, seasons) that are not
- * scoped to a specific team. All team-level permissions continue to use
- * hasTeamPermission — this is purely a global-role check.
+ * Use for system-level operations that are not scoped to a specific team.
+ * All team-level permissions continue to use hasTeamPermission — this is
+ * purely a global-role check.
  */
-export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-  if (req.user.role !== 'ADMIN') { res.status(403).json(FORBIDDEN); return; }
+  if (!(await isGlobalAdmin(req.user.userId))) { res.status(403).json(FORBIDDEN); return; }
   next();
-}
-
-/**
- * Guard for league creation.
- *
- * INTERIM (2026-07): coaches can create leagues alongside admins. Planned to
- * revert to admin-only once real/social leagues ship — see Karlos.
- *
- * Kept as a single isolated check (not scattered inline conditionals) so the
- * revert is one edit: allow ADMIN, or any user who owns a team or holds a
- * HEAD_COACH / MANAGER membership on one.
- */
-export async function requireLeagueCreator(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-  if (req.user.role === 'ADMIN') { next(); return; }
-  const [owned, staffed] = await Promise.all([
-    prisma.team.count({ where: { ownerId: req.user.userId } }),
-    prisma.teamMembership.count({ where: { userId: req.user.userId, role: { in: ['HEAD_COACH', 'MANAGER'] } } }),
-  ]);
-  if (owned > 0 || staffed > 0) { next(); return; }
-  res.status(403).json(FORBIDDEN);
 }
 
 // ─── Team-context middleware ──────────────────────────────────────────────────
@@ -107,12 +86,14 @@ export function requireChannelPermission(permission: Permission) {
 // ─── Match-context middleware ─────────────────────────────────────────────────
 
 /**
- * Looks up the match by `req.params.id`, resolves teamId, then checks permission.
+ * Looks up the match by `req.params[paramName]` (default "id"), resolves teamId,
+ * then checks permission. The param name is configurable for the same reason
+ * requireTeamPermission's is — nested routes carry the id as `:matchId`.
  */
-export function requireMatchPermission(permission: Permission) {
+export function requireMatchPermission(permission: Permission, paramName = 'id') {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-    const matchId = req.params.id;
+    const matchId = req.params[paramName];
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
     const allowed = await hasTeamPermission(req.user.userId, match.teamId, permission);

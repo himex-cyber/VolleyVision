@@ -7,6 +7,7 @@ import { AttachmentKind, MessageAttachment, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { resolveUploadContentType } from '../lib/fileSignature';
 import {
   afterCursorWhere,
   beforeCursorWhere,
@@ -205,9 +206,13 @@ export async function postMessageWithAttachments(
 
   // Reject the whole batch up front so one bad file can't strand siblings
   // that were already uploaded.
+  // contentType is verified against the file's bytes here so a byte/type
+  // mismatch also rejects the batch up front. uploadAttachment re-derives it —
+  // it stays the choke point that decides what Storage is actually told.
   const prepared = files.map((file) => ({
     file,
     kind: assertAcceptable(file),
+    contentType: resolveUploadContentType(file.mimetype, file.buffer),
   })).map((p) => ({
     ...p,
     dims: p.kind === AttachmentKind.IMAGE ? imageDimensions(p.file.buffer) : null,
@@ -224,6 +229,7 @@ export async function postMessageWithAttachments(
         channelId,
         messageId,
         originalName: p.file.originalname,
+        contentType: p.contentType,
       });
       await uploadAttachment({ key, buffer: p.file.buffer, mimeType: p.file.mimetype });
       uploaded.push({ p, storagePath: key });

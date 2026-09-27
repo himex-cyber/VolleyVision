@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { getAccessTier } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
-import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from '../services/teamActions.service';
+import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from '../services/playerActions.service';
 import { logAudit } from '../lib/audit';
 
 // Response body when a non-head-coach action is queued for approval.
@@ -26,7 +26,11 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
   try {
     const player = await prisma.player.findUnique({
       where: { id: req.params.id },
-      include: { team: true },
+      // H1b: `team: true` leaked the team's playerJoinCode/staffJoinCode to
+      // anyone who could read a player. Select only the fields the frontend
+      // reads off player.team (PlayerRecordsManager reads .name; the same
+      // shape is used elsewhere for player.team, e.g. playerPortal.service).
+      include: { team: { select: { id: true, name: true, division: true, season: true } } },
     });
     if (!player) throw new AppError(404, 'Player not found.');
     res.json(player);
