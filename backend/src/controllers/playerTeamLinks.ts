@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { isTeamVisibleTo } from '../lib/teamVisibility';
+import { isTeamVisibleTo, assertTeamVisible } from '../lib/teamVisibility';
+import { Permission, hasTeamPermission } from '../services/permission.service';
 
 // GET /players/:playerId/teams
 // Returns the player's home team plus all additional linked teams.
@@ -53,8 +54,17 @@ export async function addPlayerTeamLink(req: Request, res: Response, next: NextF
     const { teamId } = req.body as { teamId?: string };
     if (!teamId) throw new AppError(400, 'teamId is required.');
 
-    const player = await prisma.player.findUnique({ where: { id: playerId }, select: { id: true } });
+    const player = await prisma.player.findUnique({ where: { id: playerId }, select: { id: true, teamId: true } });
     if (!player) throw new AppError(404, 'Player not found.');
+
+    // M2: the route only checked MANAGE_TEAM on the *target* team (the one
+    // being linked into) — the caller could link in any player id, including
+    // one on a home team they have no relationship to, exposing that team's
+    // roster into a team they do control. Require the same visibility +
+    // manage permission on the player's home team too.
+    await assertTeamVisible(player.teamId, req.user?.userId ?? null);
+    const canManageHomeTeam = await hasTeamPermission(req.user!.userId, player.teamId, Permission.MANAGE_TEAM);
+    if (!canManageHomeTeam) throw new AppError(403, 'You do not have permission to manage this player\'s team.');
 
     const team = await prisma.team.findUnique({ where: { id: teamId }, select: { id: true } });
     if (!team) throw new AppError(404, 'Team not found.');
