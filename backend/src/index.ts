@@ -27,6 +27,8 @@ import feedbackRoutes from './routes/feedback';
 import approvalRoutes from './routes/approvals';
 import trainingSessionRoutes from './routes/trainingSessions';
 import { errorHandler } from './middleware/errorHandler';
+import { prisma } from './lib/prisma';
+import { checkDatabase } from './lib/dbHealth';
 
 dotenv.config();
 
@@ -69,9 +71,13 @@ app.use('/api/v1', feedbackRoutes);
 app.use('/api/v1/approval-requests', approvalRoutes);
 app.use('/api/v1/training-sessions', trainingSessionRoutes);
 
-// Health check — useful for deployment monitoring and CI pipelines
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'VolleyVision API', version: '1.0.0' });
+// Health check for the uptime monitor and deploy checks. It touches the
+// database because the likeliest outage is Supabase pausing the project, and a
+// check that skipped the database reported "ok" straight through one (see
+// lib/dbHealth.ts). 503 when the database can't be reached.
+app.get('/health', async (_req, res) => {
+  const db = await checkDatabase(() => prisma.$queryRaw`SELECT 1`);
+  res.status(db ? 200 : 503).json({ status: db ? 'ok' : 'degraded', db: db ? 'ok' : 'unreachable' });
 });
 
 // After every route so Sentry observes them all, before errorHandler so

@@ -4,7 +4,7 @@
   "description": "VolleyVision API - Volleyball Analytics Platform",
   "main": "dist/index.js",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",

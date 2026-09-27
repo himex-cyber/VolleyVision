@@ -248,6 +248,25 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 - About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
 - Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
 
+### v9.3.0: observability follow-up (2026-09-28)
+
+A separate review session built branch `fix/phase2-observability` ("Phase 2.2"). Claude Code checked every claim against the code and the live site and kept all of it:
+- `/health` checks the database.
+- Browser navigation breadcrumbs are scrubbed. This was a real leak of join codes and tokens.
+- Each function invocation gets its own Sentry scope, request data and root span.
+- An admin-only Sentry end-to-end check on the Feedback page.
+- `netlify.toml` is tracked again, by Karlos's decision after it was raised twice.
+
+Its criticism was fair: the VOLLEYVISION-1 test was a hand-sent event (SDK `audit-check`), so it didn't prove the app's own SDK or its scrubbing.
+
+Claude Code added:
+- **Backend breadcrumb scrubbing:** `instrument.ts` only covered request data and spans.
+- **Node 24 across `.nvmrc`, CI, `netlify.toml` and `engines`:** the live function ran `nodejs24.x`, confirmed through the Netlify API.
+- **Netlify `stop_builds: true`:** Karlos's decision. With the GitHub link active, a merge to `main` had auto-published a build that skipped the migration check.
+- **Local only:** `frontend/.env.local` now points at the live Sentry project.
+
+**Coordination note:** that session checked out its branch in the same working copy Claude Code uses. Run one agent at a time per working copy.
+
 ### Audit closed (2026-09-27)
 
 Phases 0–4 are complete. **Phase 5 (the Ruflo trial) was dropped** at Karlos's decision: it was mostly about Ruflo, whose MCP server never connected in this session, and the audit didn't need it.
@@ -346,3 +365,40 @@ Phases 0–4 are complete. **Phase 5 (the Ruflo trial) was dropped** at Karlos's
 Also in Phase 2.1: `CLAUDE.md` and `netlify.toml` were untracked (Karlos's decision) and `.gitignore` now covers every `.env*`. The minor Greptile items (two verify-page edge cases, README wording) are deferred to the full Greptile pass.
 
 Verified at the end of Phase 1B: backend `tsc` is clean, all 15 test files pass (2 new), and the backend builds; frontend `tsc` is clean and `vite build` works.
+
+### Phase 2.2: observability close-out (branch `fix/phase2-observability`, 2026-09-27)
+
+Why: the handoff's Phase 2 goal was to prove observability end to end, and it had not been met. The one event in Sentry
+(`VOLLEYVISION-1`) reports `sdk.name: audit-check`: a script sent it, not the app, so it proved the DSN, the project
+and the alert email, but not that the deployed browser bundle or API report errors, nor that the scrubbing works. There
+had been zero transactions in 7 days despite 10% sampling. `/health` never touched the database, and no uptime monitor
+existed any more.
+
+| Change | Where |
+|---|---|
+| `/health` pings the database (`SELECT 1`, 5 s bound) and returns 503 when it can't. Tested helper. | `lib/dbHealth.ts` (+ test), `index.ts` |
+| Browser scrubber also strips `from`/`to` on navigation breadcrumbs | `frontend/src/main.tsx` |
+| Each invocation runs in its own Sentry isolation scope, with method + path-only URL as request data and a root `http.server` span (cuid path segments folded to `:id`); the flush moved into a `finally` | `backend/netlify-functions/api.js` |
+| Admin-only Sentry check: `POST /api/v1/feedback/sentry-test` (requireAuth + requireAdmin + 10/hour per user) always fails; the card also throws an uncaught browser error. Both plant a probe query string. | `routes/feedback.ts`, `middleware/rateLimit.ts`, `components/feedback/SentryTestCard.tsx`, `FeedbackPage.tsx`, `lib/api.ts` |
+| `netlify.toml` tracked again (Karlos, 2026-09-27); its comment no longer claims `NODE_VERSION` pins the function runtime | `.gitignore`, `netlify.toml`, `frontend/public/_headers`, `README.md` |
+
+**Found along the way:** the browser scrubber only cleaned a breadcrumb's `url`. Sentry records every URL change as a
+navigation breadcrumb with `from` and `to`, query string included. A visit to `/redeem-invitation?code=…` (a reusable
+team join code), `/reset-password?token=…` or `/verify-email?token=…` therefore put that secret into every later error
+event from the same session. Fixed above; the probe test covers it.
+
+**Verified:** backend `tsc` clean, 32/32 test files (1 new), no import cycles, `node --check` on `api.js`; frontend `tsc`
+clean, lint clean.
+
+**Live check after deploy** (the part that closes Phase 2):
+1. `GET /health` returns `{"status":"ok","db":"ok"}`.
+2. Signed in as the admin, open Feedback and press both buttons.
+3. In Sentry, two new issues arrive: the browser one with `sdk.name` `sentry.javascript.react`, and the API one with
+   `sentry.javascript.node`, whose request shows `POST` and a path-only `/api/v1/feedback/sentry-test`.
+4. PASS only if `sentry-probe-should-not-appear` occurs nowhere in either event's JSON (request URL, breadcrumbs, spans),
+   and neither shows an `authorization` or `cookie` header or a request body.
+
+**Still open:** recreate the Sentry uptime monitor on `/health` once this is deployed; the full security review after the
+subagent spend limit resets (2026-09-28 18:00 UTC); choose one Node version (the live function runs 24; `.nvmrc`, CI and
+`netlify.toml` say 22).
+

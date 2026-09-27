@@ -2,6 +2,7 @@ import { useAuth } from '../context/AuthContext';
 import FeedbackAdminTriage from '../components/feedback/FeedbackAdminTriage';
 import FeedbackSubmitForm from '../components/feedback/FeedbackSubmitForm';
 import MyFeedbackList from '../components/feedback/MyFeedbackList';
+import SentryTestCard from '../components/feedback/SentryTestCard';
 
 export default function FeedbackPage() {
   const { user } = useAuth();
@@ -21,8 +22,9 @@ export default function FeedbackPage() {
 
       {/* Wider than the form/list above — the admin table wants more horizontal room. */}
       {isAdmin && (
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto space-y-5">
           <FeedbackAdminTriage />
+          <SentryTestCard />
         </div>
       )}
     </div>

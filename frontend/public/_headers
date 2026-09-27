@@ -1,6 +1,6 @@
 # Security headers for every response Netlify serves (the SPA and its assets).
-# Lives here rather than in netlify.toml, which is kept out of the repo; Vite
-# copies public/ into dist/, the publish directory. The API's own responses
+# Lives here rather than in netlify.toml so it ships with the frontend build:
+# Vite copies public/ into dist/, the publish directory. The API's own responses
 # also get helmet's headers from Express.
 #
 # Content-Security-Policy, source by source:
