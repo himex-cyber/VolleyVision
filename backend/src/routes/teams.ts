@@ -25,15 +25,14 @@ router.get('/:id', optionalAuth, visibleByTeamParam('id'), getTeam);
 router.post('/', requireAuth, createTeam);
 router.patch('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), updateTeam);
 // Delete takes the roster, matches and every event with it, so it's the
-// owner's call alone (a MANAGER holds MANAGE_TEAM too). Visibility first, so an
-// outsider gets 404 rather than learning the team exists.
-router.delete('/:id', requireAuth, visibleByTeamParam('id'), requireTeamPermission(Permission.MANAGE_TEAM), requireTeamOwner, deleteTeam);
+// owner's call alone (a MANAGER holds MANAGE_TEAM too).
+router.delete('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), requireTeamOwner, deleteTeam);
 
 // My role on this team — used by the frontend PermissionGuard.
 // `permissions` folds per-member access tiers over the role map, so the UI
 // gates match backend enforcement (e.g. a Statistician granted invitation
 // access sees the Invite control).
-router.get('/:id/my-role', requireAuth, async (req, res, next) => {
+router.get('/:id/my-role', requireAuth, visibleByTeamParam('id'), async (req, res, next) => {
   try {
     const { role, isOwner } = await getUserTeamRole(req.user!.userId, req.params.id);
     const permissions = await getEffectivePermissions(req.user!.userId, req.params.id);

@@ -61,6 +61,7 @@ const requireRosterAccess = asyncHandler(async (req: Request, res: Response, nex
     teamId = req.body?.teamId;
   }
   if (!teamId) { res.status(400).json({ error: 'teamId is required.' }); return; }
+  await assertTeamVisible(teamId, req.user.userId); // 404 for outsiders
   if (!(await canActInCategory(req.user.userId, teamId, 'roster'))) {
     res.status(403).json({ error: 'You do not have permission to manage this roster.' });
     return;

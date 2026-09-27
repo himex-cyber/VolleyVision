@@ -1,6 +1,7 @@
 // Regression tests for middleware/permissions.ts: requireAdmin reads the role
 // from the DB rather than trusting the JWT claim (M7 part 1), and
-// requireTeamPermission's three outcomes (403 / next() / next(err)).
+// requireTeamPermission's outcomes (404 for a non-member, 403 for a member
+// without the permission, next() / next(err)).
 import assert from 'node:assert/strict';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
@@ -55,9 +56,26 @@ async function requireAdminAllowsRealDbAdmin() {
   assert.equal(res.statusCode, null);
 }
 
+async function requireTeamPermissionHidesTeamFromNonMember() {
+  resetDb();
+  db.team.findUnique = async () => ({ ownerId: 'someone-else' });
+  db.user.findUnique = async () => ({ role: 'COACH' });
+  db.teamMembership.findUnique = async () => null; // not a member
+  const req: any = { user: { userId: 'u1' }, params: { id: 'team1' } };
+  const res = fakeRes();
+  const { next, calls } = makeNext();
+  await requireTeamPermission(Permission.MANAGE_TEAM)(req, res, next);
+  await flush();
+  // Visibility runs first: an outsider gets the not-found error, never a 403
+  // that would confirm the team exists.
+  assert.equal(res.statusCode, null);
+  assert.equal((calls[0] as any)?.statusCode, 404);
+}
+
 async function requireTeamPermissionRejectsWithout() {
   resetDb();
   db.team.findUnique = async () => ({ ownerId: 'someone-else' });
+  db.user.findUnique = async () => ({ role: 'COACH' });
   db.teamMembership.findUnique = async () => ({ role: 'VIEWER' }); // no MANAGE_TEAM
   const req: any = { user: { userId: 'u1' }, params: { id: 'team1' } };
   const res = fakeRes();
@@ -102,6 +120,7 @@ async function requireTeamPermissionDbErrorReachesNext() {
 async function main() {
   await requireAdminRejectsJwtClaimingAdminForNonAdminDbUser();
   await requireAdminAllowsRealDbAdmin();
+  await requireTeamPermissionHidesTeamFromNonMember();
   await requireTeamPermissionRejectsWithout();
   await requireTeamPermissionAllowsWith();
   await requireTeamPermissionDbErrorReachesNext();
