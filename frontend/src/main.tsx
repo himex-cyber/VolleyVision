@@ -185,6 +185,22 @@ function App() {
   );
 }
 
+// A tab left open across a deploy still references the previous build's chunk
+// files, which the deploy removed, so the next lazy route fails with "Failed to
+// fetch dynamically imported module" (Sentry VOLLEYVISION-2). Reloading picks up
+// the new index.html. At most once per 10s, so a chunk that is genuinely
+// missing surfaces as an error instead of a reload loop; storage can be
+// unavailable (private mode), in which case just reload.
+window.addEventListener('vite:preloadError', (event) => {
+  const KEY = 'vv:chunk-reload-at';
+  let last = 0;
+  try { last = Number(sessionStorage.getItem(KEY)) || 0; } catch { /* storage blocked */ }
+  if (Date.now() - last < 10_000) return;
+  try { sessionStorage.setItem(KEY, String(Date.now())); } catch { /* storage blocked */ }
+  event.preventDefault();
+  window.location.reload();
+});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
