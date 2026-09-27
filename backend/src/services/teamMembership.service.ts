@@ -51,7 +51,6 @@ export async function getUserTeams(userId: string) {
           division: true,
           season: true,
           ownerId: true,
-          leagueSeasonId: true,
           _count: { select: { players: true, matches: true } },
         },
       },

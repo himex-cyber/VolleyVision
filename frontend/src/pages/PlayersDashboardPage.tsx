@@ -1,13 +1,10 @@
 import { useEffect } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { usePlayerAnalytics, usePlayerHeatmap, usePlayerDevelopmentReport, useMatchAnalytics, useTeam } from '../hooks';
+import { usePlayerAnalytics, useMatchAnalytics, useTeam } from '../hooks';
 import { StatsCards } from '../components/analytics/StatsOverview';
 import { POSITION_FULL_LABELS } from '../types';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
-import HeatMapCourt from '../components/court/HeatMapCourt';
-import PlayerDevelopmentCard from '../components/analytics/PlayerDevelopmentCard';
-import { features } from '../config/features';
 import type { StatLine } from '../types';
 import { ArrowLeftIcon } from '../components/ui/icons';
 
@@ -19,8 +16,6 @@ export default function PlayerDashboardPage() {
   // instead of the generic career-wide profile view.
   const matchId = searchParams.get('matchId') ?? undefined;
   const { data, isLoading, isError } = usePlayerAnalytics(playerId!);
-  const { data: heatmapData } = usePlayerHeatmap(playerId!);
-  const { data: developmentData } = usePlayerDevelopmentReport(playerId!);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
   // Roster context (no matchId) gets a full-team tab bar. Guarded by the hook's
   // own `enabled: !!id`, so this stays above the early returns below.
@@ -125,21 +120,6 @@ export default function PlayerDashboardPage() {
 
       <StatsCards stats={data.stats} />
       <PlayerRadarChart stats={data.stats} />
-
-      {/* Phase 6 Sprint 2 — Player Development Intelligence */}
-      {features.recommendations && developmentData && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Development Report</h2>
-          <PlayerDevelopmentCard report={developmentData} />
-        </section>
-      )}
-
-      {features.heatMaps && heatmapData && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Player Heat Map</h2>
-          <HeatMapCourt data={heatmapData} />
-        </section>
-      )}
 
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Set Breakdown</h2>

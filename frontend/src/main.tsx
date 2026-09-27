@@ -88,14 +88,6 @@ const TeamDashboardPage = lazy(() => import('./pages/TeamDashboardPage'));
 const PlayersDashboardPage = lazy(() => import('./pages/PlayersDashboardPage'));
 const OnboardingCoachPage = lazy(() => import('./pages/OnboardingCoachPage'));
 const OnboardingPlayerPage = lazy(() => import('./pages/OnboardingPlayerPage'));
-const LeagueHubPage = lazy(() => import('./pages/LeagueHubPage'));
-const LeagueSeasonPage = lazy(() => import('./pages/LeagueSeasonPage'));
-const LeagueSeasonStandingsPage = lazy(() => import('./pages/LeagueSeasonStandingsPage'));
-const FixturesPage = lazy(() => import('./pages/FixturesPage'));
-const ResultsPage = lazy(() => import('./pages/ResultsPage'));
-const LeagueTeamProfilePage = lazy(() => import('./pages/LeagueTeamProfilePage'));
-const LeagueSeasonRankingsPage = lazy(() => import('./pages/LeagueSeasonRankingsPage'));
-const MatchCentrePage = lazy(() => import('./pages/MatchCentrePage'));
 const TeamChatPage = lazy(() => import('./pages/TeamChatPage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 
@@ -169,19 +161,6 @@ function App() {
               <Route path="/matches/:matchId/track" element={<TrackingPage />} />
               <Route path="/matches/:matchId/watch" element={<MatchWatchPage />} />
               <Route path="/players/:playerId/dashboard" element={<PlayersDashboardPage />} />
-
-              {features.leagues && (
-                <>
-                  <Route path="/leagues" element={<LeagueHubPage />} />
-                  <Route path="/leagues/seasons/:seasonId" element={<LeagueSeasonPage />} />
-                  <Route path="/leagues/seasons/:seasonId/standings" element={<LeagueSeasonStandingsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/fixtures" element={<FixturesPage />} />
-                  <Route path="/leagues/seasons/:seasonId/results" element={<ResultsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/rankings" element={<LeagueSeasonRankingsPage />} />
-                  <Route path="/leagues/seasons/:seasonId/match-centre" element={<MatchCentrePage />} />
-                  <Route path="/leagues/league-teams/:leagueTeamId/profile" element={<LeagueTeamProfilePage />} />
-                </>
-              )}
             </Route>
           </Route>
         </Routes>

@@ -1,28 +1,13 @@
 import { useParams } from 'react-router-dom';
-import { useMatchAnalytics, useMatchHeatmap, useMatchMomentum, useMatchRotations, useMatchAdvanced, useMatchReport, useMatchZoneDetail, useMatchReportNarrative, useHasPermission } from '../hooks';
+import { useMatchAnalytics, useMatchReport, useHasPermission } from '../hooks';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
-import CourtVisualization from '../components/court/CourtVisualization';
-import HeatMapCourt from '../components/court/HeatMapCourt';
-import CourtHeatMap from '../components/analytics/CourtHeatMap';
-import MomentumChart from '../components/charts/MomentumChart';
-import RotationAnalytics from '../components/analytics/RotationAnalytics';
-import AdvancedMetricsPanel from '../components/analytics/AdvancedMetricsPanel';
 import MatchReportCard from '../components/analytics/MatchReportCard';
-import VideoPanel from '../components/analytics/VideoPanel';
-import OpponentScoutingPanel from '../components/analytics/OpponentScoutingPanel';
-import { features } from '../config/features';
 
 export default function MatchDashboardPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const { data, isLoading, isError } = useMatchAnalytics(matchId!);
-  const { data: heatmapData } = useMatchHeatmap(matchId!);
-  const { data: momentumData } = useMatchMomentum(matchId!);
-  const { data: rotationData } = useMatchRotations(matchId!);
-  const { data: advancedData } = useMatchAdvanced(matchId!);
   const { data: reportData } = useMatchReport(matchId!);
-  const { data: zoneDetail } = useMatchZoneDetail(matchId!);
-  const { data: narrativeData, isLoading: narrativeLoading, isError: narrativeError } = useMatchReportNarrative(matchId!);
   // teamId is only known once the match loads; the hook stays unconditional and
   // re-runs when it resolves. Track is offered only to those who can track a
   // live match (players never can — Iteration 3 Task 6).
@@ -103,26 +88,6 @@ export default function MatchDashboardPage() {
       {/* Sprint 6 — Automated Match Report */}
       {reportData && <MatchReportCard report={reportData} />}
 
-      {/* Phase 6 Sprint 0 — AI Match Summary */}
-      {features.assistant && (narrativeLoading || narrativeData || narrativeError) && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">AI Match Summary</h2>
-          {narrativeLoading && (
-            <div className="card p-6 text-navy-300 text-sm animate-pulse">Generating coaching summary…</div>
-          )}
-          {narrativeError && (
-            <div className="card p-6 text-navy-300 text-sm">AI summary unavailable for this match.</div>
-          )}
-          {narrativeData && !narrativeLoading && (
-            <div className="card p-6 space-y-3">
-              {narrativeData.split('\n\n').filter(Boolean).map((para, i) => (
-                <p key={i} className="text-sm text-navy-100 leading-relaxed">{para}</p>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
       <StatsCards stats={data.teamStats} />
 
       <section>
@@ -148,86 +113,10 @@ export default function MatchDashboardPage() {
         )}
       </section>
 
-      {/* Sprint 3 — Momentum */}
-      {features.momentum && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Match Momentum</h2>
-          {momentumData ? (
-            <MomentumChart
-              data={momentumData}
-              teamName={data.match.teamName}
-              opponentName={data.match.opponent}
-            />
-          ) : (
-            <div className="card p-6 text-center text-navy-300 text-sm">Record scoring events to generate momentum analytics.</div>
-          )}
-        </section>
-      )}
-
-      {/* Sprint 5 — Advanced Metrics */}
-      {features.recommendations && advancedData && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Advanced Match Metrics</h2>
-          <AdvancedMetricsPanel data={advancedData} heatmapData={heatmapData} />
-        </section>
-      )}
-
-      {/* Sprint 4 — Rotation Analytics */}
-      {features.rotationAnalytics && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Rotation Analytics</h2>
-          {rotationData ? (
-            <RotationAnalytics data={rotationData} />
-          ) : (
-            <div className="card p-6 text-center text-navy-300 text-sm">Loading rotation data...</div>
-          )}
-        </section>
-      )}
-
-      {/* Sprint 2 — Court Activity */}
-      {features.heatMaps && heatmapData && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Court Activity</h2>
-          <CourtVisualization heatmapData={heatmapData} />
-        </section>
-      )}
-
-      {/* Sprint 3 — Heat Map */}
-      {features.heatMaps && heatmapData && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Heat Map</h2>
-          <HeatMapCourt data={heatmapData} />
-        </section>
-      )}
-
-      {/* Phase 3 — Zone Efficiency */}
-      {features.heatMaps && zoneDetail && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Zone Efficiency</h2>
-          <CourtHeatMap data={zoneDetail} />
-        </section>
-      )}
-
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Player Statistics</h2>
         <PlayerStatsTable rows={data.playerStats} matchId={matchId} />
       </section>
-
-      {/* Phase 6 Sprint 3 — Opponent Scouting */}
-      {features.opponentScouting && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Opponent Scouting</h2>
-          <OpponentScoutingPanel matchId={matchId!} />
-        </section>
-      )}
-
-      {/* Phase 7 — Video footage */}
-      {features.video && (
-        <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Match Video</h2>
-          <VideoPanel matchId={matchId!} />
-        </section>
-      )}
     </div>
   );
 }

@@ -3,72 +3,12 @@ import { Link } from 'react-router-dom';
 import {
   useMyTeams, useMyMemberships, useMyInvitations,
   useCreateTeam, useUpdateTeam, useDeleteTeam,
-  useLeagues, useCreateLeague,
 } from '../hooks';
 import { useAuth } from '../context/AuthContext';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
 import { PencilIcon, TrashIcon } from '../components/ui/icons';
 import { ROLE_LABELS, ROLE_BADGE } from '../lib/teamRoles';
 import type { TeamRole } from '../types';
-
-// ── League picker with inline "add new league" (Task 2) ───────────────────────
-function LeagueField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { data: leagues } = useLeagues();
-  const createLeague = useCreateLeague();
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [division, setDivision] = useState('');
-  const [error, setError] = useState('');
-
-  async function handleAdd() {
-    setError('');
-    if (!name.trim()) { setError('League name is required.'); return; }
-    try {
-      const league = await createLeague.mutateAsync({ name: name.trim(), division: division.trim() || undefined });
-      // The backend auto-creates a default season; select it.
-      const seasonId = league.seasons?.[0]?.id;
-      if (seasonId) onChange(seasonId);
-      setAdding(false);
-      setName('');
-      setDivision('');
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't create that league.");
-    }
-  }
-
-  return (
-    <div>
-      <label className="block text-xs text-grey-600 mb-1">League</label>
-      {adding ? (
-        <div className="space-y-2 rounded-xl border border-grey-200 bg-grey-50 p-3">
-          <input className="input text-sm" placeholder="League name *" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="input text-sm" placeholder="Division (optional)" value={division} onChange={(e) => setDivision(e.target.value)} />
-          {error && <p className="text-error text-xs">{error}</p>}
-          <div className="flex gap-2">
-            <button type="button" className="btn-primary text-xs" onClick={handleAdd} disabled={createLeague.isPending}>
-              {createLeague.isPending ? 'Creating…' : 'Create league'}
-            </button>
-            <button type="button" className="btn-secondary text-xs" onClick={() => { setAdding(false); setError(''); }}>Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <select className="input text-sm" value={value} onChange={(e) => onChange(e.target.value)}>
-            <option value="">No league</option>
-            {leagues?.map((l) =>
-              l.seasons.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {l.name}{l.division ? ` · ${l.division}` : ''}{s.name && s.name !== 'Current season' ? ` — ${s.name}` : ''}
-                </option>
-              )),
-            )}
-          </select>
-          <button type="button" className="btn-secondary text-sm shrink-0" onClick={() => setAdding(true)}>+ New</button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface TeamCardProps {
   id: string;
@@ -124,8 +64,8 @@ function TeamCard({ id, name, division, season, players, matches, badge, canMana
 
 const COACH_ROLES: TeamRole[] = ['HEAD_COACH', 'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN'];
 
-type TeamForm = { name: string; division: string; season: string; leagueSeasonId: string };
-const emptyForm: TeamForm = { name: '', division: '', season: '', leagueSeasonId: '' };
+type TeamForm = { name: string; division: string; season: string };
+const emptyForm: TeamForm = { name: '', division: '', season: '' };
 
 export default function TeamsPage() {
   const { user } = useAuth();
@@ -163,15 +103,14 @@ export default function TeamsPage() {
     if (!form.name || !form.season) return;
     await createTeam.mutateAsync({
       name: form.name, division: form.division, season: form.season,
-      leagueSeasonId: form.leagueSeasonId || null,
     });
     setForm(emptyForm);
     setShowForm(false);
   }
 
-  function startEdit(team: { id: string; name: string; division?: string; season: string; leagueSeasonId?: string | null }) {
+  function startEdit(team: { id: string; name: string; division?: string; season: string }) {
     setEditingId(team.id);
-    setEditForm({ name: team.name, division: team.division ?? '', season: team.season, leagueSeasonId: team.leagueSeasonId ?? '' });
+    setEditForm({ name: team.name, division: team.division ?? '', season: team.season });
   }
 
   async function handleUpdate(e: React.FormEvent, id: string) {
@@ -180,7 +119,6 @@ export default function TeamsPage() {
       id,
       data: {
         name: editForm.name, division: editForm.division, season: editForm.season,
-        leagueSeasonId: editForm.leagueSeasonId || null,
       },
     });
     setEditingId(null);
@@ -205,7 +143,6 @@ export default function TeamsPage() {
           <label className="block text-xs text-grey-600 mb-1">Season *</label>
           <input className="input" value={editForm.season} onChange={(e) => setEditForm({ ...editForm, season: e.target.value })} required />
         </div>
-        <LeagueField value={editForm.leagueSeasonId} onChange={(v) => setEditForm({ ...editForm, leagueSeasonId: v })} />
         <div className="flex gap-2">
           <button type="submit" className="btn-primary text-sm" disabled={updateTeam.isPending}>
             {updateTeam.isPending ? 'Saving…' : 'Save'}
@@ -260,7 +197,6 @@ export default function TeamsPage() {
               <label className="block text-xs text-grey-600 mb-1">Season *</label>
               <input className="input" placeholder="e.g. 2025/26" value={form.season} onChange={(e) => setForm({ ...form, season: e.target.value })} required />
             </div>
-            <LeagueField value={form.leagueSeasonId} onChange={(v) => setForm({ ...form, leagueSeasonId: v })} />
             <div className="sm:col-span-2">
               <button type="submit" className="btn-primary" disabled={createTeam.isPending}>
                 {createTeam.isPending ? 'Creating…' : 'Create team'}

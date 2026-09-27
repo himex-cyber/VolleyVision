@@ -22,22 +22,13 @@ import profileRoutes from './routes/profile';
 import playerPortalRoutes from './routes/playerPortal';
 import coachPortalRoutes from './routes/coachPortal';
 import auditRoutes from './routes/audit';
-import videoRoutes from './routes/videos';
 import channelRoutes from './routes/channels';
 import feedbackRoutes from './routes/feedback';
-import leagueRoutes from './routes/league';
 import approvalRoutes from './routes/approvals';
 import trainingSessionRoutes from './routes/trainingSessions';
 import { errorHandler } from './middleware/errorHandler';
-import { logVideoStorageConfig } from './services/videoStorage';
-import { warnIfProxyUnsupported } from './services/videoStorage/supabaseTusProxy';
 
 dotenv.config();
-
-// Config reporting only — both of these log and return, never throw. A video
-// misconfiguration must not stop the API serving auth, matches or analytics.
-logVideoStorageConfig();
-warnIfProxyUnsupported();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,10 +59,8 @@ app.use('/api/v1/players', playerRoutes);
 app.use('/api/v1/matches', matchRoutes);
 app.use('/api/v1/events', eventRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
-app.use('/api/v1', videoRoutes);
 app.use('/api/v1', channelRoutes);
 app.use('/api/v1', feedbackRoutes);
-app.use('/api/v1/leagues', leagueRoutes);
 app.use('/api/v1/approval-requests', approvalRoutes);
 app.use('/api/v1/training-sessions', trainingSessionRoutes);
 
