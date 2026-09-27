@@ -259,3 +259,17 @@ export const invitationCreateRateLimit = createRateLimit({
   keyFn: (req) => (req.user?.userId ? [`invite:user:${req.user.userId}`, `invite:team:${req.params.id}`] : null), // requireAuth handles the 401
   message: 'Too many invitations sent in the last hour. Try again later.',
 });
+
+/**
+ * Event writes (record, undo, delete) - per user. Live tracking writes one
+ * event per touch, so the budget is generous: 600 per 10 minutes is about one
+ * a second sustained, and sized so a device flushing a whole set's offline
+ * queue (roadmap Phase 6) still fits. It exists to stop a runaway client or a
+ * script, not a busy statistician.
+ */
+export const eventWriteRateLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 600,
+  keyFn: (req) => (req.user?.userId ? [`event-write:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: "You're recording events faster than we can keep up with. Wait a moment and try again.",
+});
