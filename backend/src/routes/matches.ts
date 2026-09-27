@@ -19,8 +19,9 @@ import { Permission } from '../services/permission.service';
 // We do that inline since the router doesn't have a natural param for it.
 import { Request, Response, NextFunction } from 'express';
 import { canActInCategory } from '../services/permission.service';
+import { asyncHandler } from '../middleware/asyncHandler';
 
-async function requireCreateMatch(req: Request, res: Response, next: NextFunction) {
+const requireCreateMatch = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
   const { teamId } = req.body;
   if (!teamId) { next(); return; } // body validation is the controller's job
@@ -29,7 +30,7 @@ async function requireCreateMatch(req: Request, res: Response, next: NextFunctio
     return;
   }
   next();
-}
+});
 
 const router = Router();
 
