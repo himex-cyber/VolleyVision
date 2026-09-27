@@ -47,6 +47,7 @@ type ScrubbableEvent = {
     headers?: Record<string, unknown>;
   };
   spans?: Array<{ data?: Record<string, unknown> }>;
+  breadcrumbs?: Array<{ data?: Record<string, unknown> }>;
 };
 
 function scrubRequest<T extends ScrubbableEvent>(event: T): T {
@@ -74,6 +75,19 @@ function scrubRequest<T extends ScrubbableEvent>(event: T): T {
     if (!data) continue;
     if (typeof data['url.full'] === 'string') data['url.full'] = data['url.full'].split('?')[0];
     delete data['url.query'];
+  }
+
+  // Breadcrumbs too: an outgoing-HTTP breadcrumb keeps the full URL plus its
+  // query and fragment, and every breadcrumb recorded earlier in the request
+  // rides along on the error. Same rule as the browser (src/main.tsx): path only.
+  for (const crumb of event.breadcrumbs ?? []) {
+    const data = crumb.data;
+    if (!data) continue;
+    for (const key of ['url', 'from', 'to']) {
+      if (typeof data[key] === 'string') data[key] = (data[key] as string).split('?')[0].split('#')[0];
+    }
+    delete data['http.query'];
+    delete data['http.fragment'];
   }
 
   return event;

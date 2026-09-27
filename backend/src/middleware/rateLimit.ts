@@ -235,3 +235,12 @@ export const resendVerificationIpRateLimit = createRateLimit({
   keyFn: (req) => [`resend-verify:ip:${clientIp(req)}`],
   message: 'Too many verification emails requested. Wait a while and try again.',
 });
+
+// Admin-only Sentry test (routes/feedback.ts). Each press files an event against
+// the free-tier Sentry quota, so a held-down button can't burn through it.
+export const sentryTestRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => (req.user?.userId ? [`sentry-test:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: 'Sentry test limit reached. Try again in an hour.',
+});

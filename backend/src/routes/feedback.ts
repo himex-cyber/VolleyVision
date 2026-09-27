@@ -6,7 +6,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
 import { requireAdmin } from '../middleware/permissions';
-import { chatPostRateLimit } from '../middleware/rateLimit';
+import { chatPostRateLimit, sentryTestRateLimit } from '../middleware/rateLimit';
 import { MAX_ATTACHMENTS_PER_FEEDBACK, MAX_FILE_BYTES } from '../services/feedbackStorage.service';
 import {
   createFeedback,
@@ -51,6 +51,13 @@ router.post(
 router.get('/feedback/mine', requireAuth, listMine);
 router.get('/feedback', requireAuth, requireAdmin, listAll);
 router.patch('/feedback/:id', requireAuth, requireAdmin, updateStatus);
+// Admin-only: fails on purpose, so an admin can prove on the live site that a
+// backend error reaches Sentry with its request data scrubbed. The button
+// (frontend SentryTestCard) sends a probe in the query string, and the probe
+// must appear nowhere in the captured event.
+router.post('/feedback/sentry-test', requireAuth, requireAdmin, sentryTestRateLimit, (_req, _res, next) => {
+  next(new Error('Sentry test (API): sent on purpose by an admin from the Feedback page'));
+});
 // Owner-or-admin — enforced in feedback.service.getAttachmentSignedUrl.
 router.get('/feedback/:feedbackId/attachments/:attachmentId/url', requireAuth, getAttachmentUrl);
 
