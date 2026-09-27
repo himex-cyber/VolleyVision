@@ -12,7 +12,7 @@ import {
   resetTokenExpiry,
   usableResetTokenWhere,
 } from '../lib/passwordReset';
-import { issueVerificationEmail } from './emailVerification.service';
+import { mintVerificationToken, sendVerificationEmailBestEffort } from './emailVerification.service';
 
 const SALT_ROUNDS = 12;
 
@@ -104,6 +104,13 @@ export async function registerUser(
     ? (signupIntent as 'COACH' | 'PLAYER' | 'UNSURE')
     : null;
 
+  // Mint the verification token BEFORE the
+  // create and persist its hash/expiry in the same `user.create` call. The
+  // previous create-then-write-token-separately sequence could leave a user
+  // row with no token if the second write failed — the account would then
+  // exist with no way to verify, and re-registering that email 409s forever.
+  const { token: verificationToken, tokenHash, expiresAt } = mintVerificationToken();
+
   const user = await prisma.user.create({
     data: {
       email: normalizeEmail(email),
@@ -111,17 +118,17 @@ export async function registerUser(
       firstName,
       lastName,
       ...(intent ? { signupIntent: intent } : {}),
+      emailVerificationTokenHash: tokenHash,
+      emailVerificationExpiresAt: expiresAt,
     },
   });
 
   const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role, tv: user.tokenVersion };
   const token = generateToken(payload);
 
-  // Every account must verify, including this brand-new one.
-  // issueVerificationEmail already swallows a failed *send* (logged, not
-  // thrown) so registration succeeds either way; only its own DB write is
-  // awaited here.
-  await issueVerificationEmail(user);
+  // The token is already persisted above; only the send is best-effort and
+  // must not fail registration (sendVerificationEmailBestEffort swallows it).
+  await sendVerificationEmailBestEffort(user, verificationToken);
 
   return {
     token,
@@ -179,12 +186,16 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
  * The send is therefore dispatched *after* the floor and never awaited; only
  * the DB work each branch does is inside the budget.
  *
- * ponytail: a fixed floor, not constant-time crypto — a pathologically slow DB
+ * ponytail: a fixed floor, not constant-time crypto — a pathologically slow DB or SMTP server
  * could still overshoot it. The rate limit on this route (5 per 15 min per IP
  * and per email) is what makes exploiting any residual difference across a
  * meaningful number of addresses impractical.
  */
-const FORGOT_PASSWORD_FLOOR_MS = 1200;
+// 4s, not the original 1.2s: the reset email is now sent inside this window
+// (a Netlify Function can be frozen once it responds, so it must be awaited),
+// and a Gmail SMTP round trip from the function takes ~1-2.5s. The floor has
+// to outlast the send or a real address answers measurably slower.
+const FORGOT_PASSWORD_FLOOR_MS = 4000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -198,7 +209,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  */
 export async function requestPasswordReset(email: string): Promise<void> {
   const startedAt = Date.now();
-  let dispatchEmail: (() => void) | undefined;
+  let sendEmail: (() => Promise<void>) | undefined;
   try {
     const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
 
@@ -222,21 +233,22 @@ export async function requestPasswordReset(email: string): Promise<void> {
       },
     });
 
-    // Deferred to after the floor and deliberately not awaited: an SMTP round
-    // trip inside the measured response is exactly the timing signal the floor
-    // exists to remove, and a delivery failure must not change the response the
-    // caller sees. sendPasswordResetEmail swallows send errors today and returns
-    // false, but nothing awaits this promise any more — the .catch is what keeps
-    // a rejection it ever grows from becoming an unhandled one.
-    dispatchEmail = () => {
-      void sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token).catch(
-        (err) => console.error('Password reset email failed to send:', err),
-      );
-    };
+    // Deferred to after the floor, but AWAITED rather than fired
+    // and forgotten. A Netlify Function can be frozen the instant the HTTP
+    // response goes out, so the previous fire-and-forget send was silently
+    // dropped in production before it ever reached SMTP. A failed send must
+    // still not throw (swallowed below, same as before) — only the sending
+    // is awaited, not its success.
+    sendEmail = () =>
+      sendPasswordResetEmail({ email: user.email, firstName: user.firstName }, token)
+        .then(() => undefined)
+        .catch((err) => console.error('Password reset email failed to send:', err));
   } finally {
     const remaining = FORGOT_PASSWORD_FLOOR_MS - (Date.now() - startedAt);
-    if (remaining > 0) await sleep(remaining);
-    dispatchEmail?.();
+    // Both the floor padding and the send (when there is one) are awaited
+    // together: the unknown-address branch still only waits out the floor
+    // (no sendEmail is set), so the enumeration protection above is intact.
+    await Promise.all([remaining > 0 ? sleep(remaining) : Promise.resolve(), sendEmail?.() ?? Promise.resolve()]);
   }
 }
 
@@ -249,21 +261,26 @@ export async function resetPassword(token: string, newPassword: string): Promise
     throw new AppError(400, 'Password must be at least 8 characters.');
   }
 
-  const user = await prisma.user.findFirst({ where: usableResetTokenWhere(token) });
-  if (!user) {
-    throw new AppError(400, 'This reset link is invalid or has expired. Request a new one.');
-  }
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
-  await prisma.user.update({
-    where: { id: user.id },
+  // Match-and-clear in one conditional updateMany rather than a lookup
+  // followed by an update-by-id. The previous two-step form let a concurrent
+  // reset or resend win the race between the lookup and the write — either
+  // consuming the same token twice, or clearing a token a fresh request had
+  // just replaced. `count === 0` covers not-found, expired, and already-used.
+  const result = await prisma.user.updateMany({
+    where: usableResetTokenWhere(token),
     data: {
-      passwordHash: await bcrypt.hash(newPassword, SALT_ROUNDS),
+      passwordHash,
       ...CONSUMED_RESET_FIELDS,
       // Revoke every other outstanding session (M7 part 2) — a password reset
       // is exactly the moment a stolen token should stop working.
       tokenVersion: { increment: 1 },
     },
   });
+  if (result.count === 0) {
+    throw new AppError(400, 'This reset link is invalid or has expired. Request a new one.');
+  }
 }
 
 export async function getCurrentUser(userId: string) {
