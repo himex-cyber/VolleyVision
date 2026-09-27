@@ -30,6 +30,23 @@ export async function recordEvent(req: Request, res: Response, next: NextFunctio
       throw new AppError(400, 'playerId must not be set for opponent events.');
     }
 
+    // M3: playerId came from the request body with no check that the player
+    // actually belongs to the match's team — any team member with TRACK_MATCH
+    // could attribute a stat to an arbitrary player on an unrelated roster.
+    // A player belongs via their home team (Player.teamId) or a PlayerTeamLink.
+    if (!isOpponent && playerId) {
+      const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
+      if (!match) throw new AppError(404, 'Match not found.');
+      const eligible = await prisma.player.findFirst({
+        where: {
+          id: playerId,
+          OR: [{ teamId: match.teamId }, { teamLinks: { some: { teamId: match.teamId } } }],
+        },
+        select: { id: true },
+      });
+      if (!eligible) throw new AppError(400, 'Player does not belong to this match\'s team.');
+    }
+
     if (courtZone != null) {
       const zone = Number(courtZone);
       if (!Number.isInteger(zone) || zone < 1 || zone > 6) {
