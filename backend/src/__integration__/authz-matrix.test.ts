@@ -113,7 +113,7 @@ const ROWS: Row[] = [
   { name: 'DELETE player', method: 'DELETE', path: (f) => `/api/v1/players/${f.pDel.id}`, expect: STAFF, today: OUTSIDER_403 },
   { name: 'DELETE match', method: 'DELETE', path: (f) => `/api/v1/matches/${f.matchDel.id}`, expect: STAFF, today: OUTSIDER_403 },
   { name: 'DELETE member', method: 'DELETE', path: (f) => `/api/v1/teams/${f.team.id}/members/${f.statMembership.id}`, expect: STAFF, today: OUTSIDER_403 },
-  { name: 'DELETE team', method: 'DELETE', path: (f) => `/api/v1/teams/${f.team.id}`, expect: STAFF, today: OUTSIDER_403 },
+  { name: 'DELETE team', method: 'DELETE', path: (f) => `/api/v1/teams/${f.team.id}`, expect: STAFF },
 ];
 
 async function main() {

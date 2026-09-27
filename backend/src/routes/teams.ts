@@ -8,6 +8,7 @@ import { listTeamApprovalRequests } from '../controllers/approval';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { requireTeamPermission, requireTeamAccess } from '../middleware/permissions';
 import { visibleByTeamParam } from '../middleware/visibility';
+import { requireTeamOwner } from '../middleware/teamOwner';
 import { Permission, getUserTeamRole, getEffectivePermissions } from '../services/permission.service';
 
 const router = Router();
@@ -22,7 +23,10 @@ router.get('/', optionalAuth, getTeams);
 router.get('/:id', optionalAuth, visibleByTeamParam('id'), getTeam);
 router.post('/', requireAuth, createTeam);
 router.patch('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), updateTeam);
-router.delete('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), deleteTeam);
+// Delete takes the roster, matches and every event with it, so it's the
+// owner's call alone (a MANAGER holds MANAGE_TEAM too). Visibility first, so an
+// outsider gets 404 rather than learning the team exists.
+router.delete('/:id', requireAuth, visibleByTeamParam('id'), requireTeamPermission(Permission.MANAGE_TEAM), requireTeamOwner, deleteTeam);
 
 // My role on this team — used by the frontend PermissionGuard.
 // `permissions` folds per-member access tiers over the role map, so the UI

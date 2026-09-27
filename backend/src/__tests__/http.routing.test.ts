@@ -3,20 +3,8 @@
 // real request meets them. Runs in `npm test`; scripts/run-tests.js pins
 // NETLIFY=1 (no listen) and blanks every real-service credential.
 import assert from 'node:assert/strict';
-import http from 'http';
-import { AddressInfo } from 'net';
 import { db, resetDb } from '../testing/installFakePrisma';
-import app from '../index';
-
-async function withServer(fn: (base: string) => Promise<void>) {
-  const server = http.createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  try {
-    await fn(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
-}
+import { withServer } from '../testing/http';
 
 async function unauthenticatedIs401(base: string) {
   const res = await fetch(`${base}/api/v1/teams/my-teams`);
