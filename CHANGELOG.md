@@ -2,6 +2,19 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.3.2 — 2026-09-28
+
+- **Open tabs recover after a deploy.** A tab left open across a deploy
+  still asked for the old build's page files, which the deploy removed, so
+  the next page change failed with "Failed to fetch dynamically imported
+  module" (Sentry VOLLEYVISION-2). The app now reloads once to pick up the
+  new version. It won't reload more than once every 10 seconds, so a real
+  missing file still shows up as an error.
+- **The live function no longer starts a local server.** The guard checked
+  `NETLIFY`, which only exists during builds, so every cold start opened a
+  useless `localhost:3001` listener. It now also checks
+  `AWS_LAMBDA_FUNCTION_NAME`, which is always set inside the function.
+
 ## v9.3.1 — 2026-09-28
 
 - **Fix: the admin "Send API test error" button never reached the API.** It
