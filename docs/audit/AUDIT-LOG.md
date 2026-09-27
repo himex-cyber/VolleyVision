@@ -248,6 +248,55 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 - About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
 - Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
 
+### Audit closed (2026-09-27)
+
+Phases 0–4 are complete. **Phase 5 (the Ruflo trial) was dropped** at Karlos's decision: it was mostly about Ruflo, whose MCP server never connected in this session, and the audit didn't need it.
+
+**Final state:**
+- **Releases:** `v9.0.0` (Phases 1A, 1B, 2), `v9.1.0` (Phases 2.1, 3) and `v9.2.0` (Phase 4), all deployed.
+- **Code health:** CI runs on every PR, and both packages have 0 production vulnerabilities.
+- **Tests:** 31 backend test files, covering every audit security fix.
+- **Supabase advisors:**
+  - Security: 20 INFO findings, all the intended "RLS with no policies" default-deny. No action.
+  - Performance: 32 INFO "unused index" findings, expected with 2 users and 1 team. Keep them; they'll be used as data grows.
+
+- **Greptile:** it only ever reviewed #7 and #9, because its trial had ended before #4–#6 and #10–#13. All 11 findings from those two reviews are fixed (9 in #10, 2 in #13), so nothing urgent is outstanding.
+
+**Left for later:**
+- Express 5 upgrade (needs the `req.params` typing work).
+- Move `teamJoinCode` and `invitation` services from `Object.assign(new Error)` to `AppError`.
+- A full pass over the non-urgent Greptile comments.
+- A real avatar upload.
+- The Sentry test button, which belongs on the Feedback page.
+- Source-map upload, once Karlos sets `SENTRY_AUTH_TOKEN` as a local Windows user variable.
+- Karlos to re-authorize Netlify's GitHub access.
+
+### Release v9.1.0 and Phase 4 (2026-09-27)
+
+**v9.1.0 release:**
+- #10 was merged (its branch kept), then #11 was retargeted to `develop` and merged, then #12 took `develop` to `main`. Tag `v9.1.0` is on `4cfb687`. Tag `v9.0.0` was added on `2bc83eb`, the earlier release.
+- Deployed with the fixed `deploy.ps1`.
+- Live checks: API healthy, all 6 security headers served, no CSP violations on the login page, and Karlos's screenshots of the dashboard charts and tables render correctly. No source maps are public.
+- Sentry now reports to `volleyvision` (test issue VOLLEYVISION-1 arrived).
+
+**The Sentry source-map upload fails with 401. Root cause:** the Netlify CLI passes secret env vars to local builds as a literal `*******`, and that masked value even overrides the shell. So `deploy.ps1` can never receive a Netlify-stored secret. The fix, done by Karlos: delete `SENTRY_AUTH_TOKEN` from Netlify and set it as a Windows user environment variable.
+
+**Supabase security advisor:** 20 INFO findings, all "RLS enabled, no policies". This is intentional. RLS with no policies means default-deny for the Supabase Data API, and the backend connects as the owner role, so it isn't affected.
+
+**Phase 4 (branch `test/phase4`):**
+
+| Item | Change |
+|---|---|
+| Hanging requests | Adds `middleware/asyncHandler.ts`, applied to the 8 guards in `permissions.ts` plus `requireCreateMatch`, `requireManageLinkedTeam`, `requireRosterAccess` and `requireTrackForBodyTeam`. `visibility.ts` and `teamOwner.ts` already caught their own errors. An Express 5 upgrade was tried and reverted: `@types/express` 5 types every `req.params` value as `string | string[]`, which produced 129 type errors. |
+| Error handling | Adds `lib/mapError.ts` (`mapErrorToResponse`, with a test), used by `errorHandler`. It honours `statusCode` and `code` on any Error. The 11 shortcut catches in the invitation, playerPortal, profile and teamJoinCode controllers are now `next(err)`. |
+| Test harness | Adds `src/testing/fakePrisma.ts` (a Proxy with explicit stubs and call recording) and `installFakePrisma.ts` (a `require.cache` swap). `run-tests.js` also runs `src/__tests__`. |
+| Tests | 10 new files, 31 total. The mutation check passed: dropping `teamId` from `findTeamMembership`'s where makes the C1 test fail. |
+| Greptile minors | The verify page runs once per token, and a refresh failure after success is ignored. Role pickers are filtered by `canInviteRole` (frontend mirror in `lib/teamRoles.ts`). The README clarifies the second terminal for the frontend. |
+
+**Later:**
+- Upgrade to Express 5 (it needs the `req.params` typing work).
+- `teamJoinCode.service` and `invitation.service` throw plain `Object.assign(new Error, {statusCode})` instead of `AppError`. They work, but it's inconsistent.
+
 ### Phase 3: tooling (branch `chore/tooling`, stacked on `fix/greptile-findings`, 2026-09-27)
 
 | Item | What changed |

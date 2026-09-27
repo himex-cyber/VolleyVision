@@ -4,7 +4,7 @@ import {
   useRemoveMember, useTeamRole, useHasPermission,
 } from '../../hooks';
 import type { TeamRole, TeamMember, AccessTier, AccessCategory } from '../../types';
-import { ROLE_OPTIONS, ROLE_LABELS, ROLE_BADGE, TIER_OPTIONS, ACCESS_CATEGORIES } from '../../lib/teamRoles';
+import { ROLE_LABELS, ROLE_BADGE, TIER_OPTIONS, ACCESS_CATEGORIES, invitableRoleOptions } from '../../lib/teamRoles';
 import { getApiErrorMessage } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { ChevronIcon, PencilIcon } from '../ui/icons';
@@ -39,6 +39,14 @@ export default function TeamMembersCard({ teamId }: Props) {
   const [roleError, setRoleError] = useState<{ id: string; message: string } | null>(null);
   const assistantCoachCount = members?.filter((m) => m.role === 'ASSISTANT_COACH').length ?? 0;
 
+  // UX filter mirroring the backend's canInviteRole — the viewer's own role
+  // (owner already resolves to HEAD_COACH via roleInfo) caps which roles they
+  // may offer, so e.g. an assistant coach never sees MANAGER in the picker.
+  const invitableRoles = invitableRoleOptions(roleInfo?.role);
+  const staffInviteRoles = invitableRoles
+    .map((r) => r.value)
+    .filter((r) => r === 'ASSISTANT_COACH' || r === 'MANAGER' || r === 'STATISTICIAN');
+
   async function handleRoleChange(memberId: string, role: TeamRole): Promise<boolean> {
     setRoleError(null);
     try {
@@ -56,7 +64,7 @@ export default function TeamMembersCard({ teamId }: Props) {
         <h2 className="font-semibold text-grey-900">Team Members</h2>
         <div className="flex items-center gap-3">
           <span className="text-xs text-grey-600 tabular-nums">{members?.length ?? 0} members</span>
-          {canInvite && (
+          {canInvite && staffInviteRoles.length > 0 && (
             <button
               className={`${showInvite ? 'btn-ghost' : 'btn-primary'} text-sm px-3 py-1.5`}
               onClick={() => setShowInvite(!showInvite)}
@@ -67,14 +75,14 @@ export default function TeamMembersCard({ teamId }: Props) {
         </div>
       </div>
 
-      {showInvite && canInvite && (
+      {showInvite && canInvite && staffInviteRoles.length > 0 && (
         <div className="px-5 py-4 border-b border-grey-200 bg-grey-50 space-y-2">
           <p className="text-xs text-grey-600">Share the staff code, or send an email invite:</p>
           <TeamJoinCodes teamId={teamId} only="STAFF" />
           <QuickEmailInvite
             teamId={teamId}
-            roles={['ASSISTANT_COACH', 'MANAGER', 'STATISTICIAN']}
-            defaultRole="ASSISTANT_COACH"
+            roles={staffInviteRoles}
+            defaultRole={staffInviteRoles.includes('ASSISTANT_COACH') ? 'ASSISTANT_COACH' : staffInviteRoles[0]}
           />
         </div>
       )}
@@ -91,6 +99,7 @@ export default function TeamMembersCard({ teamId }: Props) {
               key={m.id}
               member={m}
               canManage={canManage}
+              roleOptions={invitableRoles}
               isSelf={m.user.id === user?.id}
               // Other members already holding ASSISTANT_COACH — excludes this
               // row itself, so a current assistant coach can still be re-saved.
@@ -115,6 +124,7 @@ export default function TeamMembersCard({ teamId }: Props) {
 interface MemberRowProps {
   member: TeamMember;
   canManage: boolean;
+  roleOptions: { value: TeamRole; label: string }[];
   isSelf: boolean;
   otherAssistantCoachCount: number;
   roleError: string | null;
@@ -124,7 +134,7 @@ interface MemberRowProps {
 }
 
 function MemberRow({
-  member, canManage, isSelf, otherAssistantCoachCount, roleError, onRoleChange, onAccessChange, onRemove,
+  member, canManage, roleOptions, isSelf, otherAssistantCoachCount, roleError, onRoleChange, onAccessChange, onRemove,
 }: MemberRowProps) {
   const [editing, setEditing] = useState(false);
   const [role, setRole] = useState<TeamRole>(member.role);
@@ -191,7 +201,14 @@ function MemberRow({
               value={role}
               onChange={(e) => setRole(e.target.value as TeamRole)}
             >
-              {ROLE_OPTIONS.map((r) => {
+              {/* Include the member's current role even if the viewer couldn't
+                  newly assign it, so an existing MANAGER doesn't just vanish
+                  from an assistant coach's picker (they can still re-save it,
+                  or lower it, but never raise it — server re-checks either way). */}
+              {(roleOptions.some((r) => r.value === member.role)
+                ? roleOptions
+                : [...roleOptions, { value: member.role, label: ROLE_LABELS[member.role] }]
+              ).map((r) => {
                 // At most 2 assistant coaches per team (409 from the backend
                 // otherwise) — disable before the round-trip once full, unless
                 // this member already holds the role (re-saving is a no-op).

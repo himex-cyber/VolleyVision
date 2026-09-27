@@ -2,6 +2,31 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.2.0 — 2026-09-27
+
+The final release of the September 2026 audit. No migration.
+
+### Phase 4: tests and error handling
+
+- **Requests no longer hang when the database fails during a permission
+  check.** Express 4 ignored rejected async middleware, so the request sat
+  until the function timed out. `asyncHandler` now turns that into a
+  normal 500. It's applied to all 12 async guards.
+- **One error-response path.** Four controllers used to answer errors
+  themselves, bypassing the shared handler. A single tested mapping now
+  covers every error, and response shapes are unchanged.
+- **Tests for the security fixes.** A small fake-database harness
+  (`backend/src/testing/`) lets middleware, services and controllers be
+  tested without a database or any test framework. 10 new test files cover:
+  token revocation, admin and team permissions, team-scoped member lookups
+  (mutation-checked), role limits, ownership transfer, the
+  email-verification gate, the stale invite role, and member-email
+  visibility. That's 31 test files in total, all running in CI.
+- **Minor fixes from the Greptile review.**
+  - The verify-email page handles a second link opened in the same tab.
+  - A failed profile refresh no longer shows a false verification failure.
+  - Role pickers only offer roles the viewer can actually grant.
+
 ## v9.1.0 — 2026-09-27
 
 Review fixes and tooling from the September 2026 audit. No migration.

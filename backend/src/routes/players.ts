@@ -15,24 +15,25 @@ import { requireAuth, optionalAuth } from '../middleware/auth';
 import { visibleByTeamParam, visibleByPlayerParam } from '../middleware/visibility';
 import { hasTeamPermission, canActInCategory, Permission } from '../services/permission.service';
 import { prisma } from '../lib/prisma';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 // Guard for link mutations: requester must have MANAGE_TEAM on the team being linked/unlinked.
 // For POST the teamId comes from req.body; for DELETE from req.params.teamId.
-async function requireManageLinkedTeam(req: Request, res: Response, next: NextFunction) {
+const requireManageLinkedTeam = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
   const teamId = req.body.teamId ?? req.params.teamId;
   if (!teamId) { res.status(400).json({ error: 'teamId is required.' }); return; }
   const allowed = await hasTeamPermission(req.user.userId, teamId, Permission.MANAGE_TEAM);
   if (!allowed) { res.status(403).json({ error: 'You do not have permission to manage this team.' }); return; }
   next();
-}
+});
 
 // Roster access (Iteration 3): gated on the member's roster access tier, not the
 // static role permission — a VIEW_ONLY member is blocked here even if their role
 // would otherwise allow it, and a member granted access can proceed regardless of
 // role. Create → teamId from body; update/delete → resolved from the player.
 // The controller then decides immediate vs queued from FULL_ACCESS vs APPROVAL_REQUIRED.
-async function requireRosterAccess(req: Request, res: Response, next: NextFunction) {
+const requireRosterAccess = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
   let teamId: string | undefined;
   if (req.params.id) {
@@ -56,7 +57,7 @@ async function requireRosterAccess(req: Request, res: Response, next: NextFuncti
     return;
   }
   next();
-}
+});
 
 const router = Router();
 

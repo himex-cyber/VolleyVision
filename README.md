@@ -66,6 +66,8 @@ npm install
 npm run dev        # :3001, health at /health
 ```
 
+In a second terminal, from the repo root:
+
 ```powershell
 cd frontend
 copy .env.example .env
@@ -105,6 +107,13 @@ npm run preview          # vite preview
 ## Testing
 
 Backend tests are plain `assert`-based TypeScript files at `backend/src/lib/*.test.ts`, run directly by `ts-node` via `npm test`. They must stay pure logic — importing anything that pulls in `lib/prisma` instantiates a `PrismaClient` at module load, which needs a platform-specific engine binary the test runner doesn't have. This is why the static role-permission map lives in `lib/rolePermissions.ts`, separate from `services/permission.service.ts`.
+
+Code that touches the database is tested with a fake Prisma client instead:
+- A test file imports `src/testing/installFakePrisma.ts` **first**, which swaps `lib/prisma` in the module cache for a recording fake.
+- The test then stubs only the calls it expects. Unstubbed calls throw.
+- Assertions can check the exact `where` clause.
+
+These tests live in `backend/src/__tests__/`, and `npm test` runs both folders.
 
 There are no frontend tests yet.
 

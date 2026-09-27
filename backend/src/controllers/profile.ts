@@ -5,8 +5,7 @@ export async function getProfileHandler(req: Request, res: Response, next: NextF
   try {
     const profile = await getProfile(req.user!.userId);
     res.json(profile);
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  } catch (err) {
     next(err);
   }
 }
@@ -21,8 +20,7 @@ export async function updateProfileHandler(req: Request, res: Response, next: Ne
       preferredPosition,
     });
     res.json(updated);
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  } catch (err) {
     next(err);
   }
 }

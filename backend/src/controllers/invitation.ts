@@ -43,8 +43,7 @@ export async function createTeamInvitation(req: Request, res: Response, next: Ne
       payload: { teamId, invitedById: userId, email, role },
     });
     res.status(202).json({ status: 'pending_approval', requestId: request.id });
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  } catch (err) {
     next(err);
   }
 }
@@ -63,11 +62,7 @@ export async function acceptInvitationHandler(req: Request, res: Response, next:
     const result = await acceptInvitation(req.params.token, req.user!.userId);
     logAudit(req.user!.userId, 'ACCEPT_INVITATION', 'invitation', result.id);
     res.json(result);
-  } catch (err: any) {
-    // .code (e.g. EMAIL_NOT_VERIFIED) must survive this shortcut path exactly
-    // like it does through the shared errorHandler — dropping it here would
-    // silently downgrade the response to a plain { error } for this route only.
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+  } catch (err) {
     next(err);
   }
 }
@@ -79,8 +74,7 @@ export async function redeemInvitationHandler(req: Request, res: Response, next:
     const result = await redeemInvitationByCode(code, req.user!.userId);
     logAudit(req.user!.userId, 'REDEEM_INVITATION', 'invitation', result.id);
     res.json(result);
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+  } catch (err) {
     next(err);
   }
 }
@@ -89,8 +83,7 @@ export async function declineInvitationHandler(req: Request, res: Response, next
   try {
     const result = await declineInvitation(req.params.token, req.user!.userId);
     res.json(result);
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  } catch (err) {
     next(err);
   }
 }
