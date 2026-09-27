@@ -101,7 +101,10 @@ const dsn = process.env.SENTRY_DSN;
 if (dsn) {
   Sentry.init({
     dsn,
-    environment: process.env.NODE_ENV || 'development',
+    // SENTRY_ENVIRONMENT first: staging runs with NODE_ENV=production (the
+    // Postgres rate limiter only runs there), so NODE_ENV alone would tag every
+    // staging error as production.
+    environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
     // Free-tier Sentry quota: 10% keeps trace volume affordable. Raise only
     // after confirming there's quota headroom to spend.
     tracesSampleRate: 0.1,

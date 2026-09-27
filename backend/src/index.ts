@@ -47,7 +47,8 @@ app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
 // string would otherwise land in plaintext request logs. 'dev' still uses this
 // token internally, so its coloring/format is unchanged.
 morgan.token('url', (req: express.Request) => req.path);
-app.use(morgan('dev'));
+// Tests drive hundreds of requests through the app; their log would bury failures.
+if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 app.use(express.json());
 
 // ─── Routes ───────────────────────────────────────────────────────────────────

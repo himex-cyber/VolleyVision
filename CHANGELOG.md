@@ -2,6 +2,41 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.5.0 — 2026-09-28
+
+Phase 1 of the rebuild roadmap: the tooling that proves every later change
+before it reaches real teams. Nothing changes for users. **One migration,
+not yet applied** (see below). Not deployed yet.
+
+- **Row-level security on every table, in a migration.** Production had RLS
+  switched on by hand for most tables, but only two were ever in a migration,
+  so a database rebuilt from migrations (a staging copy, a restore, CI) would
+  have left 19 tables readable through Supabase's public API. The new
+  migration switches RLS on for every table and removes Supabase's default
+  public-role grants. The app never uses those, so nothing it does changes.
+  It must be applied (staging first, then production after a backup) before
+  the next deploy; `deploy.ps1` refuses to deploy while it's pending.
+- **Every authorization rule has a test.** A new integration suite runs the
+  real app against a real database and calls every team route as an outsider,
+  a viewer and a player. Where the app doesn't yet meet the target (outsiders
+  should always get "not found"), the gap is recorded for Phase 2 to close. A
+  second check fails if any table is ever created without RLS.
+- **CI checks the database too.** A new job builds the whole schema from the
+  migrations on a throwaway Postgres, fails if `schema.prisma` has drifted
+  from them, and runs the integration suite. CI still never touches Supabase.
+- **Faster HTTP tests** run the whole app over the fake database in
+  `npm test`, so middleware order and status codes are checked on every
+  commit. The unit tests can no longer reach the production database, even
+  by mistake.
+- **Staging is ready to create.** A seed script (pre-verified users for every
+  role, two teams, two matches) that refuses any database but staging's, a
+  post-deploy smoke check, `deploy.ps1 -Target staging`, and
+  `backend/.env.staging.example`. Staging errors will report to Sentry as
+  "staging", not "production".
+- **Safer production deploys.** `deploy.ps1` now refuses a dirty working tree
+  or a branch other than `main` unless you pass `-Force`, and runs the smoke
+  check after deploying.
+
 ## v9.4.0 — 2026-09-28
 
 Phase 0 of the rebuild roadmap: removes an unused API. No migration.

@@ -420,3 +420,56 @@ monitor on `/health`, which closes those two items above.
 **Verified:** backend `tsc` clean, 32/32 test files, no import cycles (131 files), build OK; frontend `tsc` clean,
 lint clean, build OK.
 
+
+### Phase 1 of the rebuild roadmap: staging and the verification toolchain (branch `rebuild/p1-staging-toolchain`, 2026-09-28)
+
+Why: every later phase must be proven before it reaches real teams. That needs a staging copy of the app, and CI
+that catches schema drift, missing RLS and authorization regressions by itself.
+
+Karlos's decisions for this run: the release is v9.5.0 (Phase 0 took v9.4.0). Nothing is deployed and no migration is
+applied anywhere while Netlify credits are low. So staging creation (Part C1), applying the RLS migration (C2) and the
+staging and production smoke checks are **deferred**, and this phase is released as merged and tagged only.
+
+| Change | Where |
+|---|---|
+| RLS on every public table + revoke anon/authenticated grants, guarded for plain Postgres (**not applied**) | `prisma/migrations/20260927221052_enable_rls_all_public_tables` |
+| `SENTRY_ENVIRONMENT` / `VITE_SENTRY_ENVIRONMENT` override | `instrument.ts`, `main.tsx`, `.env.example` files |
+| Staging seed; refuses any non-staging database (prod ref held in `lib/stagingGuard.ts`, tested) | `scripts/seed-staging.ts`, `lib/stagingGuard.ts` |
+| Integration runner (localhost-only, credentials pinned) and harness | `scripts/run-integration-tests.js`, `src/__integration__/harness.ts` |
+| authz matrix (47 routes x outsider/viewer/player, 35 caller cases pinned as `TODO(P2)`) and RLS check | `src/__integration__/*.test.ts` |
+| Fast HTTP layer over fakePrisma; unit runner pins a dead `DATABASE_URL` and blank Sentry/SMTP/Supabase | `src/__tests__/http.routing.test.ts`, `scripts/run-tests.js` |
+| CI `db` job: postgres:17, migrations from zero, `migrate diff --exit-code`, integration tests | `.github/workflows/ci.yml` |
+| Smoke check | `scripts/smoke.mjs` |
+| `deploy.ps1 -Target staging\|prod`: prod refuses dirty/non-main without `-Force`; staging refuses prod ids; smoke after deploy | `deploy.ps1` |
+| Docs | `README.md`, `backend/.env.staging.example`, `.gitignore` |
+
+Deviations from the handoff:
+- CI uses postgres:17 to match prod (17.6), not 16.
+- No drift allowlist. Prisma 5.22's diff ignores the partial index `team_memberships_one_head_coach`, so the diff is
+  empty. Verified that an added column makes it exit 2.
+
+**Gaps the authz matrix pinned for Phase 2:**
+- Outsiders get 403, not 404, on staff reads, every write and chat.
+- `GET /teams/:id/my-role` answers an outsider 200.
+- `GET /analytics/players/:id` is open to every member.
+- The forgot-password global limiter runs first (defect 3).
+
+**Verified** (in this session):
+- Backend: `tsc` clean, 34/34 unit test files, no import cycles, build OK.
+- Frontend: `tsc`, lint and build clean. `npm audit --omit=dev --audit-level=high` is clean in both packages.
+- Against a throwaway local PostgreSQL 18 cluster:
+  - every migration applies from zero, and 20/20 tables have RLS
+  - the drift check is empty
+  - integration tests pass 2/2
+  - the staging seed runs twice cleanly
+  - the full smoke check passes, including the logged-in checks
+- `smoke.mjs` read-only against prod: PASS.
+- Reviews: `/code-review high` raised 7 findings. 6 were fixed; the runner duplication was kept, because the handoff
+  asks for a copy. The independent Opus review raised 1 medium and 2 low findings, all fixed: the unit runner's
+  database pin, the staging deploy refusing prod ids, and the missing chat-upload row.
+
+**Deferred until deploys resume:**
+1. Karlos creates staging (Part C1).
+2. Apply the RLS migration to staging, check the advisor, back up prod, then apply it to prod.
+3. Seed staging.
+4. `deploy.ps1 -Target staging`, then a prod deploy with its smoke check.

@@ -54,7 +54,7 @@ deploy.ps1                  Production deploy script
 
 Prerequisites: Node 24 (see `.nvmrc`), the same version the live function runs.
 
-**Important:** `backend/.env` points at the production Supabase database. Any `prisma` command run from `backend/` (migrate, studio, db push) hits production — there is no separate local or staging database.
+**Important:** `backend/.env` points at the production Supabase database. Any `prisma` command run from `backend/` (migrate, studio, db push) hits production. The staging tooling is built (see "Staging and tests" below), but the staging project itself hasn't been created yet.
 
 ### Setup
 
@@ -86,13 +86,15 @@ Key frontend env var: `VITE_API_URL` (leave unset locally; only needed when the 
 ```bash
 npm run dev              # ts-node-dev, :3001
 npm run build            # tsc -> dist/
-npm test                 # runs every src/lib/*.test.ts sequentially
+npm test                 # import-cycle check, then src/lib and src/__tests__
+npm run test:integration # src/__integration__ against a LOCAL Postgres (refuses anything else)
 npm run check:cycles     # import-cycle check
 npm run db:generate      # prisma generate
 npm run db:migrate       # prisma migrate dev (interactive)
 npm run db:push          # prisma db push
 npm run db:studio        # prisma studio
 npm run db:seed          # prisma/seed.ts
+npm run db:seed:staging  # staging seed users/teams/matches (refuses any non-staging DB)
 ```
 
 **Frontend** (`cd frontend`)
@@ -113,13 +115,23 @@ Code that touches the database is tested with a fake Prisma client instead:
 - The test then stubs only the calls it expects. Unstubbed calls throw.
 - Assertions can check the exact `where` clause.
 
-These tests live in `backend/src/__tests__/`, and `npm test` runs both folders.
+These tests live in `backend/src/__tests__/`, and `npm test` runs both folders. The `http.*.test.ts` files there start the whole Express app on a random port over the fake client, so they check middleware order and status codes the way a real request meets them.
 
 There are no frontend tests yet.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`/`develop`. It runs `prisma validate`, type-checks, the backend tests, the frontend lint and build, and a production dependency audit for both packages. It never connects to a database or deploys.
+GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`/`develop`. It runs `prisma validate`, type-checks, the backend tests, the frontend lint and build, and a production dependency audit for both packages. Its `db` job starts a throwaway Postgres container, applies every migration from zero, checks `schema.prisma` hasn't drifted from the migrations, and runs the integration tests. CI never touches Supabase or deploys.
 
-`backend/scripts/` holds the test runner, the import-cycle check and a few one-off maintenance scripts (`ensure-admin`, `backfill-team-join-codes`, `cleanup-orphaned-teams`). They are not part of `npm test`, and the database ones run against production.
+`backend/scripts/` holds the test runners, the import-cycle check, the staging seed, the smoke check and a few one-off maintenance scripts (`ensure-admin`, `backfill-team-join-codes`, `cleanup-orphaned-teams`). The maintenance scripts are not part of `npm test`, and the database ones run against production.
+
+## Staging and tests
+
+Every change is meant to be proven on staging (a second Supabase project and a second Netlify site) before production. The tooling is in place; the staging project is created when deploys resume.
+
+- **Integration tests** (`backend/src/__integration__/`): the real app against a real, local Postgres. `authz-matrix.test.ts` is the single place authorization expectations live: every team-scoped route, called as an outsider, a viewer and a player. `rls.test.ts` checks every public table has row-level security on. Run them locally against a throwaway database with `DATABASE_URL=postgresql://…@localhost:…/… npm run test:integration`. The runner refuses any non-local database.
+- **Staging seed** (`npm run db:seed:staging`): pre-verified users for every role plus an outsider, two teams and two matches. It refuses any database that isn't the staging project.
+- **Smoke check** (`node backend/scripts/smoke.mjs <url>`): health, the CSP header and a 404 for an unknown team. With the `SMOKE_*` variables set, it also logs in as the staging seed users. `deploy.ps1` runs it after every deploy.
+- **Staging config** lives in `backend/.env.staging` (gitignored; see `backend/.env.staging.example`).
+- **Row-level security:** every new table must enable RLS in its own migration. `rls.test.ts` fails CI if one doesn't.
 
 ## Architecture
 
@@ -150,10 +162,11 @@ This must be run **before** deploying when the schema has changed. The Netlify b
 From the repository root:
 
 ```powershell
-.\deploy.ps1
+.\deploy.ps1                   # production
+.\deploy.ps1 -Target staging   # the staging site, using backend/.env.staging
 ```
 
-The Netlify build, function and redirect config is `netlify.toml` at the repo root. `deploy.ps1` builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
+The Netlify build, function and redirect config is `netlify.toml` at the repo root. `deploy.ps1` builds the site locally and publishes it (`netlify deploy --prod --build`, plus `--site` for staging), with a deploy message built from the current git state. It first runs `npx prisma migrate status` against the target's database and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). A production deploy also refuses a dirty working tree or a branch other than `main` unless you pass `-Force`. After deploying, it runs the smoke check: read-only against production, logged in as the seed users on staging. It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
 
 ## Security
 
