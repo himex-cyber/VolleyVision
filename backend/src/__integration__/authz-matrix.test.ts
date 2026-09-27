@@ -105,8 +105,8 @@ const ROWS: Row[] = [
   { name: 'POST chat upload (no files)', method: 'POST', path: (f) => `/api/v1/channels/${f.channel.id}/messages/upload`, body: () => ({}), expect: { outsider: 404, viewer: 403, player: 400 }, today: OUTSIDER_403 },
   { name: 'PATCH message (not author)', method: 'PATCH', path: (f) => `/api/v1/messages/${f.message.id}`, body: () => ({ body: 'edited' }), expect: STAFF, today: OUTSIDER_403 },
   { name: 'DELETE message (not author)', method: 'DELETE', path: (f) => `/api/v1/messages/${f.message.id}`, expect: STAFF, today: OUTSIDER_403 },
-  { name: 'POST approve request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/approve`, expect: STAFF, today: OUTSIDER_403 },
-  { name: 'POST reject request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/reject`, expect: STAFF, today: OUTSIDER_403 },
+  { name: 'POST approve request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/approve`, expect: STAFF },
+  { name: 'POST reject request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/reject`, expect: STAFF },
   // Destructive rows last, each against a target nothing else uses.
   { name: 'DELETE event (undo last)', method: 'DELETE', path: (f) => `/api/v1/events/undo/${f.match.id}`, expect: STAFF, today: OUTSIDER_403 },
   { name: 'DELETE event', method: 'DELETE', path: (f) => `/api/v1/events/${f.event.id}`, expect: STAFF, today: OUTSIDER_403 },
