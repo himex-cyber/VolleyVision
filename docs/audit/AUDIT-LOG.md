@@ -248,6 +248,25 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 - About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
 - Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
 
+### v9.3.0: observability follow-up (2026-09-28)
+
+A separate review session built branch `fix/phase2-observability` ("Phase 2.2"). Claude Code checked every claim against the code and the live site and kept all of it:
+- `/health` checks the database.
+- Browser navigation breadcrumbs are scrubbed. This was a real leak of join codes and tokens.
+- Each function invocation gets its own Sentry scope, request data and root span.
+- An admin-only Sentry end-to-end check on the Feedback page.
+- `netlify.toml` is tracked again, by Karlos's decision after it was raised twice.
+
+Its criticism was fair: the VOLLEYVISION-1 test was a hand-sent event (SDK `audit-check`), so it didn't prove the app's own SDK or its scrubbing.
+
+Claude Code added:
+- **Backend breadcrumb scrubbing:** `instrument.ts` only covered request data and spans.
+- **Node 24 across `.nvmrc`, CI, `netlify.toml` and `engines`:** the live function ran `nodejs24.x`, confirmed through the Netlify API.
+- **Netlify `stop_builds: true`:** Karlos's decision. With the GitHub link active, a merge to `main` had auto-published a build that skipped the migration check.
+- **Local only:** `frontend/.env.local` now points at the live Sentry project.
+
+**Coordination note:** that session checked out its branch in the same working copy Claude Code uses. Run one agent at a time per working copy.
+
 ### Audit closed (2026-09-27)
 
 Phases 0–4 are complete. **Phase 5 (the Ruflo trial) was dropped** at Karlos's decision: it was mostly about Ruflo, whose MCP server never connected in this session, and the audit didn't need it.

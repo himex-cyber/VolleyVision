@@ -2,7 +2,7 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## Unreleased
+## v9.3.0 — 2026-09-28
 
 Closes the observability work the September audit left open. No migration.
 
@@ -23,6 +23,15 @@ Closes the observability work the September audit left open. No migration.
   that must not appear anywhere in Sentry.
 - **`netlify.toml` is tracked again.** It holds no secrets, and deploys should
   be reproducible from a clone. Its note on the Node version is corrected.
+- **Backend breadcrumbs are scrubbed too.** Outgoing-HTTP breadcrumbs kept
+  their full URL, query and fragment on the backend. They're now path-only,
+  the same as in the browser.
+- **Node 24 everywhere.** The live function already ran Node 24, while the
+  repo, CI and build config said 22. They're now aligned, so CI tests the
+  runtime that actually serves traffic.
+- **Netlify auto-builds are stopped.** Deploys only go out through
+  `deploy.ps1`, which refuses to deploy while migrations are pending. The
+  GitHub link stays connected.
 
 ## v9.2.0 — 2026-09-27
 
