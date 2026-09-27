@@ -32,7 +32,7 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     firstName: '', lastName: '', bio: '', phoneNumber: '', city: '', country: '',
-    profileImage: '', dateOfBirth: '', heightCm: '', weightKg: '', preferredPosition: '',
+    dateOfBirth: '', heightCm: '', weightKg: '', preferredPosition: '',
   });
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -46,7 +46,6 @@ export default function ProfilePage() {
         phoneNumber: profile.phoneNumber ?? '',
         city: profile.city ?? '',
         country: profile.country ?? '',
-        profileImage: profile.profileImage ?? '',
         dateOfBirth: profile.dateOfBirth ? profile.dateOfBirth.split('T')[0] : '',
         heightCm: profile.heightCm != null ? String(profile.heightCm) : '',
         weightKg: profile.weightKg != null ? String(profile.weightKg) : '',
@@ -80,7 +79,6 @@ export default function ProfilePage() {
         phoneNumber: form.phoneNumber || undefined,
         city: form.city || undefined,
         country: form.country || undefined,
-        profileImage: form.profileImage || undefined,
         dateOfBirth: form.dateOfBirth || null,
         heightCm: form.heightCm === '' ? null : Number(form.heightCm),
         weightKg: form.weightKg === '' ? null : Number(form.weightKg),
@@ -208,11 +206,6 @@ export default function ProfilePage() {
                 <label className="block text-xs text-grey-600 mb-1">Weight (kg)</label>
                 <input className="input" type="number" min={30} max={200} placeholder="e.g. 78" value={form.weightKg} onChange={(e) => setForm({ ...form, weightKg: e.target.value })} />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs text-grey-600 mb-1">Profile Image URL</label>
-              <input className="input" type="url" placeholder="https://…" value={form.profileImage} onChange={(e) => setForm({ ...form, profileImage: e.target.value })} />
             </div>
 
             {saveError && <p className="text-error text-sm">{saveError}</p>}
