@@ -2,6 +2,33 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## Unreleased — Audit Phase 2.1: review fixes
+
+Fixes for the nine real findings in Greptile's review of #7 and #9, each
+checked against the code first.
+
+- **An approved invitation re-checks the inviter's current role.** A queued
+  invitation used to keep the role from when it was requested, even if the
+  inviter had been demoted since.
+- **Names in emails are HTML-escaped.** First names, inviter names and team
+  names could inject markup into mail sent to other people.
+- **Concurrency.** The check and the write now run in one serializable
+  transaction, and a lost race returns a retryable 409 instead of a 500, for:
+  - role edits and removals racing an ownership transfer
+  - two player claims at the same moment
+  - ownership transfer itself
+- **Registration is atomic.** The verification token is saved with the new
+  account in a single write.
+- **Verification and reset links are strictly single use,** even when two
+  requests arrive at once.
+- **Password-reset emails are awaited,** so Netlify can no longer drop them
+  after responding. The anti-enumeration delay on forgot-password rises from
+  1.2s to 4s so it still covers the send.
+- **A mistyped password no longer logs out an existing session.**
+- **`CLAUDE.md` and `netlify.toml` are no longer committed.** They're kept
+  locally instead, and neither ever contained a secret. `.gitignore` now
+  catches every `.env*` variant except `.env.example`.
+
 ## Unreleased — Audit Phase 2: coach roles and email verification
 
 - **One head coach, at most two assistant coaches, per team.**

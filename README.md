@@ -47,13 +47,12 @@ frontend/                 Vite + React SPA
 docs/design/               Design notes and mockups
 docs/audit/AUDIT-LOG.md    September 2026 audit log
 CHANGELOG.md               Release history, newest first
-netlify.toml                Build and redirect config
 deploy.ps1                  Production deploy script
 ```
 
 ## Local development
 
-Prerequisites: Node 22 (see `.nvmrc` and `netlify.toml`).
+Prerequisites: Node 22 (see `.nvmrc`).
 
 **Important:** `backend/.env` points at the production Supabase database. Any `prisma` command run from `backend/` (migrate, studio, db push) hits production — there is no separate local or staging database.
 
@@ -143,7 +142,7 @@ From the repository root:
 .\deploy.ps1
 ```
 
-This builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
+The Netlify build and redirect config (`netlify.toml`) is kept on the maintainer's machine and is not committed. This builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
 
 ## Security
 
