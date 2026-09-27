@@ -2,6 +2,16 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.3.1 — 2026-09-28
+
+- **Fix: the admin "Send API test error" button never reached the API.** It
+  sent a `null` body, which the HTTP client serialises as the text `"null"`.
+  The server's JSON parser only accepts objects and arrays, so it rejected
+  the request with a 400 before the test endpoint ran. The button now sends
+  `{}`. The browser half of the check had already passed: the probe was
+  scrubbed from the URL and the breadcrumbs, and the source-mapped stack
+  trace pointed at the right line.
+
 ## v9.3.0 — 2026-09-28
 
 Closes the observability work the September audit left open. No migration.
