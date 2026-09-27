@@ -4,6 +4,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../middleware/errorHandler';
+import { isGlobalAdmin } from '../services/permission.service';
 import {
   createFeedback as createFeedbackService,
   getAttachmentSignedUrl,
@@ -84,7 +85,7 @@ export async function getAttachmentUrl(req: Request, res: Response, next: NextFu
       req.params.feedbackId,
       req.params.attachmentId,
       req.user.userId,
-      req.user.role === 'ADMIN',
+      await isGlobalAdmin(req.user.userId),
     );
     res.json({ url });
   } catch (err) {

@@ -1,6 +1,5 @@
 import { AccessTier, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { normalizeEmail, isEmailAddress } from '../lib/email';
 import { AppError } from '../middleware/errorHandler';
 import { defaultAccessTiers } from './permission.service';
 import { applyCreatePlayer } from './playerActions.service';
@@ -126,13 +125,24 @@ export async function addMember(teamId: string, userId: string, role: TeamRole) 
 }
 
 /**
+ * Every member mutation arrives as /teams/:id/members/:memberId, and the route
+ * guard only checks the caller's permission on :id. Scoping the lookup to that
+ * same team is what stops the owner of any team (and anyone can create one)
+ * editing or removing a membership that belongs to a different team.
+ */
+export async function findTeamMembership(teamId: string, membershipId: string) {
+  const membership = await prisma.teamMembership.findFirst({ where: { id: membershipId, teamId } });
+  if (!membership) throw new AppError(404, 'Membership not found.');
+  return membership;
+}
+
+/**
  * Update a member's role. Changing the role re-seeds the three access tiers to
  * that role's defaults — a role change is a coarse action, and this avoids a
  * demoted member silently keeping elevated access. A coach can then fine-tune.
  */
-export async function updateMemberRole(membershipId: string, role: TeamRole) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+export async function updateMemberRole(teamId: string, membershipId: string, role: TeamRole) {
+  const membership = await findTeamMembership(teamId, membershipId);
   const updated = await prisma.teamMembership.update({
     where: { id: membershipId },
     data: { role, ...defaultAccessTiers(role) },
@@ -146,11 +156,11 @@ export async function updateMemberRole(membershipId: string, role: TeamRole) {
 
 /** Update one or more of a member's access tiers, leaving role untouched. */
 export async function updateMemberAccess(
+  teamId: string,
   membershipId: string,
   tiers: { rosterAccess?: AccessTier; invitationAccess?: AccessTier; matchAccess?: AccessTier },
 ) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+  await findTeamMembership(teamId, membershipId);
   return prisma.teamMembership.update({
     where: { id: membershipId },
     data: {
@@ -163,9 +173,8 @@ export async function updateMemberAccess(
 }
 
 /** Remove a member from a team. */
-export async function removeMember(membershipId: string) {
-  const membership = await prisma.teamMembership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw new AppError(404, 'Membership not found.');
+export async function removeMember(teamId: string, membershipId: string) {
+  await findTeamMembership(teamId, membershipId);
   await prisma.teamMembership.delete({ where: { id: membershipId } });
 }
 
@@ -199,31 +208,4 @@ export async function syncOwnerMembership(teamId: string, ownerId: string) {
       data: { teamId, userId: ownerId, role: 'HEAD_COACH' },
     });
   }
-}
-
-/**
- * Look up the ONE user with this exact email — the add-member lookup.
- *
- * Deliberately not a search. It used to substring-match email, firstName and
- * lastName on any two-character string and return twenty rows to any
- * authenticated user, which is a directory walk of every person in the product.
- * Requiring the whole address means a caller must already know it — the same
- * disclosure registration gives when it rejects an address as taken.
- *
- * What this still discloses, deliberately: given a full address, that it has an
- * account and whose name it is. That is the accepted cost of an add-by-email
- * flow and it is bounded by already knowing the address — unlike the fragment
- * search, which needed no prior knowledge at all. `role` is not selected: the
- * caller never rendered it, and a stranger's platform role is not its business.
- * Narrowing further means scoping the lookup to a team the caller may add to,
- * which needs a teamId this endpoint does not currently take.
- */
-export async function searchUsers(query: string) {
-  const email = normalizeEmail(query);
-  if (!isEmailAddress(email)) return [];
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, firstName: true, lastName: true, email: true },
-  });
-  return user ? [user] : [];
 }

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
-import { Permission, hasTeamPermission, canActInCategory, AccessCategory } from '../services/permission.service';
+import { Permission, hasTeamPermission, canActInCategory, AccessCategory, isGlobalAdmin } from '../services/permission.service';
 
 const FORBIDDEN = { error: 'You do not have permission to perform this action.' };
 
@@ -12,9 +12,9 @@ const FORBIDDEN = { error: 'You do not have permission to perform this action.' 
  * All team-level permissions continue to use hasTeamPermission — this is
  * purely a global-role check.
  */
-export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-  if (req.user.role !== 'ADMIN') { res.status(403).json(FORBIDDEN); return; }
+  if (!(await isGlobalAdmin(req.user.userId))) { res.status(403).json(FORBIDDEN); return; }
   next();
 }
 

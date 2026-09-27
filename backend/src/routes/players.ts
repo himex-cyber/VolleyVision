@@ -34,11 +34,21 @@ async function requireManageLinkedTeam(req: Request, res: Response, next: NextFu
 // The controller then decides immediate vs queued from FULL_ACCESS vs APPROVAL_REQUIRED.
 async function requireRosterAccess(req: Request, res: Response, next: NextFunction) {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-  let teamId: string | undefined = req.body?.teamId;
-  if (!teamId && req.params.id) {
+  let teamId: string | undefined;
+  if (req.params.id) {
+    // M1: for :id routes (update/delete) teamId must come from the player
+    // record, never from the body — trusting body.teamId here let a caller
+    // supply a team they DO manage while the mutation actually landed on a
+    // different player/team, slipping an unrelated team's approval queue.
     const player = await prisma.player.findUnique({ where: { id: req.params.id }, select: { teamId: true } });
     if (!player) { res.status(404).json({ error: 'Player not found.' }); return; }
     teamId = player.teamId;
+    if (req.body?.teamId && req.body.teamId !== teamId) {
+      res.status(400).json({ error: 'teamId does not match this player\'s team.' });
+      return;
+    }
+  } else {
+    teamId = req.body?.teamId;
   }
   if (!teamId) { res.status(400).json({ error: 'teamId is required.' }); return; }
   if (!(await canActInCategory(req.user.userId, teamId, 'roster'))) {

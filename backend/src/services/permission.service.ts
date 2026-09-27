@@ -54,6 +54,14 @@ export async function isApprovalAuthority(userId: string, teamId: string): Promi
  */
 export async function canModerateChannel(userId: string, teamId: string): Promise<boolean> {
   if (await isApprovalAuthority(userId, teamId)) return true;
+  return isGlobalAdmin(userId);
+}
+
+/**
+ * Global ADMIN, read from the database. Never trust the role claim in the JWT:
+ * tokens live 7 days, so a demoted admin would keep admin rights until expiry.
+ */
+export async function isGlobalAdmin(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
   return user?.role === 'ADMIN';
 }

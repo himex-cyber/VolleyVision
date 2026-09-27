@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { EventType } from '@prisma/client';
 import { ownEventsOnly } from '../lib/eventFilters';
 import { assertTeamVisible } from '../lib/teamVisibility';
+import { getUserTeamRole } from './permission.service';
 
 // Reuses the same stat derivation logic as the existing analytics engine
 function deriveStats(events: { eventType: EventType }[]) {
@@ -87,12 +88,37 @@ export async function linkPlayerToUser(playerId: string, userId: string) {
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player) throw Object.assign(new Error('Player not found'), { statusCode: 404 });
   await assertTeamVisible(player.teamId, userId);
+
+  // L4: any team member could claim any unclaimed player record — a coach or
+  // statistician could attach a roster entry (and its stats) to their own
+  // account. Only a PLAYER-role member of the team may claim one.
+  // (There is no data-model link from an Invitation/join-code to a specific
+  // Player row — Invitation only carries email + team + role for account
+  // creation — so matching by that isn't possible; role + team membership is
+  // the closest available signal.)
+  const { role } = await getUserTeamRole(userId, player.teamId);
+  if (role !== 'PLAYER') {
+    throw Object.assign(new Error('Only a player-role team member may claim a roster record'), { statusCode: 403 });
+  }
+
   if (player.userId && player.userId !== userId) {
     throw Object.assign(
       new Error('This player record is already linked to another account'),
       { statusCode: 409 },
     );
   }
+
+  // One claimed player per user per team — Player.userId has no DB-level
+  // unique constraint (nullable, many players can share the same team), so
+  // enforce it here.
+  const existing = await prisma.player.findFirst({
+    where: { userId, teamId: player.teamId, NOT: { id: playerId } },
+    select: { id: true },
+  });
+  if (existing) {
+    throw Object.assign(new Error('You already have a linked player record on this team'), { statusCode: 409 });
+  }
+
   return prisma.player.update({ where: { id: playerId }, data: { userId } });
 }
 

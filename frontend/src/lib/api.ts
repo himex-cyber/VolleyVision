@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getToken } from './tokenStorage';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, UserSearchResult, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -242,8 +242,6 @@ export const feedbackApi = {
 export const membershipsApi = {
   listByTeam: (teamId: string) =>
     api.get<TeamMember[]>(`/teams/${teamId}/members`).then((r) => r.data),
-  add: (teamId: string, data: { userId: string; role: TeamRole }) =>
-    api.post<TeamMember>(`/teams/${teamId}/members`, data).then((r) => r.data),
   updateRole: (teamId: string, memberId: string, role: TeamRole) =>
     api.patch<TeamMember>(`/teams/${teamId}/members/${memberId}`, { role }).then((r) => r.data),
   // Iteration 3 — patch one or more access tiers, leaving role untouched.
@@ -255,8 +253,6 @@ export const membershipsApi = {
   remove: (teamId: string, memberId: string) =>
     api.delete(`/teams/${teamId}/members/${memberId}`),
   myTeams: () => api.get<UserTeamMembership[]>('/users/me/teams').then((r) => r.data),
-  searchUsers: (q: string) =>
-    api.get<UserSearchResult[]>('/users/search', { params: { q } }).then((r) => r.data),
 };
 
 // ─── Permissions (Phase 5 Sprint 6) ──────────────────────────────────────────

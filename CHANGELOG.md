@@ -2,6 +2,42 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## Unreleased — Audit Phase 1B: security fixes
+
+These come from the September 2026 security audit. Each fix is its own commit, and the details are in
+[docs/audit/AUDIT-LOG.md](docs/audit/AUDIT-LOG.md).
+
+- **Critical: member edits were not tied to their team.** The owner of any
+  team could promote themselves to head coach on, demote, or remove members
+  of any other team. Member lookups are now scoped to the team in the URL.
+- **Join codes no longer leak.** Every team read returned the player and staff
+  join codes to all members, so a player could join a second account as a
+  manager. The Prisma client now omits them globally, and only the join-codes
+  endpoint (behind MANAGE_MEMBERS) selects them.
+- **Login, register and reset-password are rate limited,** per email and per
+  IP, using the Postgres-backed limiter.
+- **Dependency advisories fixed:** multer, nodemailer, image-size,
+  body-parser, morgan and axios.
+- **Authorisation holes closed:**
+  - Player edits resolve the player's team from the record, not the request body.
+  - Linking a player needs rights on their home team too.
+  - Stats can only be recorded against the match's own players.
+  - An invited role can't outrank the inviter, and head coach can never be invited.
+  - Admin rights are read from the database instead of the 7-day token.
+- **Privacy:**
+  - Only roster managers see member email addresses.
+  - Login takes the same time whether or not the email exists.
+  - Join codes, emails and query strings are kept out of logs.
+  - Profile images can only come from our own storage host. The free-text
+    image-URL field on the Profile page is removed.
+- **No more adding people without consent.** "+ Add member", which put any
+  existing user straight onto a team, is replaced by "+ Invite staff", using
+  the staff code or an email invite. The user-by-email lookup behind it is
+  gone.
+- **Approvals and claims:**
+  - Approvers can't approve their own requests (the owner is exempt).
+  - Only player-role members can claim a roster record, one per team.
+
 ## Unreleased — Audit Phase 1A: removed features
 
 Reset to a smaller, cleaner core before the February 2027 beta. Every feature

@@ -89,3 +89,24 @@ export function getPermissionsForRole(role: string): Permission[] {
 export function roleHasPermission(role: string, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role]?.has(permission) ?? false;
 }
+
+// ─── Role ranking (M4) ────────────────────────────────────────────────────────
+// Authority order, highest first — mirrors the TeamRole enum's declaration
+// order in schema.prisma, which is itself ordered this way on purpose.
+const ROLE_ORDER = ['HEAD_COACH', 'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN', 'PLAYER', 'VIEWER'];
+
+/** Lower is more authority. An unknown role ranks last (least authority). */
+export function roleRank(role: string): number {
+  const i = ROLE_ORDER.indexOf(role);
+  return i === -1 ? ROLE_ORDER.length : i;
+}
+
+/**
+ * Can `inviterRole` invite someone as `targetRole`? HEAD_COACH is never an
+ * invitable role (head coach changes only via ownership transfer), and an
+ * inviter can never hand out a role that outranks their own.
+ */
+export function canInviteRole(inviterRole: string, targetRole: string): boolean {
+  if (targetRole === 'HEAD_COACH') return false;
+  return roleRank(targetRole) >= roleRank(inviterRole);
+}

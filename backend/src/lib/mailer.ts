@@ -41,7 +41,7 @@ export interface MailInput {
 export async function sendMail({ to, subject, html, text }: MailInput): Promise<boolean> {
   const tx = getTransporter();
   if (!tx) {
-    console.warn(`[mailer] SMTP not configured (SMTP_PASS missing) — skipped email to ${to}: "${subject}"`);
+    console.warn(`[mailer] SMTP not configured (SMTP_PASS missing) — skipped email: "${subject}"`);
     return false;
   }
   try {
@@ -57,7 +57,7 @@ export async function sendMail({ to, subject, html, text }: MailInput): Promise<
     });
     return true;
   } catch (err) {
-    console.error(`[mailer] Failed to send email to ${to} ("${subject}"):`, err);
+    console.error(`[mailer] Failed to send email ("${subject}"):`, err);
     return false;
   }
 }

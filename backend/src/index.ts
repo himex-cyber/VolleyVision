@@ -41,6 +41,11 @@ app.use(helmet());
 // body is base64'd rather than mangled through a utf8 round-trip.
 app.use(compression());
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+// Override morgan's built-in :url token (req.originalUrl) with req.path —
+// reset tokens, join codes, etc. sometimes ride in a query string, and that
+// string would otherwise land in plaintext request logs. 'dev' still uses this
+// token internally, so its coloring/format is unchanged.
+morgan.token('url', (req: express.Request) => req.path);
 app.use(morgan('dev'));
 app.use(express.json());
 

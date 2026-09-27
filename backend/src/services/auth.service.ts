@@ -15,6 +15,17 @@ import {
 
 const SALT_ROUNDS = 12;
 
+/**
+ * Hashed once at module load, compared against on every login with an unknown
+ * email. Without this, an unknown-email response returns as soon as the
+ * findUnique misses, while a known-email/wrong-password response waits on a
+ * bcrypt.compare — the response-time gap is itself an account-enumeration
+ * oracle even though both branches return the same 401 body.
+ */
+// Precomputed (cost 12, same as SALT_ROUNDS) rather than hashSync at load:
+// that would add ~250 ms to every Netlify Function cold start.
+const DUMMY_PASSWORD_HASH = '$2b$12$8kEnWXiVftUN3DWYnK3NfODyDjlqvMPF2Vkoq4TLE1SY3JXHsI9tW';
+
 export interface AuthPayload {
   userId: string;
   email: string;
@@ -73,6 +84,11 @@ export async function registerUser(
     throw new AppError(400, 'Password must be at least 8 characters.');
   }
 
+  // Accepted risk: this 409 is an account-enumeration oracle, but
+  // registerUser logs the caller in on success (see the token below) — the
+  // response has to shape-diverge from "you're now logged in" somehow, so
+  // hiding existence here would require redesigning signup into a confirm-only
+  // flow. Out of scope for this fix; rate-limited via registerRateLimit.
   const existing = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
   if (existing) throw new AppError(409, 'An account with that email already exists.');
 
@@ -111,7 +127,10 @@ export async function registerUser(
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
   const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
-  if (!user) throw new AppError(401, 'Invalid email or password.');
+  if (!user) {
+    await verifyPassword(password, DUMMY_PASSWORD_HASH); // pad timing, see DUMMY_PASSWORD_HASH
+    throw new AppError(401, 'Invalid email or password.');
+  }
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) throw new AppError(401, 'Invalid email or password.');

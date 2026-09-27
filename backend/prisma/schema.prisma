@@ -18,6 +18,9 @@ generator client {
   // Linux 2 (Node 18) runtime and is dropped: it was dead weight in a ~74 MB
   // bundle. Revisit if NODE_VERSION (netlify.toml) ever drops below 20.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  // omitApi: lets lib/prisma.ts hide Team join codes from every query that does
+  // not explicitly select them. GA in Prisma 6; drop this line when upgrading.
+  previewFeatures = ["omitApi"]
 }
 
 datasource db {

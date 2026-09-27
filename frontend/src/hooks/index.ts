@@ -367,20 +367,6 @@ export function useTeamMembers(teamId: string) {
   });
 }
 
-export function useAddMember(teamId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { userId: string; role: TeamRole }) =>
-      membershipsApi.add(teamId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['members', teamId] });
-      // Adding someone as PLAYER also creates their roster row server-side —
-      // refresh the team so the Roster card picks it up without a reload.
-      qc.invalidateQueries({ queryKey: ['teams', teamId] });
-    },
-  });
-}
-
 export function useUpdateMemberAccess(teamId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -421,18 +407,6 @@ export function useMyMemberships() {
   return useQuery({
     queryKey: ['memberships', 'me'],
     queryFn: membershipsApi.myTeams,
-  });
-}
-
-// The lookup is exact-match on email (see searchUsers in
-// teamMembership.service.ts), so anything without an "@" cannot match and the
-// request is skipped. This is request-avoidance only — the backend guard is
-// the control.
-export function useUserSearch(q: string) {
-  return useQuery({
-    queryKey: ['users', 'search', q],
-    queryFn: () => membershipsApi.searchUsers(q),
-    enabled: q.includes('@'),
   });
 }
 

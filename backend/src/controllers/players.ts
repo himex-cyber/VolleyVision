@@ -26,7 +26,11 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
   try {
     const player = await prisma.player.findUnique({
       where: { id: req.params.id },
-      include: { team: true },
+      // H1b: `team: true` leaked the team's playerJoinCode/staffJoinCode to
+      // anyone who could read a player. Select only the fields the frontend
+      // reads off player.team (PlayerRecordsManager reads .name; the same
+      // shape is used elsewhere for player.team, e.g. playerPortal.service).
+      include: { team: { select: { id: true, name: true, division: true, season: true } } },
     });
     if (!player) throw new AppError(404, 'Player not found.');
     res.json(player);

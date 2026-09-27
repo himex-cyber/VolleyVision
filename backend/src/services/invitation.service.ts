@@ -53,7 +53,10 @@ export async function createInvitation(
   let emailSent = false;
   try {
     emailSent = await sendInvitationEmail(invitation, joinCode);
-    if (!emailSent) console.warn(`[invitation] Email not sent for invitation ${invitation.id} (${email}) — code ${joinCode}`);
+    // No email/join code in the log — the code is a bearer credential for the
+    // invite and the id alone is enough to look the row up if this needs
+    // investigating.
+    if (!emailSent) console.warn(`[invitation] Email not sent for invitation ${invitation.id}`);
   } catch (err) {
     console.error(`[invitation] Unexpected error sending email for invitation ${invitation.id}:`, err);
   }

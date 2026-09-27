@@ -1,5 +1,6 @@
 import { Position } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { isAllowedProfileImageUrl } from '../lib/profileImage';
 
 const profileSelect = {
   id: true,
@@ -57,6 +58,14 @@ export async function updateProfile(
   }
   if (preferredPosition != null && preferredPosition !== '' && !VALID_POSITIONS.has(preferredPosition)) {
     throw Object.assign(new Error('Invalid preferred position.'), { statusCode: 400 });
+  }
+  // A profile image is rendered to every teammate (chat, members list), so an
+  // arbitrary URL is a tracking pixel pointed at other users' browsers. Only
+  // our own storage host is allowed. There is no avatar upload yet, so today
+  // this effectively only permits clearing it; the Profile page no longer
+  // offers a free-text URL field.
+  if (rest.profileImage != null && rest.profileImage !== '' && !isAllowedProfileImageUrl(rest.profileImage, process.env.SUPABASE_URL)) {
+    throw Object.assign(new Error('profileImage must be an https URL on our storage host.'), { statusCode: 400 });
   }
 
   return prisma.user.update({

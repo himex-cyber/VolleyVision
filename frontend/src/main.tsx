@@ -55,8 +55,7 @@ if (sentryDsn) {
     // that token to Sentry, where it stays readable until it expires.
     //
     // Breadcrumbs carry the same thing from the other side: the SDK records
-    // every fetch, and the add-member lookup is GET /users/search?q=<a full
-    // email address>. Path only, on both. See backend/src/instrument.ts for
+    // every fetch, and any query string on it. Path only, on both. See backend/src/instrument.ts for
     // the server half and the SDK source this is based on.
     beforeSend: scrubUrls,
     beforeSendTransaction: scrubUrls,
