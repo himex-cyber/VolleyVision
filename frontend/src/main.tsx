@@ -70,6 +70,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const RedeemInvitationPage = lazy(() => import('./pages/RedeemInvitationPage'));
 const InvitationsPage = lazy(() => import('./pages/InvitationsPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -123,6 +124,8 @@ function App() {
           {/* Password reset — public; the emailed token is the credential */}
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Email verification — reached from the emailed link, works logged in or out */}
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           {/* Invitation redemption — public so brand-new / logged-out invitees can join */}
           <Route path="/invitations/redeem" element={<RedeemInvitationPage />} />
           {/* Post-registration onboarding nudges — one-time, intent-driven */}

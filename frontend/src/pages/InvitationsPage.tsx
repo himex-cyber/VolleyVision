@@ -6,8 +6,10 @@ import {
 import type { Invitation, TeamRole } from '../types';
 import { isPendingApproval } from '../types';
 import { ROLE_LABELS, ROLE_BADGE, ROLE_OPTIONS } from '../lib/teamRoles';
+import { isEmailNotVerifiedError } from '../lib/api';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
 import TeamJoinCodes from '../components/team/TeamJoinCodes';
+import ResendVerificationNotice from '../components/ui/ResendVerificationNotice';
 
 const COACH_ROLES: TeamRole[] = ['HEAD_COACH', 'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN'];
 
@@ -45,7 +47,13 @@ function InvitationCard({ inv }: { inv: Invitation }) {
         Expires in {daysLeft(inv.expiresAt)} day{daysLeft(inv.expiresAt) !== 1 ? 's' : ''}
       </p>
 
-      {accept.isError && <p className="text-error text-xs">{(accept.error as any)?.response?.data?.error ?? "Couldn't accept that invitation."}</p>}
+      {accept.isError && (
+        isEmailNotVerifiedError(accept.error) ? (
+          <ResendVerificationNotice />
+        ) : (
+          <p className="text-error text-xs">{(accept.error as any)?.response?.data?.error ?? "Couldn't accept that invitation."}</p>
+        )
+      )}
       {decline.isError && <p className="text-error text-xs">{(decline.error as any)?.response?.data?.error ?? "Couldn't decline that invitation."}</p>}
 
       <div className="flex gap-2">

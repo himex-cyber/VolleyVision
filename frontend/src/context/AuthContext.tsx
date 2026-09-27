@@ -10,6 +10,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) => Promise<void>;
   logout: () => void;
+  /** Re-fetches /auth/me — used after verifying an email so the banner drops. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -53,8 +55,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    if (!getToken()) return;
+    const u = await authApi.me();
+    setUser(u);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

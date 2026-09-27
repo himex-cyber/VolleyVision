@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getToken } from './tokenStorage';
+import { getToken, clearToken } from './tokenStorage';
 import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
@@ -26,6 +26,31 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Tokens are now revoked server-side after a password change, so a 401 can
+// happen mid-session on any authenticated request, not just at login. Only
+// treat it as a session revocation when the request actually carried a
+// token — a 401 from /auth/login (bad password) has no Authorization header
+// and must stay a normal per-form error instead of forcing a logout.
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const hadAuth = !!error.config?.headers?.Authorization;
+    if (error.response?.status === 401 && hadAuth) {
+      clearToken();
+      if (window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+/** True when a request failed because the caller's email isn't verified yet
+ *  (join-team endpoints: accept invitation, redeem join code, claim player). */
+export function isEmailNotVerifiedError(err: unknown): boolean {
+  return (err as any)?.response?.data?.code === 'EMAIL_NOT_VERIFIED';
+}
+
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
   register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) =>
@@ -38,6 +63,11 @@ export const authApi = {
     api.post<{ message: string }>('/auth/forgot-password', data).then((r) => r.data),
   resetPassword: (data: { token: string; password: string }) =>
     api.post<{ message: string }>('/auth/reset-password', data).then((r) => r.data),
+  verifyEmail: (data: { token: string }) =>
+    api.post<{ verified: true }>('/auth/verify-email', data).then((r) => r.data),
+  // 204 (sent) comes back with empty body; 200 means already verified.
+  resendVerification: () =>
+    api.post<{ verified: true } | ''>('/auth/resend-verification').then((r) => r.data),
 };
 
 // ─── Teams ────────────────────────────────────────────────────────────────────

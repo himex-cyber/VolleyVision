@@ -8,6 +8,7 @@ import {
   BellIcon, ChevronIcon, MenuIcon, LogoutIcon, FeedbackIcon,
 } from './icons';
 import PageLoadingFallback from './PageLoadingFallback';
+import EmailVerificationBanner from './EmailVerificationBanner';
 
 /**
  * Page components are code-split (see main.tsx), so the routed child suspends
@@ -268,6 +269,8 @@ export default function Layout() {
           </div>
         </div>
       </header>
+
+      <EmailVerificationBanner />
 
       <main className="flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6">
         <SuspendedOutlet />

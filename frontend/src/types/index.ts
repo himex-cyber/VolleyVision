@@ -197,6 +197,7 @@ export interface User {
   role: UserRole;
   profileImage: string | null;
   signupIntent?: SignupIntent | null;
+  emailVerified: boolean;
   createdAt?: string;
 }
 
