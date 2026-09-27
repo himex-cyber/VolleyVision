@@ -23,12 +23,13 @@
 
 [build.environment]
   # Node for builds on Netlify's own build image. It does NOT pin the Functions
-  # runtime for CLI deploys (deploy.ps1): on 2026-09-27 the live function ran
-  # nodejs24.x while this, .nvmrc and CI all said 22. Both run on Amazon Linux
-  # 2023, which is what the Prisma binaryTarget in backend/prisma/schema.prisma
-  # (rhel-openssl-3.0.x) needs, so either works; a runtime on an older Linux
-  # would need a different engine.
-  NODE_VERSION = "22"
+  # runtime for CLI deploys (deploy.ps1). The live function runs nodejs24.x, so
+  # everything (this, .nvmrc for CI, engines, Karlos's PC) is on 24 to match:
+  # CI tests the runtime that actually serves traffic. Node 24 runs on Amazon
+  # Linux 2023, which is what the Prisma binaryTarget in
+  # backend/prisma/schema.prisma (rhel-openssl-3.0.x) needs; a runtime on an
+  # older Linux would need a different engine.
+  NODE_VERSION = "24"
 
 [functions]
   directory = "backend/netlify-functions"

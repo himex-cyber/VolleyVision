@@ -52,7 +52,7 @@ deploy.ps1                  Production deploy script
 
 ## Local development
 
-Prerequisites: Node 22 (see `.nvmrc`).
+Prerequisites: Node 24 (see `.nvmrc`), the same version the live function runs.
 
 **Important:** `backend/.env` points at the production Supabase database. Any `prisma` command run from `backend/` (migrate, studio, db push) hits production — there is no separate local or staging database.
 
