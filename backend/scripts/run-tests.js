@@ -15,12 +15,19 @@ const cycleCheck = spawnSync(
 if (cycleCheck.status !== 0) process.exit(cycleCheck.status ?? 1);
 
 const libDir = path.join(__dirname, '..', 'src', 'lib');
-const testFiles = readdirSync(libDir)
-  .filter((f) => f.endsWith('.test.ts'))
-  .sort();
+const unitTestsDir = path.join(__dirname, '..', 'src', '__tests__');
+
+const testFiles = [
+  ...readdirSync(libDir)
+    .filter((f) => f.endsWith('.test.ts'))
+    .map((f) => path.join(libDir, f)),
+  ...readdirSync(unitTestsDir)
+    .filter((f) => f.endsWith('.test.ts'))
+    .map((f) => path.join(unitTestsDir, f)),
+].sort();
 
 if (testFiles.length === 0) {
-  console.error('No test files found in src/lib.');
+  console.error('No test files found in src/lib or src/__tests__.');
   process.exit(1);
 }
 
@@ -28,8 +35,8 @@ const tsNodeBin = require.resolve('ts-node/dist/bin.js', {
   paths: [path.join(__dirname, '..')],
 });
 
-for (const file of testFiles) {
-  const fullPath = path.join(libDir, file);
+for (const fullPath of testFiles) {
+  const file = path.relative(path.join(__dirname, '..', 'src'), fullPath);
   console.log(`\n── ${file} ──`);
   const result = spawnSync(
     process.execPath,
