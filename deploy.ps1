@@ -92,4 +92,16 @@ if (-not $Message) {
 }
 
 Write-Host "Deploying with message: $Message"
+# Same PowerShell 5.1 trap as the migration check above: under Stop, npm's
+# harmless stderr warnings (e.g. "npm warn allow-scripts") become terminating
+# NativeCommandErrors and abort the deploy before it starts. Run with Continue
+# and judge success by the CLI's exit code instead.
+$ErrorActionPreference = 'Continue'
 npx netlify-cli@26.2.0 deploy --prod --build --message "$Message"
+$deployExitCode = $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
+if ($deployExitCode -ne 0) {
+  Write-Host ""
+  Write-Host "DEPLOY FAILED (exit code $deployExitCode). Check the output above for whether anything was published."
+  exit $deployExitCode
+}
