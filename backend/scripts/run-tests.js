@@ -31,6 +31,23 @@ if (testFiles.length === 0) {
   process.exit(1);
 }
 
+// The src/__tests__/http.*.test.ts files import the whole app, whose
+// instrument.ts loads backend/.env. dotenv never overwrites a variable that is
+// already set (even to ''), so pinning these keeps a real Sentry DSN, SMTP
+// login or Supabase key in that file from being used by a test run.
+const childEnv = {
+  ...process.env,
+  NETLIFY: '1', // index.ts must not listen; http tests start their own server
+  NODE_ENV: 'test', // in-memory rate limiter
+  JWT_SECRET: process.env.JWT_SECRET || 'test-secret',
+  SENTRY_DSN: '',
+  SMTP_HOST: '',
+  SMTP_USER: '',
+  SMTP_PASS: '',
+  SUPABASE_URL: '',
+  SUPABASE_SERVICE_ROLE_KEY: '',
+};
+
 const tsNodeBin = require.resolve('ts-node/dist/bin.js', {
   paths: [path.join(__dirname, '..')],
 });
@@ -41,7 +58,7 @@ for (const fullPath of testFiles) {
   const result = spawnSync(
     process.execPath,
     [tsNodeBin, '--transpile-only', fullPath],
-    { stdio: 'inherit', cwd: path.join(__dirname, '..') },
+    { stdio: 'inherit', cwd: path.join(__dirname, '..'), env: childEnv },
   );
   if (result.status !== 0) {
     console.error(`\nFAILED: ${file}`);
