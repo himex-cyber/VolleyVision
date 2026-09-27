@@ -142,6 +142,56 @@ export const forgotPasswordGlobalRateLimit = createRateLimit({
 });
 
 /**
+ * Login — per-email arm stops one account being credential-stuffed; per-IP arm
+ * raises the cost of spraying many emails from one source. Separate instances
+ * (not one keyFn returning both keys, like forgot-password does) because the
+ * two dimensions need different budgets: a shared household/NAT IP legitimately
+ * retries far more than one email should.
+ */
+export const loginEmailRateLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => {
+    const email = typeof req.body?.email === 'string' ? normalizeEmail(req.body.email) : '';
+    return email ? [`login:email:${email}`] : null;
+  },
+  message: 'Too many login attempts. Wait a few minutes and try again.',
+});
+
+export const loginIpRateLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  keyFn: (req) => [`login:ip:${clientIp(req)}`],
+  message: 'Too many login attempts. Wait a few minutes and try again.',
+});
+
+/**
+ * Register — per-IP only. There's no existing account to key an email arm on,
+ * and the endpoint itself is the enumeration oracle (409 on a taken email), so
+ * the limiter's job is capping how fast that oracle can be swept, not
+ * protecting one victim address.
+ */
+export const registerRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyFn: (req) => [`register:ip:${clientIp(req)}`],
+  message: 'Too many accounts created from this location. Try again later.',
+});
+
+/**
+ * Reset-password (the token-consuming step, not the request-a-link step
+ * above) — per-IP only. The token itself is high entropy and single-use, so
+ * this is defence in depth against brute-forcing it rather than the primary
+ * control.
+ */
+export const resetPasswordRateLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => [`reset:ip:${clientIp(req)}`],
+  message: 'Too many password reset attempts. Wait a few minutes and try again.',
+});
+
+/**
  * Join-code lookup and redemption — defence in depth only. A code is 8 chars
  * from a 32-symbol alphabet (~1.1e12 combinations), so guessing is already
  * hopeless; this just makes automated sweeps pointless. Deliberately roomier
