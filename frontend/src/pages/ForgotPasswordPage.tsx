@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { authApi } from '../lib/api';
+import { authApi, getApiErrorMessage } from '../lib/api';
 
 /**
  * Step 1 of the reset flow. The confirmation is deliberately generic and shows
@@ -20,8 +20,8 @@ export default function ForgotPasswordPage() {
     try {
       await authApi.forgotPassword({ email });
       setSent(true);
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't send a reset link. Try again in a moment.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't send a reset link. Try again in a moment."));
     } finally {
       setLoading(false);
     }

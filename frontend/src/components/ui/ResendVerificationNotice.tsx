@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useResendVerification } from '../../hooks';
+import { isRateLimitedError } from '../../lib/api';
 
 /** Shown in place of a generic failure message wherever joining a team can
  *  403 with EMAIL_NOT_VERIFIED (redeem invitation, join code, claim player). */
@@ -12,8 +13,8 @@ export default function ResendVerificationNotice() {
     try {
       await resend.mutateAsync();
       setStatus('sent');
-    } catch (err: any) {
-      setStatus(err?.response?.status === 429 ? 'limited' : 'error');
+    } catch (err) {
+      setStatus(isRateLimitedError(err) ? 'limited' : 'error');
     }
   }
 

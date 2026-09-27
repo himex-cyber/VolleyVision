@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useLookupCode, useRedeemTeamCode, useRedeemInvitation } from '../../hooks';
-import { isEmailNotVerifiedError } from '../../lib/api';
+import { isEmailNotVerifiedError, getApiErrorMessage } from '../../lib/api';
 import type { CodeLookupResult } from '../../lib/api';
 import type { TeamRole } from '../../types';
 import ResendVerificationNotice from '../ui/ResendVerificationNotice';
@@ -43,8 +43,8 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
         return;
       }
       setFound(result);
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't redeem that code. Check it and try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't redeem that code. Check it and try again."));
     }
   }
 
@@ -61,11 +61,11 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
         const result = await redeemTeamCode.mutateAsync({ code: code.trim(), role });
         setJoinedTeam(result.team.name);
       }
-    } catch (err: any) {
+    } catch (err) {
       if (isEmailNotVerifiedError(err)) {
         setNotVerified(true);
       } else {
-        setError(err?.response?.data?.error ?? "Couldn't redeem that code. Check it and try again.");
+        setError(getApiErrorMessage(err, "Couldn't redeem that code. Check it and try again."));
       }
     }
   }

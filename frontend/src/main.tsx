@@ -93,6 +93,7 @@ const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 
 // Backward-compat redirect: live tracking moved under the shared match shell at
 // /matches/:matchId/track. Old bookmarks to /track/:matchId land here.
+// eslint-disable-next-line react-refresh/only-export-components -- this is the app entrypoint, not a component module; splitting it up isn't worth it
 function LegacyTrackRedirect() {
   const { matchId } = useParams<{ matchId: string }>();
   return <Navigate to={`/matches/${matchId}/track`} replace />;
@@ -107,6 +108,7 @@ const queryClient = new QueryClient({
   },
 });
 
+// eslint-disable-next-line react-refresh/only-export-components -- see LegacyTrackRedirect above
 function App() {
   return (
     <BrowserRouter>

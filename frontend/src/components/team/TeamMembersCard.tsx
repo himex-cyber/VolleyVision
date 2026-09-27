@@ -5,6 +5,7 @@ import {
 } from '../../hooks';
 import type { TeamRole, TeamMember, AccessTier, AccessCategory } from '../../types';
 import { ROLE_OPTIONS, ROLE_LABELS, ROLE_BADGE, TIER_OPTIONS, ACCESS_CATEGORIES } from '../../lib/teamRoles';
+import { getApiErrorMessage } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { ChevronIcon, PencilIcon } from '../ui/icons';
 import TeamJoinCodes from './TeamJoinCodes';
@@ -43,8 +44,8 @@ export default function TeamMembersCard({ teamId }: Props) {
     try {
       await updateRole.mutateAsync({ memberId, role });
       return true;
-    } catch (err: any) {
-      setRoleError({ id: memberId, message: err?.response?.data?.error ?? "Couldn't change role. Try again." });
+    } catch (err) {
+      setRoleError({ id: memberId, message: getApiErrorMessage(err, "Couldn't change role. Try again.") });
       return false;
     }
   }

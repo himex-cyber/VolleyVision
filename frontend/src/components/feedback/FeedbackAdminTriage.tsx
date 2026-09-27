@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAllFeedback, useUpdateFeedbackStatus } from '../../hooks';
+import { getApiErrorMessage } from '../../lib/api';
 import type { Feedback, FeedbackStatus } from '../../types/feedback';
 import { AttachmentChips, STATUS_LABELS, TYPE_BADGE, TYPE_LABELS, TYPE_OPTIONS } from './MyFeedbackList';
 
@@ -17,8 +18,8 @@ function AdminFeedbackRow({ fb }: { fb: Feedback }) {
     setError('');
     try {
       await updateStatus.mutateAsync({ id: fb.id, data: { status, adminNotes: notes.trim() || null } });
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't save. Try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't save. Try again."));
     }
   }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlayerDashboard, useLinkPlayer, useUnlinkPlayer, useTeams, useTeam } from '../../hooks';
-import { isEmailNotVerifiedError } from '../../lib/api';
+import { isEmailNotVerifiedError, getApiErrorMessage } from '../../lib/api';
 import type { PlayerRecord } from '../../types';
 import ResendVerificationNotice from '../ui/ResendVerificationNotice';
 
@@ -44,11 +44,11 @@ function LinkPlayerPanel() {
       await linkPlayer.mutateAsync(selectedPlayerId);
       setSelectedTeamId('');
       setSelectedPlayerId('');
-    } catch (err: any) {
+    } catch (err) {
       if (isEmailNotVerifiedError(err)) {
         setNotVerified(true);
       } else {
-        setError(err?.response?.data?.error ?? "Couldn't link that player. Try again.");
+        setError(getApiErrorMessage(err, "Couldn't link that player. Try again."));
       }
     }
   }

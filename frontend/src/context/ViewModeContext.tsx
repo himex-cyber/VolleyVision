@@ -98,6 +98,7 @@ export function ViewModeProvider({ children }: { children: React.ReactNode }) {
   return <ViewModeContext.Provider value={value}>{children}</ViewModeContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook belongs with the context/provider it reads, splitting it out would be a bigger refactor for no benefit
 export function useViewMode(): ViewModeContextValue {
   const ctx = useContext(ViewModeContext);
   if (!ctx) throw new Error('useViewMode must be used inside <ViewModeProvider>');

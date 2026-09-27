@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../lib/api';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -18,8 +19,8 @@ export default function LoginPage() {
     try {
       await login(email, password);
       navigate('/dashboard', { replace: true });
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't sign you in. Check your email and password, then try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't sign you in. Check your email and password, then try again."));
     } finally {
       setLoading(false);
     }
