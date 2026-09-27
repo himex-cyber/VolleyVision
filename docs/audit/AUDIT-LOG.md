@@ -402,3 +402,21 @@ clean, lint clean.
 subagent spend limit resets (2026-09-28 18:00 UTC); choose one Node version (the live function runs 24; `.nvmrc`, CI and
 `netlify.toml` say 22).
 
+### Phase 0 of the rebuild roadmap (branch `chore/phase0-clean-base`, 2026-09-28)
+
+Why: the roadmap (`VolleyVision-Roadmap-to-Beta.md`) rebuilds the app feature by feature from v9.2.0,
+and starts from a clean, released base. Karlos decided on 2026-09-28 to remove the training-session
+routes rather than build a UI for them now.
+
+The observability half of Phase 0 had already shipped as v9.3.0, with fixes in v9.3.1 and v9.3.2, so this
+release carries only the removal. Karlos ran the Sentry probe check after v9.3.1 and set up the uptime
+monitor on `/health`, which closes those two items above.
+
+| Change | Where |
+|---|---|
+| Training-session API removed (table, `Event.trainingSessionId` and `ownEventsOnly` kept) | `routes/`, `controllers/`, `services/trainingSession.service.ts`, `index.ts` |
+| v9.4.0 released: the removal | `CHANGELOG.md` |
+
+**Verified:** backend `tsc` clean, 32/32 test files, no import cycles (131 files), build OK; frontend `tsc` clean,
+lint clean, build OK.
+
