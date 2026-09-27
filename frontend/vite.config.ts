@@ -1,9 +1,28 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
+
+// Sentry source-map upload only runs when SENTRY_AUTH_TOKEN is set (a Netlify
+// build env var, never committed) so local/CI builds without it behave
+// exactly as before. filesToDeleteAfterUpload removes the generated .map
+// files post-upload so maps reach Sentry but never ship on the public site.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    sentryAuthToken &&
+      sentryVitePlugin({
+        org: 'himex-cyber',
+        project: process.env.SENTRY_PROJECT || 'volleyvision',
+        authToken: sentryAuthToken,
+        sourcemaps: {
+          filesToDeleteAfterUpload: ['**/*.js.map'],
+        },
+      }),
+  ],
   build: {
+    sourcemap: sentryAuthToken ? 'hidden' : false,
     rollupOptions: {
       output: {
         // recharts is heavy and used by only 7 files (charts + analytics panels),

@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
+import { getApiErrorMessage } from '../lib/api';
 
 /**
  * Public entry point for the join-code flow (Stabilization Pass 2).
@@ -34,8 +35,8 @@ export default function RedeemInvitationPage() {
         if (password.length < 8) { setError('Password must be at least 8 characters.'); setBusy(false); return; }
         await register({ email, password, firstName, lastName });
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? (authMode === 'login'
+    } catch (err) {
+      setError(getApiErrorMessage(err, authMode === 'login'
         ? "Couldn't sign you in. Check your email and password, then try again."
         : "Couldn't create your account. Check your details and try again."));
     } finally {

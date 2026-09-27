@@ -6,7 +6,7 @@ import {
 import type { Invitation, TeamRole } from '../types';
 import { isPendingApproval } from '../types';
 import { ROLE_LABELS, ROLE_BADGE, ROLE_OPTIONS } from '../lib/teamRoles';
-import { isEmailNotVerifiedError } from '../lib/api';
+import { isEmailNotVerifiedError, getApiErrorMessage } from '../lib/api';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
 import TeamJoinCodes from '../components/team/TeamJoinCodes';
 import ResendVerificationNotice from '../components/ui/ResendVerificationNotice';
@@ -51,10 +51,10 @@ function InvitationCard({ inv }: { inv: Invitation }) {
         isEmailNotVerifiedError(accept.error) ? (
           <ResendVerificationNotice />
         ) : (
-          <p className="text-error text-xs">{(accept.error as any)?.response?.data?.error ?? "Couldn't accept that invitation."}</p>
+          <p className="text-error text-xs">{getApiErrorMessage(accept.error, "Couldn't accept that invitation.")}</p>
         )
       )}
-      {decline.isError && <p className="text-error text-xs">{(decline.error as any)?.response?.data?.error ?? "Couldn't decline that invitation."}</p>}
+      {decline.isError && <p className="text-error text-xs">{getApiErrorMessage(decline.error, "Couldn't decline that invitation.")}</p>}
 
       <div className="flex gap-2">
         <button className="btn-primary flex-1 text-sm py-2" disabled={accept.isPending} onClick={() => accept.mutate(inv.token)}>
@@ -94,8 +94,8 @@ function TeamSentInvitations({ teamId }: { teamId: string }) {
       } else {
         setNotice(`Invite created, but the email failed — share this code manually${result.joinCode ? `: ${result.joinCode}` : '.'}`);
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't send that invitation. Try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't send that invitation. Try again."));
     }
   }
 

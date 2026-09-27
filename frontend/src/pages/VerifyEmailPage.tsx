@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useResendVerification } from '../hooks';
-import { authApi } from '../lib/api';
+import { authApi, getApiErrorMessage, isRateLimitedError } from '../lib/api';
 
 /**
  * Reached from the emailed verification link. Mirrors ResetPasswordPage's
@@ -35,9 +35,9 @@ export default function VerifyEmailPage() {
         setStatus('success');
         if (user) await refreshUser();
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         setStatus('error');
-        setError(err?.response?.data?.error ?? 'This verification link is invalid or has expired.');
+        setError(getApiErrorMessage(err, 'This verification link is invalid or has expired.'));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -47,8 +47,8 @@ export default function VerifyEmailPage() {
     try {
       await resend.mutateAsync();
       setResendStatus('sent');
-    } catch (err: any) {
-      setResendStatus(err?.response?.status === 429 ? 'limited' : 'error');
+    } catch (err) {
+      setResendStatus(isRateLimitedError(err) ? 'limited' : 'error');
     }
   }
 

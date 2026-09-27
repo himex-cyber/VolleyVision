@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { usePlayerTeams, useAddPlayerTeamLink, useRemovePlayerTeamLink } from '../../hooks';
 import { useMyTeams, useMyMemberships } from '../../hooks';
+import { getApiErrorMessage } from '../../lib/api';
 import { CloseIcon } from '../ui/icons';
 
 interface Props {
@@ -46,8 +47,8 @@ export default function PlayerTeamLinksCard({ playerId, homeTeamId, playerName }
     try {
       await addLink.mutateAsync(selectedTeamId);
       setSelectedTeamId('');
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't link that team. Try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't link that team. Try again."));
     }
   }
 

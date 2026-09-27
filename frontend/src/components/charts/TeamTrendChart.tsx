@@ -11,6 +11,11 @@ import { CHART_SERIES, CHART_GRID, CHART_TICK, CHART_TOOLTIP_BG, CHART_TOOLTIP_T
 
 interface Props {
   title: string;
+  // Callers pass differently-shaped rows (match perf stats, per-stat trend
+  // rows) with no shared index signature; dataKey picks whichever field to
+  // plot dynamically, so a precise type here would need widening every
+  // caller's shape instead.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[];
   dataKey: string;
 }

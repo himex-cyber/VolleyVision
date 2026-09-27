@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import type { SignupIntent } from '../types';
+import { getApiErrorMessage } from '../lib/api';
 import clsx from 'clsx';
 
 // ── Onboarding redirect — isolated so it's obvious this is a one-time nudge,
@@ -54,8 +55,8 @@ export default function RegisterPage() {
     try {
       await register({ email, password, firstName, lastName, signupIntent: intent });
       navigate(onboardingPath(intent), { replace: true });
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't create your account. Check your details and try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't create your account. Check your details and try again."));
     } finally {
       setLoading(false);
     }

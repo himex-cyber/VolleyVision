@@ -4,6 +4,7 @@ import { useTeam, useCreatePlayer, useDeletePlayer, useUpdatePlayer, useTransfer
 import type { Position, ApprovalRequest } from '../types';
 import { POSITION_FULL_LABELS, POSITION_BADGE, isPendingApproval } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../lib/api';
 import TeamMembersCard from '../components/team/TeamMembersCard';
 import PermissionGuard from '../components/ui/PermissionGuard';
 import PlayerTeamLinksCard from '../components/team/PlayerTeamLinksCard';
@@ -257,7 +258,7 @@ export default function TeamDetailPage() {
 
         {transferOwnership.isError && (
           <p className="mt-2 text-error text-sm">
-            {(transferOwnership.error as any)?.response?.data?.error ?? "Couldn't transfer ownership. Try again."}
+            {getApiErrorMessage(transferOwnership.error, "Couldn't transfer ownership. Try again.")}
           </p>
         )}
       </div>

@@ -248,6 +248,21 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 - About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
 - Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
 
+### Phase 3: tooling (branch `chore/tooling`, stacked on `fix/greptile-findings`, 2026-09-27)
+
+| Item | What changed |
+|---|---|
+| CI | Adds `.github/workflows/ci.yml` with separate backend and frontend jobs on Node from `.nvmrc`. Uses placeholder DB URLs, so no secrets are involved. The audit step fails on `--audit-level=high`. |
+| Lint | Adds `frontend/eslint.config.js` (ESLint 9 flat config: `@eslint/js` + `typescript-eslint` + `react-hooks` + `react-refresh`). Typed axios error helpers (`getApiErrorMessage`, `isRateLimitedError`) replace `any` casts. 11 suppressions, each with a reason: 9 `react-refresh/only-export-components` and 2 `no-explicit-any`. |
+| Headers | Adds `frontend/public/_headers` (CSP, XFO, nosniff, Referrer-Policy, Permissions-Policy, HSTS). **Any new external origin must be added to the CSP.** Tested on a local server applying the same headers: the login and register pages show no violations. Pages behind login still need checking on the live site. |
+| react-router | 6 → 7.18.4. No route code changes were needed. Production audit is now 0 in both packages. |
+| Source maps | `@sentry/vite-plugin` runs only when `SENTRY_AUTH_TOKEN` is set at build time. Maps are uploaded, then deleted by `filesToDeleteAfterUpload`. **Needs Karlos:** a Sentry auth token in the Netlify env. |
+| deploy.ps1 | The deploy step now uses the same Continue plus exit-code guard as the migration check. |
+
+**Sentry finding:** production's DSNs point at two older projects (backend `…0620160`, frontend `…6453376`). Both accept events, but Karlos's dashboard and the connector only show the new `volleyvision` project (`…7605504`). Both DSNs were repointed to `volleyvision` on 2026-09-27 (Karlos approved), and `SENTRY_AUTH_TOKEN` was added to Netlify for source maps.
+
+**Local-only files hazard:** switching from a branch that tracks `CLAUDE.md` and `netlify.toml` to one that doesn't deletes the working copies. Backups are in `.claude/local-config-backup/`.
+
 ### Deploy and Phase 2.1 (2026-09-27)
 
 **Release:**

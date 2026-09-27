@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useResendVerification } from '../../hooks';
+import { isRateLimitedError } from '../../lib/api';
 
 const DISMISS_KEY = 'vv_verify_banner_dismissed';
 
@@ -25,8 +26,8 @@ export default function EmailVerificationBanner() {
       } else {
         setStatus('sent');
       }
-    } catch (err: any) {
-      setStatus(err?.response?.status === 429 ? 'limited' : 'error');
+    } catch (err) {
+      setStatus(isRateLimitedError(err) ? 'limited' : 'error');
     }
   }
 

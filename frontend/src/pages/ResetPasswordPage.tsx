@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { authApi } from '../lib/api';
+import { authApi, getApiErrorMessage } from '../lib/api';
 
 /**
  * Step 2 of the reset flow, reached from the emailed link. Calls authApi
@@ -35,8 +35,8 @@ export default function ResetPasswordPage() {
     try {
       await authApi.resetPassword({ token, password });
       setDone(true);
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't reset your password. Request a new link and try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't reset your password. Request a new link and try again."));
     } finally {
       setLoading(false);
     }

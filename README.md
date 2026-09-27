@@ -98,7 +98,7 @@ npm run db:seed          # prisma/seed.ts
 ```bash
 npm run dev              # vite, :5173
 npm run build            # tsc && vite build
-npm run lint             # eslint --max-warnings 0 (not yet configured; see CHANGELOG)
+npm run lint             # eslint 9 flat config, --max-warnings 0
 npm run preview          # vite preview
 ```
 
@@ -107,6 +107,8 @@ npm run preview          # vite preview
 Backend tests are plain `assert`-based TypeScript files at `backend/src/lib/*.test.ts`, run directly by `ts-node` via `npm test`. They must stay pure logic — importing anything that pulls in `lib/prisma` instantiates a `PrismaClient` at module load, which needs a platform-specific engine binary the test runner doesn't have. This is why the static role-permission map lives in `lib/rolePermissions.ts`, separate from `services/permission.service.ts`.
 
 There are no frontend tests yet.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`/`develop`. It runs `prisma validate`, type-checks, the backend tests, the frontend lint and build, and a production dependency audit for both packages. It never connects to a database or deploys.
 
 `backend/scripts/` holds the test runner, the import-cycle check and a few one-off maintenance scripts (`ensure-admin`, `backfill-team-join-codes`, `cleanup-orphaned-teams`). They are not part of `npm test`, and the database ones run against production.
 

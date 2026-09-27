@@ -62,7 +62,7 @@ export default function MessageList({
     if (isFirstRender || nearBottom || isOwnSend) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [lastMessage?.id, lastMessage?.sendState, currentUserId, messages.length]);
+  }, [lastMessage?.id, lastMessage?.sendState, lastMessage?.senderId, currentUserId, messages.length]);
 
   function handleScroll() {
     const el = containerRef.current;

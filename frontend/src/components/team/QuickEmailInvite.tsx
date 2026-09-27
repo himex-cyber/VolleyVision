@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useCreateInvitation } from '../../hooks';
 import type { TeamRole } from '../../types';
 import { isPendingApproval } from '../../types';
+import { getApiErrorMessage } from '../../lib/api';
 import { ROLE_LABELS } from '../../lib/teamRoles';
 
 // Compact single-row email invite, for nesting inside an already-open panel.
@@ -37,8 +38,8 @@ export default function QuickEmailInvite(props: Props) {
       } else {
         setNotice(`Invite created, but the email failed — share this code manually${result.joinCode ? `: ${result.joinCode}` : '.'}`);
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't send that invitation. Try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't send that invitation. Try again."));
     }
   }
 

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useCreateFeedback } from '../../hooks';
+import { getApiErrorMessage } from '../../lib/api';
 import type { FeedbackSeverity, FeedbackType } from '../../types/feedback';
 import { CHAT_ACCEPT_ATTR, formatBytes, rejectFileReason } from '../chat/format';
 import { TYPE_LABELS, TYPE_OPTIONS } from './MyFeedbackList';
@@ -55,8 +56,8 @@ export default function FeedbackSubmitForm() {
       });
       setType('BUG'); setSeverity(''); setSubject(''); setDescription(''); setFiles([]); setFileError('');
       setNotice('Thanks — your feedback has been submitted.');
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? "Couldn't submit your feedback. Try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't submit your feedback. Try again."));
     }
   }
 
