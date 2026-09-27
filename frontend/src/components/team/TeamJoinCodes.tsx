@@ -64,6 +64,8 @@ export default function TeamJoinCodes({ teamId, only }: Props) {
   // Nested inside an already-padded panel, the rows shouldn't re-indent or draw
   // their own boundary; standalone on the Invitations tab, they should.
   const rowClass = only ? 'py-2' : 'px-5 py-3';
+  // The server leaves the staff code out below FULL_ACCESS on invitations.
+  const canSeeStaffCode = !!codes && 'staffJoinCode' in codes;
 
   const rows = {
     PLAYER: (
@@ -72,12 +74,12 @@ export default function TeamJoinCodes({ teamId, only }: Props) {
         code={codes?.playerJoinCode ?? null} kind="PLAYER" teamId={teamId} rowClass={rowClass}
       />
     ),
-    STAFF: (
+    STAFF: canSeeStaffCode ? (
       <JoinCodeRow
-        label="Staff code" hint="Joins as Assistant Coach, Manager, or Statistician"
+        label="Staff code" hint="Joins as Assistant Coach or Statistician"
         code={codes?.staffJoinCode ?? null} kind="STAFF" teamId={teamId} rowClass={rowClass}
       />
-    ),
+    ) : null,
   };
 
   if (only) {

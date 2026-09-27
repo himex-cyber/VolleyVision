@@ -10,9 +10,14 @@ import {
 } from '../services/teamJoinCode.service';
 import { getAccessTier } from '../services/permission.service';
 
+// The route lets any member with invitation access (APPROVAL_REQUIRED included)
+// through; the staff code needs the same FULL_ACCESS bar as regenerating it,
+// since whoever holds it joins as staff with no approval step.
 export async function listTeamJoinCodes(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await getTeamJoinCodes(req.params.id));
+    const teamId = req.params.id;
+    const fullAccess = (await getAccessTier(req.user!.userId, teamId, 'invitation')) === AccessTier.FULL_ACCESS;
+    res.json(await getTeamJoinCodes(teamId, fullAccess));
   } catch (err) {
     next(err);
   }

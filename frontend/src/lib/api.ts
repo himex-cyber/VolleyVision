@@ -373,7 +373,8 @@ export type TeamJoinCodeKind = 'PLAYER' | 'STAFF';
 
 export interface TeamJoinCodes {
   playerJoinCode: string | null;
-  staffJoinCode: string | null;
+  /** Absent unless the caller has FULL_ACCESS on invitations; null = not generated yet. */
+  staffJoinCode?: string | null;
 }
 
 export type CodeLookupKind = 'EMAIL_INVITE' | 'TEAM_PLAYER' | 'TEAM_STAFF' | null;

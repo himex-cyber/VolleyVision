@@ -6,8 +6,8 @@ import type { TeamRole } from '../../types';
 import ResendVerificationNotice from '../ui/ResendVerificationNotice';
 
 const STAFF_ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
+  // No Manager: managers join by email invitation only (the server refuses it).
   { value: 'ASSISTANT_COACH', label: 'Assistant Coach' },
-  { value: 'MANAGER', label: 'Manager' },
   { value: 'STATISTICIAN', label: 'Statistician' },
 ];
 
