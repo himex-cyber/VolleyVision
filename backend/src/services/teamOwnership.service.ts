@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import { prisma, runSerializable } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { normalizeEmail } from '../lib/email';
 import { defaultAccessTiers } from './permission.service';
@@ -63,7 +63,7 @@ export async function transferOwnership(teamId: string, requesterId: string, new
   // if both assistant slots are taken the transfer is refused rather than
   // pushing someone out (Karlos, 2026-09-27). The new owner's own slot counts
   // as free, since they are leaving it.
-  return prisma.$transaction(async (tx) => {
+  return runSerializable(async (tx) => {
     const assistants = await tx.teamMembership.count({
       where: { teamId, role: 'ASSISTANT_COACH', userId: { notIn: [requesterId, membership.userId] } },
     });
@@ -85,7 +85,7 @@ export async function transferOwnership(teamId: string, requesterId: string, new
       data: { ownerId: membership.userId },
       include: { owner: { select: ownerSelect } },
     });
-  }, { isolationLevel: 'Serializable' });
+  });
 }
 
 /** Throws 403 if the requesting user does not own the team. */

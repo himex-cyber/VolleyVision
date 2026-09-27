@@ -1,6 +1,9 @@
 import { TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { createInvitation } from './invitation.service';
+import { canInviteRole } from '../lib/rolePermissions';
+import { getUserTeamRole } from './permission.service';
+import { AppError } from '../middleware/errorHandler';
 
 /**
  * Stabilization Pass 2 — single "apply the change" function per structural
@@ -76,7 +79,17 @@ export interface InvitationCreatePayload {
   role: TeamRole;
 }
 
-export function applyCreateInvitation(p: InvitationCreatePayload) {
+export async function applyCreateInvitation(p: InvitationCreatePayload) {
+  // For an APPROVAL_REQUIRED inviter, this runs later
+  // (when a head coach/manager approves the queued ApprovalRequest) using the
+  // payload captured back when the request was made. The inviter's authority
+  // can have changed since then (demoted, access tier revoked) — re-check
+  // against their CURRENT role here, in the one path both the immediate and
+  // queued flows funnel through, rather than trusting the stale payload.
+  const { role: currentRole } = await getUserTeamRole(p.invitedById, p.teamId);
+  if (!currentRole || !canInviteRole(currentRole, p.role)) {
+    throw new AppError(403, 'You can no longer invite a member at that role.');
+  }
   // createInvitation also triggers the invitation email (Fix 1).
   return createInvitation(p.teamId, p.invitedById, p.email, p.role);
 }

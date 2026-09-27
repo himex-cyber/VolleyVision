@@ -1,4 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { AppError } from '../middleware/errorHandler';
+import { isSerializationConflict } from './serializationConflict';
 
 // Singleton pattern prevents connection pool exhaustion during hot reloads in
 // development. In production (Node.js process stays alive) this is just a
@@ -20,4 +22,22 @@ export const prisma =
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
+}
+
+/**
+ * Run a check-then-write as one SERIALIZABLE transaction, so a concurrent
+ * request can't slip in between the check and the write (two joins taking the
+ * last assistant slot, a role edit racing an ownership transfer, a double
+ * claim). Postgres aborts the loser; that becomes a 409 the user can retry
+ * instead of a 500.
+ */
+export async function runSerializable<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  try {
+    return await prisma.$transaction(fn, { isolationLevel: 'Serializable' });
+  } catch (err) {
+    if (isSerializationConflict(err)) {
+      throw new AppError(409, 'Someone else changed this at the same moment. Please try again.');
+    }
+    throw err;
+  }
 }

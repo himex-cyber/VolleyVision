@@ -19,18 +19,25 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach stored JWT to every request automatically
+// Credential endpoints never get the stored JWT. Otherwise a mistyped password
+// on /auth/login, sent while a valid session is stored, comes back 401 *with*
+// an Authorization header, and the interceptor below mistakes it for a revoked
+// session and logs the user out.
+const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/auth/verify-email'];
+
+// Attach stored JWT to every other request automatically
 api.interceptors.request.use((config) => {
   const token = getToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const isPublicAuth = PUBLIC_AUTH_PATHS.some((p) => config.url?.startsWith(p));
+  if (token && !isPublicAuth) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 // Tokens are now revoked server-side after a password change, so a 401 can
 // happen mid-session on any authenticated request, not just at login. Only
 // treat it as a session revocation when the request actually carried a
-// token — a 401 from /auth/login (bad password) has no Authorization header
-// and must stay a normal per-form error instead of forcing a logout.
+// token; credential endpoints never do (see PUBLIC_AUTH_PATHS), so a bad
+// password stays a normal per-form error instead of forcing a logout.
 api.interceptors.response.use(
   (res) => res,
   (error) => {

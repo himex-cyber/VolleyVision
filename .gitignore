@@ -2,12 +2,14 @@ node_modules/
 dist/
 backend/dist/
 frontend/dist/
-.env
+# Any env file (.env, .env.production, .env.local, ...) except the documented examples
+.env*
 *.env.local
+!.env.example
 .DS_Store
 .claude/
 .netlify/
-# Video uploads (local disk MVP — never commit actual video files)
+# Uploaded files — never commit
 backend/uploads/
 
 # Vite temp config artifacts (regenerated on every dev/build run)
@@ -23,3 +25,11 @@ graphify-out/
 .claude-flow/
 ruvector.db
 .swarm/
+
+# Local-only tooling and deploy config (Karlos, 2026-09-27): kept on disk,
+# never pushed. deploy.ps1 builds from the local netlify.toml.
+CLAUDE.md
+netlify.toml
+
+# Browser-automation tool logs
+.playwright-mcp/

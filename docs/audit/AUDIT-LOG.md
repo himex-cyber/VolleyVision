@@ -248,4 +248,37 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 - About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
 - Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
 
+### Deploy and Phase 2.1 (2026-09-27)
+
+**Release:**
+- PRs #4, #5, #7 and #8 were merged into `develop`, then `develop` was merged into `main` (#9).
+- Both migrations were applied to production and the site was deployed with `deploy.ps1`'s command. The script crashes under PowerShell 5.1 on npm's stderr warnings; that fix is part of Phase 3.
+- Checks on the live site: `/health` is OK, a bogus login returns 401, the new endpoints respond, the removed routes return 404, and the live JS bundle contains the new pages.
+- Karlos received the verification email, so SMTP works end to end.
+
+**Environment and repo settings:**
+- `SMTP_HOST=smtp.gmail.com` was missing from Netlify. Production had never sent any email before this.
+- The Netlify repo link was moved from `karlos-h` to `himex-cyber`. Netlify's GitHub access still needs re-authorizing in the UI: git-triggered builds now fail to clone, which is harmless because deploys come from `deploy.ps1`.
+- PRs are now opened from the `himex-cyber` account.
+
+**Security and monitoring:**
+- The secret scan of the full git history found **no secret ever committed**. The only credential-like strings are the two Sentry DSNs, which are public by design.
+- Sentry works: the backend and frontend DSNs point at two projects in the `himex-cyber` org, and both accepted a test event. **Open:** the Sentry connector can only see one project, and source maps aren't uploaded yet (Phase 3).
+
+**Phase 2.1 (branch `fix/greptile-findings`):** fixes for the nine findings from Greptile's review that were real and still on `main`.
+
+| Finding | Fix |
+|---|---|
+| Queued invitation used a stale inviter role | `applyCreateInvitation` re-checks `canInviteRole` against the requester's current role |
+| Email HTML injection | Adds `lib/escapeHtml.ts` (with a test), applied to every user-supplied value in `mailer.ts` |
+| Role edit or removal racing ownership transfer | The HEAD_COACH re-check runs inside the transaction. `runSerializable` in `lib/prisma.ts` and `isSerializationConflict` (with a test) replace ad-hoc P2034 handling |
+| Double player claim | Check and claim run in one serializable transaction |
+| Ownership transfer returned 500 on a conflict | Now goes through `runSerializable`, which returns 409 |
+| Non-atomic registration | The token is minted before `user.create` and saved in the same write |
+| Tokens could be consumed twice | Verification and reset both use a conditional `updateMany` plus a `count` check |
+| Reset email fired and forgotten | The send is awaited, and the floor rises from 1.2s to 4s |
+| A wrong password logged out a valid session | The token is never attached to credential endpoints |
+
+Also in Phase 2.1: `CLAUDE.md` and `netlify.toml` were untracked (Karlos's decision) and `.gitignore` now covers every `.env*`. The minor Greptile items (two verify-page edge cases, README wording) are deferred to the full Greptile pass.
+
 Verified at the end of Phase 1B: backend `tsc` is clean, all 15 test files pass (2 new), and the backend builds; frontend `tsc` is clean and `vite build` works.
