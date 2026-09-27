@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { mapErrorToResponse } from '../lib/mapError';
 
 export class AppError extends Error {
   constructor(
@@ -21,23 +22,9 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  if (err instanceof AppError) {
-    res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
-    return;
+  const { status, body } = mapErrorToResponse(err);
+  if (status === 500) {
+    console.error('Unhandled error:', err);
   }
-
-  // Prisma unique constraint violation
-  if ((err as any).code === 'P2002') {
-    res.status(409).json({ error: 'A record with those details already exists.' });
-    return;
-  }
-
-  // Prisma record not found
-  if ((err as any).code === 'P2025') {
-    res.status(404).json({ error: 'Record not found.' });
-    return;
-  }
-
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'An unexpected error occurred.' });
+  res.status(status).json(body);
 }

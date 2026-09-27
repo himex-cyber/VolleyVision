@@ -50,10 +50,7 @@ export async function linkPlayerHandler(req: Request, res: Response, next: NextF
     if (!playerId) return res.status(400).json({ error: 'playerId is required' });
     const player = await linkPlayerToUser(playerId, req.user!.userId);
     res.json(player);
-  } catch (err: any) {
-    // .code (e.g. EMAIL_NOT_VERIFIED) must survive this shortcut path exactly
-    // like it does through the shared errorHandler.
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+  } catch (err) {
     next(err);
   }
 }
@@ -62,8 +59,7 @@ export async function unlinkPlayerHandler(req: Request, res: Response, next: Nex
   try {
     const player = await unlinkPlayer(req.params.playerId, req.user!.userId);
     res.json(player);
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  } catch (err) {
     next(err);
   }
 }

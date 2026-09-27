@@ -30,6 +30,27 @@ export const ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
   'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN', 'PLAYER', 'VIEWER',
 ].map((value) => ({ value: value as TeamRole, label: ROLE_LABELS[value as TeamRole] }));
 
+// Mirrors lib/rolePermissions.ts's ROLE_ORDER/canInviteRole on the backend —
+// a UX filter only, so the picker doesn't offer a role the server rejects
+// (target rank must be >= inviter rank; HEAD_COACH is never invitable). The
+// server remains the real check.
+const ROLE_ORDER: TeamRole[] = ['HEAD_COACH', 'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN', 'PLAYER', 'VIEWER'];
+
+function roleRank(role: string | null | undefined): number {
+  const i = role ? ROLE_ORDER.indexOf(role as TeamRole) : -1;
+  return i === -1 ? ROLE_ORDER.length : i;
+}
+
+export function canInviteRole(inviterRole: string | null | undefined, targetRole: TeamRole): boolean {
+  if (targetRole === 'HEAD_COACH') return false;
+  return roleRank(targetRole) >= roleRank(inviterRole);
+}
+
+/** ROLE_OPTIONS filtered to what `inviterRole` may actually assign/invite. */
+export function invitableRoleOptions(inviterRole: string | null | undefined) {
+  return ROLE_OPTIONS.filter((r) => canInviteRole(inviterRole, r.value));
+}
+
 // Categorical badge classes (defined in index.css). No positive/negative meaning.
 export const ROLE_BADGE: Record<TeamRole, string> = {
   HEAD_COACH:      'badge-accent',

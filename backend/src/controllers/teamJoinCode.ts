@@ -13,8 +13,7 @@ import { getAccessTier } from '../services/permission.service';
 export async function listTeamJoinCodes(req: Request, res: Response, next: NextFunction) {
   try {
     res.json(await getTeamJoinCodes(req.params.id));
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  } catch (err) {
     next(err);
   }
 }
@@ -38,8 +37,7 @@ export async function regenerateTeamJoinCode(req: Request, res: Response, next: 
     const code = await regenerateCode(teamId, kind);
     logAudit(userId, 'REGENERATE_TEAM_CODE', 'team', teamId, { kind });
     res.json({ kind, code });
-  } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  } catch (err) {
     next(err);
   }
 }
@@ -60,10 +58,7 @@ export async function redeemTeamJoinCodeHandler(req: Request, res: Response, nex
     const result = await redeemCode(code, userId, role);
     logAudit(userId, 'REDEEM_TEAM_CODE', 'team', result.team.id, { kind: result.kind, role: result.role });
     res.json(result);
-  } catch (err: any) {
-    // .code (e.g. EMAIL_NOT_VERIFIED) must survive this shortcut path exactly
-    // like it does through the shared errorHandler.
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
+  } catch (err) {
     next(err);
   }
 }
