@@ -289,6 +289,9 @@ export const feedbackApi = {
   // Signed URL round-trip — owner or admin only.
   getAttachmentUrl: (feedbackId: string, attachmentId: string) =>
     api.get<{ url: string }>(`/feedback/${feedbackId}/attachments/${attachmentId}/url`).then((r) => r.data.url),
+  // Admin-only, and it always fails with a 500. That's the point: it's the
+  // backend half of the Sentry check in components/feedback/SentryTestCard.
+  sentryTest: (probe: string) => api.post('/feedback/sentry-test', null, { params: { probe } }),
 };
 
 // ─── Memberships (Phase 5 Sprint 3) ──────────────────────────────────────────
