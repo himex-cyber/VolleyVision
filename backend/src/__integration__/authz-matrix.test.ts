@@ -96,8 +96,8 @@ const ROWS: Row[] = [
   { name: 'POST reset match', method: 'POST', path: (f) => `/api/v1/matches/${f.match.id}/score/reset-match`, expect: STAFF, today: OUTSIDER_403 },
   { name: 'POST player', method: 'POST', path: () => '/api/v1/players', body: (f) => ({ teamId: f.team.id, firstName: 'N', lastName: 'N', jerseyNumber: 99, position: 'SETTER' }), expect: STAFF, today: OUTSIDER_403 },
   { name: 'PATCH player', method: 'PATCH', path: (f) => `/api/v1/players/${f.p1.id}`, body: () => ({ firstName: 'Z' }), expect: STAFF, today: OUTSIDER_403 },
-  { name: 'POST player team link', method: 'POST', path: (f) => `/api/v1/players/${f.p1.id}/team-links`, body: (f) => ({ teamId: f.team.id }), expect: STAFF, today: OUTSIDER_403 },
-  { name: 'DELETE player team link', method: 'DELETE', path: (f) => `/api/v1/players/${f.p1.id}/team-links/${f.team.id}`, expect: STAFF, today: OUTSIDER_403 },
+  { name: 'POST player team link', method: 'POST', path: (f) => `/api/v1/players/${f.p1.id}/team-links`, body: (f) => ({ teamId: f.team.id }), expect: STAFF },
+  { name: 'DELETE player team link', method: 'DELETE', path: (f) => `/api/v1/players/${f.p1.id}/team-links/${f.team.id}`, expect: STAFF },
   { name: 'POST event', method: 'POST', path: () => '/api/v1/events', body: (f) => ({ matchId: f.match.id, playerId: f.p1.id, eventType: 'KILL', setNumber: 1 }), expect: STAFF, today: OUTSIDER_403 },
   { name: 'POST chat message', method: 'POST', path: (f) => `/api/v1/channels/${f.channel.id}/messages`, body: () => ({ body: 'hi' }), expect: { outsider: 404, viewer: 403, player: 201 }, today: OUTSIDER_403 },
   // No files attached: the permission guard runs before multer, so a caller who

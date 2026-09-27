@@ -15,14 +15,23 @@ import { requireAuth, optionalAuth } from '../middleware/auth';
 import { visibleByTeamParam, visibleByPlayerParam } from '../middleware/visibility';
 import { hasTeamPermission, canActInCategory, Permission } from '../services/permission.service';
 import { prisma } from '../lib/prisma';
+import { assertTeamVisible } from '../lib/teamVisibility';
 import { asyncHandler } from '../middleware/asyncHandler';
 
 // Guard for link mutations: requester must have MANAGE_TEAM on the team being linked/unlinked.
 // For POST the teamId comes from req.body; for DELETE from req.params.teamId.
+// The URL wins: the delete acts on :teamId, so checking a body teamId instead
+// let a caller pass on their own team and unlink someone else's (defect 4).
 const requireManageLinkedTeam = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-  const teamId = req.body.teamId ?? req.params.teamId;
+  const bodyTeamId = req.body?.teamId;
+  const teamId = req.params.teamId ?? bodyTeamId;
   if (!teamId) { res.status(400).json({ error: 'teamId is required.' }); return; }
+  if (req.params.teamId && bodyTeamId && bodyTeamId !== req.params.teamId) {
+    res.status(400).json({ error: 'teamId in the body does not match the URL.' });
+    return;
+  }
+  await assertTeamVisible(teamId, req.user.userId); // 404 for outsiders
   const allowed = await hasTeamPermission(req.user.userId, teamId, Permission.MANAGE_TEAM);
   if (!allowed) { res.status(403).json({ error: 'You do not have permission to manage this team.' }); return; }
   next();
