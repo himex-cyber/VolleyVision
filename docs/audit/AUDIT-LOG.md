@@ -259,7 +259,7 @@ Before any code was written, production (Supabase, read-only) held 2 users, 1 te
 | Source maps | `@sentry/vite-plugin` runs only when `SENTRY_AUTH_TOKEN` is set at build time. Maps are uploaded, then deleted by `filesToDeleteAfterUpload`. **Needs Karlos:** a Sentry auth token in the Netlify env. |
 | deploy.ps1 | The deploy step now uses the same Continue plus exit-code guard as the migration check. |
 
-**Sentry finding:** production's DSNs point at two older projects (backend `…0620160`, frontend `…6453376`). Both accept events, but Karlos's dashboard and the connector only show the new `volleyvision` project (`…7605504`). Both DSNs need repointing to the new project (awaiting Karlos's OK).
+**Sentry finding:** production's DSNs point at two older projects (backend `…0620160`, frontend `…6453376`). Both accept events, but Karlos's dashboard and the connector only show the new `volleyvision` project (`…7605504`). Both DSNs were repointed to `volleyvision` on 2026-09-27 (Karlos approved), and `SENTRY_AUTH_TOKEN` was added to Netlify for source maps.
 
 **Local-only files hazard:** switching from a branch that tracks `CLAUDE.md` and `netlify.toml` to one that doesn't deletes the working copies. Backups are in `.claude/local-config-backup/`.
 
