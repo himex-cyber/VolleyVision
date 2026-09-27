@@ -2,6 +2,26 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## Unreleased — Audit Phase 3: tooling
+
+- **CI:** GitHub Actions checks both packages on every PR and on every push to
+  `main`/`develop`. It runs `prisma validate`, type-checks, tests, lints,
+  builds, and a production dependency audit that fails on high-severity
+  advisories. It never touches the database and never deploys.
+- **Lint works:** `npm run lint` in `frontend/` uses ESLint 9 with the
+  standard React-TypeScript rules and passes with zero warnings.
+- **Security headers** in `frontend/public/_headers`: a Content Security
+  Policy, clickjacking protection (`frame-ancestors 'none'` and
+  `X-Frame-Options`), `nosniff`, a referrer policy, a permissions policy
+  and HSTS.
+- **react-router 7:** fixes the remaining frontend advisory (an open
+  redirect). Both packages now report 0 production vulnerabilities.
+- **Readable production stack traces:** source maps upload to Sentry during
+  the build once `SENTRY_AUTH_TOKEN` is set in Netlify, and they're deleted
+  before publishing, so they never ship to the site.
+- **`deploy.ps1` fixed:** it no longer aborts on npm's harmless warnings
+  under Windows PowerShell 5.1.
+
 ## Unreleased — Audit Phase 2.1: review fixes
 
 Fixes for the nine real findings in Greptile's review of #7 and #9, each
