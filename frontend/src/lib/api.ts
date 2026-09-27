@@ -291,7 +291,10 @@ export const feedbackApi = {
     api.get<{ url: string }>(`/feedback/${feedbackId}/attachments/${attachmentId}/url`).then((r) => r.data.url),
   // Admin-only, and it always fails with a 500. That's the point: it's the
   // backend half of the Sentry check in components/feedback/SentryTestCard.
-  sentryTest: (probe: string) => api.post('/feedback/sentry-test', null, { params: { probe } }),
+  // Body is {} not null: axios serialises null to the literal "null" under the
+  // JSON content type, and express.json() (strict) rejects it with a 400
+  // before the route runs, so the check never reached Sentry.
+  sentryTest: (probe: string) => api.post('/feedback/sentry-test', {}, { params: { probe } }),
 };
 
 // ─── Memberships (Phase 5 Sprint 3) ──────────────────────────────────────────
