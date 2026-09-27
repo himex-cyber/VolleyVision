@@ -1,256 +1,156 @@
-# VolleyVision — Phase 1: Match Tracking System
+# VolleyVision
 
-A volleyball analytics platform built as a portfolio project for Information Systems & Business Analytics.
+VolleyVision is a volleyball performance analytics web app: coaches track matches live, players see their own stats, and teams get analytics built from every recorded event. It is in beta, aimed at a February 2027 launch with a local club, with a mobile app planned after that.
 
-## Tech Stack
+## What it does
 
-| Layer      | Technology                          |
-|------------|-------------------------------------|
-| Frontend   | React 18 · TypeScript · Tailwind CSS |
-| Backend    | Node.js · Express · TypeScript      |
-| Database   | PostgreSQL                          |
-| ORM        | Prisma                              |
-| State      | TanStack Query (React Query)        |
-| Routing    | React Router v6                     |
+- **Auth and email verification** — register/login with a JWT session; every account must verify its email before it can join a team (invitation, join code, or claiming a player record). Password reset revokes existing sessions via a token version check.
+- **Teams, privately** — a team is visible only to its owner, an accepted member, or an admin. There is no public team listing.
+- **Coach roles** — one head coach (the team owner, changed only by ownership transfer) and up to two assistant coaches per team. The one-head-coach rule is also a database constraint.
+- **Invitations and join codes** — email invitations with a role, plus regenerable player/staff join codes for joining a team directly.
+- **Approval queue** — members on a restricted access tier get their mutations queued as `ApprovalRequest`s instead of applied immediately; the owner, a head coach or a manager approves or rejects them.
+- **Roster and players** — player records, linking a user account to a roster entry, a player portal and a coach portal.
+- **Match tracking** — live scoring, set/score adjustments, a scoreboard, and a spectator watch view.
+- **Analytics** — match, team and player analytics and a match report, built from the event log.
+- **Team chat** — one polled channel per team.
+- **Feedback** — in-app feedback with optional attachments, reviewed by admins.
 
----
+## Removed in September 2026
 
-## Project Structure
+Leagues, match video (YouTube and upload), the AI assistant/match summary, heat maps, coaching/training/season recommendations, rotation analytics, momentum charts, and opponent scouting reports were all built, then deleted (not just flagged off) in a September 2026 audit that refocused the app on its core. They're recoverable from the git tag `pre-feature-removal`. See `CHANGELOG.md` for the full audit trail.
+
+## Tech stack
+
+- **Backend:** Express 4 + TypeScript 5 + Prisma 5, against Supabase Postgres.
+- **Frontend:** React 18 + Vite 5 + TanStack Query 5 + Tailwind CSS 3.
+- **Deployment:** Netlify — the frontend as static assets, the entire backend as one Netlify Function.
+- **Error tracking:** Sentry (`@sentry/node` / `@sentry/react`).
+
+## Repository layout
 
 ```
-volleyvision/
-├── backend/
-│   ├── prisma/
-│   │   ├── schema.prisma       ← Database schema
-│   │   └── seed.ts             ← Sample data
-│   └── src/
-│       ├── controllers/        ← Business logic (teams, players, matches, events)
-│       ├── routes/             ← Express route definitions
-│       ├── middleware/         ← Error handling
-│       ├── lib/prisma.ts       ← DB client singleton
-│       └── index.ts            ← App entry point
-└── frontend/
-    └── src/
-        ├── pages/              ← TeamsPage, TeamDetailPage, MatchesPage, TrackingPage
-        ├── components/ui/      ← Layout, shared UI
-        ├── hooks/              ← React Query hooks
-        ├── lib/api.ts          ← Axios API client
-        ├── types/              ← Shared TypeScript types
-        └── index.css           ← Tailwind + component classes
+backend/                  Express + Prisma API
+  src/routes/              Express wiring + validators, versioned under /api/v1
+  src/controllers/         HTTP request/response shaping
+  src/services/            Business logic, Prisma queries
+  src/lib/                 Pure, testable helpers (no Prisma import)
+  src/middleware/          Auth, visibility, permissions, rate limiting
+  prisma/schema.prisma     Database schema
+  netlify-functions/api.js Express app wrapped for Netlify Functions
+frontend/                 Vite + React SPA
+  src/pages/               Route-level page components
+  src/components/          Shared UI, including PermissionGuard
+  src/context/             AuthContext, ViewModeContext
+  src/hooks/               TanStack Query hooks
+  src/lib/                 Axios client, token storage
+  src/config/features.ts   Feature flags
+docs/design/               Design notes and mockups
+docs/audit/AUDIT-LOG.md    September 2026 audit log
+CHANGELOG.md               Release history, newest first
+netlify.toml                Build and redirect config
+deploy.ps1                  Production deploy script
 ```
 
----
+## Local development
 
-## Prerequisites
+Prerequisites: Node 22 (see `.nvmrc` and `netlify.toml`).
 
-- **Node.js** 18+
-- **PostgreSQL** 14+ (running locally or via Docker)
-- **npm** or **pnpm**
+**Important:** `backend/.env` points at the production Supabase database. Any `prisma` command run from `backend/` (migrate, studio, db push) hits production — there is no separate local or staging database.
 
----
+### Setup
 
-## Local Development Setup
-
-### 1. Clone and install dependencies
-
-```bash
-git clone <your-repo-url>
-cd volleyvision
-
-# Install backend dependencies
+```powershell
 cd backend
+copy .env.example .env
+# fill in DATABASE_URL, DIRECT_URL, JWT_SECRET at minimum
 npm install
-
-# Install frontend dependencies
-cd ../frontend
-npm install
+npm run dev        # :3001, health at /health
 ```
 
-### 2. Set up PostgreSQL
-
-Option A — Local PostgreSQL:
-```bash
-createdb volleyvision
-```
-
-Option B — Docker (recommended for portability):
-```bash
-docker run --name volleyvision-db \
-  -e POSTGRES_PASSWORD=password \
-  -e POSTGRES_DB=volleyvision \
-  -p 5433:5433 \
-  -d postgres:16
-```
-
-### 3. Configure environment
-
-```bash
-cd backend
-cp .env.example .env
-# Edit .env and set your DATABASE_URL
-```
-
-Default `.env`:
-```
-DATABASE_URL="postgresql://postgres:password@localhost:5433/volleyvision"
-PORT=3001
-NODE_ENV=development
-CLIENT_URL=http://localhost:5173
-```
-
-### 4. Run Prisma migrations and seed
-
-```bash
-cd backend
-npm run db:generate    # Generate Prisma client
-npm run db:push        # Push schema to database
-npm run db:seed        # Load sample team, players, and a match
-```
-
-To open Prisma Studio (visual DB browser):
-```bash
-npm run db:studio
-```
-
-### 5. Start the backend
-
-```bash
-cd backend
-npm run dev
-# → API running at http://localhost:3001
-# → Health check: http://localhost:3001/health
-```
-
-### 6. Start the frontend
-
-```bash
+```powershell
 cd frontend
-npm run dev
-# → App running at http://localhost:5173
+copy .env.example .env
+npm install
+npm run dev        # :5173, proxies /api/v1 to the backend in dev
 ```
 
----
+Key backend env vars (see `backend/.env.example` for the full list): `DATABASE_URL` (pooled), `DIRECT_URL` (direct, migrations only), `JWT_SECRET` (required — auth 500s without it), `CLIENT_URL` (CORS origin), SMTP settings (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`; without them no email is sent, so nobody can verify their address or join a team), Supabase Storage settings (optional — degrades only attachment endpoints), `SENTRY_DSN`.
 
-## API Reference
+Key frontend env var: `VITE_API_URL` (leave unset locally; only needed when the frontend is served from a different origin than the API), `VITE_SENTRY_DSN`.
 
-All endpoints are prefixed with `/api/v1`.
+## Scripts
 
-### Teams
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/teams` | List all teams |
-| GET | `/teams/:id` | Get team with roster + recent matches |
-| POST | `/teams` | Create team |
-| PATCH | `/teams/:id` | Update team |
-| DELETE | `/teams/:id` | Delete team |
+**Backend** (`cd backend`)
 
-### Players
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/players/by-team/:teamId` | Get roster for a team |
-| GET | `/players/:id` | Get player |
-| POST | `/players` | Create player |
-| PATCH | `/players/:id` | Update player |
-| DELETE | `/players/:id` | Delete player |
-
-### Matches
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/matches/by-team/:teamId` | Get matches for a team |
-| GET | `/matches/:id` | Get match with team and roster |
-| POST | `/matches` | Create match |
-| PATCH | `/matches/:id` | Update match (status, scores) |
-| DELETE | `/matches/:id` | Delete match |
-
-### Events
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/events` | Record an event |
-| GET | `/events/by-match/:matchId` | Get all events for a match |
-| DELETE | `/events/undo/:matchId` | Delete the most recent event (undo) |
-| DELETE | `/events/:id` | Delete a specific event |
-
----
-
-## Volleyball Events
-
-| Code | Label | Category | Outcome |
-|------|-------|----------|---------|
-| KILL | Kill | Attack | ✅ Positive |
-| ATTACK_ERROR | Att. Error | Attack | ❌ Negative |
-| ATTACK_ATTEMPT | Attempt | Attack | ➖ Neutral |
-| ACE | Ace | Serve | ✅ |
-| SERVICE_ERROR | Svc Error | Serve | ❌ |
-| SERVE_IN | Serve In | Serve | ➖ |
-| PASS_3 | Pass 3 | Pass | ✅ |
-| PASS_2 | Pass 2 | Pass | ➖ |
-| PASS_1 | Pass 1 | Pass | ➖ |
-| PASS_0 | Pass 0 | Pass | ❌ |
-| SOLO_BLOCK | Solo Block | Block | ✅ |
-| BLOCK_ASSIST | Blk Assist | Block | ✅ |
-| BLOCK_ERROR | Blk Error | Block | ❌ |
-| DIG | Dig | Defence | ✅ |
-| DIG_ERROR | Dig Error | Defence | ❌ |
-| ASSIST | Assist | Set | ✅ |
-| SETTING_ERROR | Set Error | Set | ❌ |
-
----
-
-## Workflow
-
-```
-1. Create a Team          /teams
-2. Add Players            /teams/:id (Roster tab)
-3. Create a Match         /teams/:id/matches
-4. Start Tracking         /track/:matchId
-   - Select player from roster
-   - Tap event buttons to record
-   - Switch sets with the set selector (1–5)
-   - Use ↩ Undo to remove the last event
-   - Toggle match status LIVE / COMPLETED
+```bash
+npm run dev              # ts-node-dev, :3001
+npm run build            # tsc -> dist/
+npm test                 # runs every src/lib/*.test.ts sequentially
+npm run check:cycles     # import-cycle check
+npm run db:generate      # prisma generate
+npm run db:migrate       # prisma migrate dev (interactive)
+npm run db:push          # prisma db push
+npm run db:studio        # prisma studio
+npm run db:seed          # prisma/seed.ts
 ```
 
----
+**Frontend** (`cd frontend`)
 
-## Architectural Decisions
+```bash
+npm run dev              # vite, :5173
+npm run build            # tsc && vite build
+npm run lint             # eslint --max-warnings 0 (not yet configured; see CHANGELOG)
+npm run preview          # vite preview
+```
 
-### Why Prisma over raw SQL?
-Type-safe queries mean the TypeScript compiler catches schema changes before they reach production. For a portfolio project, it also demonstrates ORM proficiency while keeping migrations declarative and version-controlled.
+## Testing
 
-### Why is `events` the central fact table?
-Every Phase 2–5 analytics calculation aggregates from `events`. The schema is deliberately minimal (no score state stored per event) but indexed on `(matchId, setNumber)`, `(playerId, eventType)`, and `recordedAt` — the three most common slice patterns in volleyball analytics.
+Backend tests are plain `assert`-based TypeScript files at `backend/src/lib/*.test.ts`, run directly by `ts-node` via `npm test`. They must stay pure logic — importing anything that pulls in `lib/prisma` instantiates a `PrismaClient` at module load, which needs a platform-specific engine binary the test runner doesn't have. This is why the static role-permission map lives in `lib/rolePermissions.ts`, separate from `services/permission.service.ts`.
 
-### Why JSON for `setScores`?
-A separate `SetScore` table would require a join on every match list page for a field that only matters when displaying a completed scoreline. JSON keeps Phase 1 fast. Phase 2 can normalise this with a migration if aggregation performance requires it.
+There are no frontend tests yet.
 
-### Why TanStack Query?
-Courtside data must feel instant. React Query handles caching, background refetch (5s polling during live matches), and optimistic updates without a Redux boilerplate overhead. For Phase 2 dashboards, the same query layer will handle computed stats.
+`backend/scripts/` holds the test runner, the import-cycle check and a few one-off maintenance scripts (`ensure-admin`, `backfill-team-join-codes`, `cleanup-orphaned-teams`). They are not part of `npm test`, and the database ones run against production.
 
-### Why versioned API routes (`/api/v1`)?
-A tablet app locked on a specific version should not break when Phase 2 introduces breaking changes to the events schema. `/api/v2` can coexist.
+## Architecture
 
-### Why `rallyNumber` in the schema?
-Not used in Phase 1 UI, but Phase 3 heat maps and rotation analysis need to know which events belong to the same rally. Adding it now costs nothing and avoids a destructive migration later.
+The backend is layered `routes/` (Express wiring + validators) -> `controllers/` (HTTP shape) -> `services/` (business logic, Prisma), with `lib/` holding pure helpers kept free of Prisma imports so they stay unit-testable. All routes are versioned under `/api/v1`, so a future `/api/v2` can be introduced without breaking older clients.
 
----
+Team authorization is three stacked layers, and a new team-scoped endpoint needs to go through all of them:
 
-## Recommended Next Steps (Phase 2)
+1. **Visibility** — a team is visible only to its owner, an accepted membership, or a global admin. Anyone else gets a 404, not a 403, so team ids never leak.
+2. **Role permissions** — a static `TeamRole` -> `Permission` map, with the team owner always resolved to head coach.
+3. **Access tiers** — a per-member dial (`VIEW_ONLY`, `APPROVAL_REQUIRED`, `FULL_ACCESS`) on roster, invitation and match actions. `VIEW_ONLY` is rejected outright; `APPROVAL_REQUIRED` mutations become queued `ApprovalRequest` rows instead of applying immediately.
 
-1. **Player stats API** — aggregate kills, errors, hitting %, passing rating per player per match
-2. **Match summary** — set-by-set score entry, final result
-3. **Player dashboard** — visualise per-match trends with Recharts
-4. **Team dashboard** — team hitting %, side-out efficiency
-5. **Authentication** — JWT + role-based access (Statistician, Coach, Viewer)
-6. **CSV export** — pipe `events` into a template for coach review
+Rate limiting (login, register, password reset, join-code lookups) is backed by a Postgres token-bucket table rather than in-memory state, so every Netlify Function invocation shares the same budget instead of starting with an empty one.
 
----
+## Database and migrations
 
-## Portfolio Notes
+Prisma against Supabase Postgres. `DATABASE_URL` is the pooled (pgbouncer) connection used at runtime; `DIRECT_URL` is the non-pooled connection used only for migrations.
 
-This project demonstrates:
-- Full-stack TypeScript monorepo architecture
-- Relational database design with scalability built in
-- RESTful API design with versioning
-- React Query for server state management
-- Mobile-first, tablet-optimised UX for real-time data entry
-- Professional folder structure matching industry patterns
+Migrations are applied with, from `backend/`:
+
+```bash
+npx prisma migrate deploy
+```
+
+This must be run **before** deploying when the schema has changed. The Netlify build deliberately does not run migrations — the CLI masks secret env vars during a build, which makes `migrate` fail with error P1013.
+
+## Deployment
+
+From the repository root:
+
+```powershell
+.\deploy.ps1
+```
+
+This builds the site locally and publishes it to Netlify production (`netlify deploy --prod --build`), with a deploy message built from the current git state. It first runs `npx prisma migrate status` from `backend/` and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
+
+## Security
+
+See "Architecture" above for the authorization model, and `CHANGELOG.md` / `docs/audit/AUDIT-LOG.md` for the September 2026 security audit (rate limiting, authorization fixes, dependency updates, privacy fixes).
+
+## Further reading
+
+- [CHANGELOG.md](CHANGELOG.md)
+- [docs/audit/AUDIT-LOG.md](docs/audit/AUDIT-LOG.md)
+- [docs/design/](docs/design/)
