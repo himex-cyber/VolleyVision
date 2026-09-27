@@ -23,17 +23,27 @@ export default function VerifyEmailPage() {
 
   // Guard against React StrictMode's double-invoke of effects in dev, which
   // would otherwise POST the single-use token twice and show a false failure.
-  const ranRef = useRef(false);
+  // Keyed on the token itself (not a plain boolean) so a second verification
+  // link opened in the same mounted page — a new token — still runs once.
+  const ranForTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!token || ranRef.current) return;
-    ranRef.current = true;
+    if (!token || ranForTokenRef.current === token) return;
+    ranForTokenRef.current = token;
     // A plain call, not useMutation: per-call mutate() callbacks are dropped when
     // StrictMode remounts the component, which left the page stuck on "Verifying".
     authApi.verifyEmail({ token })
       .then(async () => {
+        // Verification itself succeeded once we get here — a failing refreshUser()
+        // below must not downgrade this to an error state.
         setStatus('success');
-        if (user) await refreshUser();
+        if (user) {
+          try {
+            await refreshUser();
+          } catch {
+            // Non-fatal: the banner just won't drop until the next natural refresh.
+          }
+        }
       })
       .catch((err: unknown) => {
         setStatus('error');

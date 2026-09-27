@@ -66,6 +66,8 @@ npm install
 npm run dev        # :3001, health at /health
 ```
 
+In a second terminal, from the repo root:
+
 ```powershell
 cd frontend
 copy .env.example .env
