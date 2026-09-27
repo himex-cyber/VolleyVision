@@ -1,12 +1,20 @@
 import { useMemo } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, approvalApi, feedbackApi } from '../lib/api';
+import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, approvalApi, feedbackApi, authApi } from '../lib/api';
 import type { TeamJoinCodeKind } from '../lib/api';
 import type { CreateTeamInput } from '../lib/api';
 import type { Player, Match, TeamRole, TeamMember, ApprovalStatus } from '../types';
 import type { FeedbackStatus } from '../types/feedback';
 import { useViewMode } from '../context/ViewModeContext';
 import { PLAYER_VIEW_PERMISSIONS } from '../lib/teamRoles';
+
+// ─── Email verification ──────────────────────────────────────────────────────
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => authApi.resendVerification(),
+  });
+}
 
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
 

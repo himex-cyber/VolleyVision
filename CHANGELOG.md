@@ -2,6 +2,32 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## Unreleased — Audit Phase 2: coach roles and email verification
+
+- **One head coach, at most two assistant coaches, per team.**
+  - The head coach is the team owner and only changes through ownership
+    transfer. It's gone from every role picker and can't be invited or given
+    by a role edit.
+  - A third assistant coach is refused on every path (invite, staff code,
+    role change). The check runs in a serializable transaction, so two people
+    joining at once can't both take the last slot.
+  - A partial unique index enforces the head-coach rule in the database too.
+- **Ownership transfer bug fixed.** The old owner used to stay on as a second
+  head coach. They now become an assistant coach, and if both assistant slots
+  are taken the transfer is blocked until one is freed.
+- **Re-saving a member's unchanged role no longer resets their custom access
+  settings.**
+- **Email verification.**
+  - Every account, including existing ones, must verify its email before
+    joining a team (invitation, join code or claiming a player record).
+  - Unverified users can still sign in; they see a banner with a resend button.
+  - Links expire after 24 hours and work once. Resend is rate limited.
+- **Sessions are revoked on password reset.** Every token carries a version
+  that's checked on each request, so resetting a password signs out every
+  other device. Existing sessions keep working through the deploy.
+- Migration `20260927130000_roles_and_email_verification` must be applied
+  before deploying.
+
 ## Unreleased — Audit Phase 1B: security fixes
 
 These come from the September 2026 security audit. Each fix is its own commit, and the details are in

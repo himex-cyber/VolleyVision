@@ -225,4 +225,27 @@ M5 and M6 were resolved by Phase 1A (the code was deleted). H3 (email verificati
 - L4 edge case: a player who joined with a code already has an auto-created roster row, so they can't claim a separate, older coach-created row that holds their history. Merging the two would need a coach-side tool.
 - The Supabase project was **paused** on 2026-09-27, so the production API is down until it's restored.
 
+### Phase 2: roles and email verification (branch `feat/roles-and-verification`, stacked on `fix/security`, 2026-09-27)
+
+Before any code was written, production (Supabase, read-only) held 2 users, 1 team, 0 league/video rows, and no HEAD_COACH or assistant-cap violations.
+
+| Area | What changed |
+|---|---|
+| Migration `20260927130000` | Adds `users.email_verified_at`, `email_verification_token_hash`, `email_verification_expires_at` and `token_version` (default 0), plus the partial unique index `team_memberships_one_head_coach` on `(team_id) WHERE role = 'HEAD_COACH'`. **Not applied.** |
+| Coach rule | `lib/roleSlots.ts` (pure, with a test). `withRoleSlot` in `teamMembership.service.ts` wraps `addMember` and `updateMemberRole` in a SERIALIZABLE transaction and maps P2034 to 409. HEAD_COACH is removed from the `VALID_ROLES` the controller accepts. The head coach can't be demoted or removed. Re-saving the same role is a no-op (it used to re-seed the tiers). |
+| Ownership transfer | `teamOwnership.service.ts` now runs in one transaction: the old owner is demoted to ASSISTANT_COACH, then the new owner is promoted with the matching default tiers, then `ownerId` is updated. It returns 409 if the old owner would be a third assistant. `syncOwnerMembership` is now only used at team creation. |
+| Email verification | Adds `lib/emailVerification.ts` (24 h TTL, reuses `hashResetToken`), `services/emailVerification.service.ts` (`issueVerificationEmail`, `verifyEmail`, `resendVerification`, `assertEmailVerified`) and `mailer.sendVerificationEmail`. Endpoints: `POST /auth/verify-email` and `POST /auth/resend-verification`. The gate (403 `EMAIL_NOT_VERIFIED`) is on invitation accept (both paths), join-code redeem and player claim. `AppError` gains an optional `code`. There's no email-change endpoint anywhere, so nothing needed re-verifying. |
+| Token revocation (M7 part 2) | JWTs carry a `tv` claim, and `requireAuth`/`optionalAuth` compare it to `users.token_version` on every request. A missing `tv` counts as 0. `resetPassword` increments the version. There's no separate change-password path. Both middlewares now send DB errors to `next(err)`. |
+| Frontend | `/verify-email` page, `EmailVerificationBanner`, `ResendVerificationNotice` on all three join flows, HEAD_COACH removed from `ROLE_OPTIONS`, ASSISTANT_COACH disabled once 2 are taken, per-row role-change errors, and a 401 interceptor that clears the token and goes to `/login`. |
+
+**Verified:**
+- Backend `tsc` is clean, all 18 test files pass (3 new), and the backend builds.
+- Frontend `tsc` is clean and `vite build` works.
+- In the preview, `/verify-email` with a bad token shows the failure state. This caught and fixed a StrictMode bug where the page stayed on "Verifying".
+- **Not** tested end to end against a database, because production doesn't have the new columns until the migration runs. After deploying, walk through: register, receive the email, click the link, the banner disappears, then join a team.
+
+**Still open:**
+- About 7 older controllers catch `err.statusCode` themselves and skip the shared error handler. Harmless today, but they would drop a future error `code`.
+- Serializable transactions on pgbouncer are expected to work in transaction mode, but that's unverified until production.
+
 Verified at the end of Phase 1B: backend `tsc` is clean, all 15 test files pass (2 new), and the backend builds; frontend `tsc` is clean and `vite build` works.

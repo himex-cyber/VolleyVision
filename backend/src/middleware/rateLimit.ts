@@ -204,3 +204,34 @@ export const joinCodeRateLimit = createRateLimit({
   keyFn: (req) => [`code:ip:${clientIp(req)}`, `code:user:${req.user?.userId ?? 'anon'}`],
   message: 'Too many join code attempts. Wait a few minutes and try again.',
 });
+
+/**
+ * Verify-email — public and token-consuming, same defence-in-depth rationale
+ * as resetPasswordRateLimit: the token itself is high entropy, this just
+ * makes automated sweeps pointless.
+ */
+export const verifyEmailRateLimit = createRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => [`verify-email:ip:${clientIp(req)}`],
+  message: 'Too many verification attempts. Wait a few minutes and try again.',
+});
+
+/**
+ * Resend-verification — authenticated, so the per-user arm is the primary
+ * control (stop one account looping the send button); per-IP is a second arm
+ * since it's a mail-bombing vector like forgot-password.
+ */
+export const resendVerificationRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  keyFn: (req) => (req.user?.userId ? [`resend-verify:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: 'Too many verification emails requested. Wait a while and try again.',
+});
+
+export const resendVerificationIpRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => [`resend-verify:ip:${clientIp(req)}`],
+  message: 'Too many verification emails requested. Wait a while and try again.',
+});

@@ -7,6 +7,7 @@ import { canActInCategory } from './permission.service';
 import { AppError } from '../middleware/errorHandler';
 import { sendInvitationEmail } from '../lib/mailer';
 import { normalizeEmail } from '../lib/email';
+import { assertEmailVerified } from './emailVerification.service';
 
 const EXPIRY_DAYS = 7;
 
@@ -65,6 +66,7 @@ export async function createInvitation(
 }
 
 export async function acceptInvitation(token: string, userId: string) {
+  await assertEmailVerified(userId);
   const inv = await prisma.invitation.findUnique({ where: { token } });
   if (!inv) throw Object.assign(new Error('Invitation not found'), { statusCode: 404 });
   if (inv.status !== InvitationStatus.PENDING) {
@@ -103,6 +105,7 @@ export async function acceptInvitation(token: string, userId: string) {
  * the invited address.
  */
 export async function redeemInvitationByCode(joinCode: string, userId: string) {
+  await assertEmailVerified(userId);
   const inv = await prisma.invitation.findUnique({ where: { joinCode: normalizeCode(joinCode) } });
   if (!inv) throw Object.assign(new Error('Invalid or unknown join code'), { statusCode: 404 });
   if (inv.status !== InvitationStatus.PENDING) {

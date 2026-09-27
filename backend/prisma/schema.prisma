@@ -220,6 +220,18 @@ model User {
   passwordResetTokenHash String?   @map("password_reset_token_hash")
   passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
 
+  // Email verification — same token scheme as password reset (only a sha256 of
+  // the mailed token is stored; single use). Null emailVerifiedAt = unverified.
+  // Accounts that existed before this column start unverified on purpose: many
+  // users are minors, and an unverified address may not belong to its holder.
+  emailVerifiedAt            DateTime? @map("email_verified_at")
+  emailVerificationTokenHash String?   @map("email_verification_token_hash")
+  emailVerificationExpiresAt DateTime? @map("email_verification_expires_at")
+
+  // Carried in every JWT and compared on each request. Bumping it (password
+  // reset/change) is the only way to revoke a stateless 7-day token.
+  tokenVersion Int @default(0) @map("token_version")
+
   profileImage String?  @map("profile_image")
 
   // Iteration 3 — the athlete's own stated position preference, independent of
@@ -338,6 +350,10 @@ model TeamMembership {
   joinedAt DateTime @default(now()) @map("joined_at")
 
   @@unique([userId, teamId])
+  // Also enforced in the database, not expressible in Prisma: a partial unique
+  // index "team_memberships_one_head_coach" on (team_id) WHERE role =
+  // 'HEAD_COACH' (migration 20260927130000). The 2-assistant cap is app-level
+  // only — see lib/roleSlots.ts.
   @@index([teamId])
   @@index([userId])
 

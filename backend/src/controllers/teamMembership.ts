@@ -11,8 +11,9 @@ import {
 } from '../services/teamMembership.service';
 import { canManageMembers } from '../services/permission.service';
 
+// HEAD_COACH is deliberately absent: it only changes via ownership transfer.
 const VALID_ROLES = new Set<string>([
-  'HEAD_COACH', 'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN', 'PLAYER', 'VIEWER',
+  'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN', 'PLAYER', 'VIEWER',
 ]);
 
 const VALID_TIERS = new Set<string>(['VIEW_ONLY', 'APPROVAL_REQUIRED', 'FULL_ACCESS']);

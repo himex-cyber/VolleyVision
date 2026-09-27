@@ -64,7 +64,10 @@ export async function acceptInvitationHandler(req: Request, res: Response, next:
     logAudit(req.user!.userId, 'ACCEPT_INVITATION', 'invitation', result.id);
     res.json(result);
   } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    // .code (e.g. EMAIL_NOT_VERIFIED) must survive this shortcut path exactly
+    // like it does through the shared errorHandler — dropping it here would
+    // silently downgrade the response to a plain { error } for this route only.
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     next(err);
   }
 }
@@ -77,7 +80,7 @@ export async function redeemInvitationHandler(req: Request, res: Response, next:
     logAudit(req.user!.userId, 'REDEEM_INVITATION', 'invitation', result.id);
     res.json(result);
   } catch (err: any) {
-    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     next(err);
   }
 }

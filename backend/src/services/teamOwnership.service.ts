@@ -1,7 +1,8 @@
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { normalizeEmail } from '../lib/email';
-import { syncOwnerMembership } from './teamMembership.service';
+import { defaultAccessTiers } from './permission.service';
+import { roleSlotError } from '../lib/roleSlots';
 
 const ownerSelect = {
   id: true,
@@ -30,8 +31,7 @@ export async function getOwnedTeams(userId: string) {
  *
  * The target must already hold a TeamMembership on this team. That constraint
  * is doing two jobs. Ownership carries every permission on the team, so it
- * should only ever land on someone who has already joined it (syncOwnerMembership
- * below would happily fabricate a membership for a stranger otherwise). And it
+ * should only ever land on someone who has already joined it. And it
  * keeps this endpoint from becoming an account-enumeration oracle: the single
  * lookup asks only "does a member of *this* team use this address?", which the
  * caller can already answer from GET /teams/:id/members. An address with no
@@ -50,21 +50,42 @@ export async function transferOwnership(teamId: string, requesterId: string, new
   const email = normalizeEmail(newOwnerEmail);
   const membership = await prisma.teamMembership.findFirst({
     where: { teamId, user: { email } },
-    select: { userId: true },
+    select: { id: true, userId: true },
   });
   if (!membership) {
     throw new AppError(404, 'No member of this team uses that email address. Add them to the team first.');
   }
+  if (membership.userId === requesterId) throw new AppError(400, 'You already own this team.');
 
-  const updated = await prisma.team.update({
-    where: { id: teamId },
-    data: { ownerId: membership.userId },
-    include: { owner: { select: ownerSelect } },
-  });
-  // Still required: the new owner may have been a PLAYER/VIEWER member, and the
-  // owner is always a HEAD_COACH.
-  await syncOwnerMembership(teamId, membership.userId);
-  return updated;
+  // One transaction, demote before promote: the partial unique index allows
+  // only one HEAD_COACH per team, and it used to be left with two — the old
+  // owner kept their HEAD_COACH row. The old owner becomes an assistant coach;
+  // if both assistant slots are taken the transfer is refused rather than
+  // pushing someone out (Karlos, 2026-09-27). The new owner's own slot counts
+  // as free, since they are leaving it.
+  return prisma.$transaction(async (tx) => {
+    const assistants = await tx.teamMembership.count({
+      where: { teamId, role: 'ASSISTANT_COACH', userId: { notIn: [requesterId, membership.userId] } },
+    });
+    const slotError = roleSlotError('ASSISTANT_COACH', assistants);
+    if (slotError) {
+      throw new AppError(409, `${slotError} You become an assistant coach after the transfer, so free a slot first.`);
+    }
+
+    await tx.teamMembership.updateMany({
+      where: { teamId, userId: requesterId },
+      data: { role: 'ASSISTANT_COACH', ...defaultAccessTiers('ASSISTANT_COACH') },
+    });
+    await tx.teamMembership.update({
+      where: { id: membership.id },
+      data: { role: 'HEAD_COACH', ...defaultAccessTiers('HEAD_COACH') },
+    });
+    return tx.team.update({
+      where: { id: teamId },
+      data: { ownerId: membership.userId },
+      include: { owner: { select: ownerSelect } },
+    });
+  }, { isolationLevel: 'Serializable' });
 }
 
 /** Throws 403 if the requesting user does not own the team. */

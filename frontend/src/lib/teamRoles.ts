@@ -23,9 +23,11 @@ export const ROLE_LABELS: Record<TeamRole, string> = {
   VIEWER:          'Viewer',
 };
 
-// Order shown in role pickers (most to least authority).
+// Order shown in role pickers (most to least authority). HEAD_COACH is
+// deliberately excluded — a team has exactly one, set only via ownership
+// transfer, never via invite, role change, or join code.
 export const ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
-  'HEAD_COACH', 'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN', 'PLAYER', 'VIEWER',
+  'MANAGER', 'ASSISTANT_COACH', 'STATISTICIAN', 'PLAYER', 'VIEWER',
 ].map((value) => ({ value: value as TeamRole, label: ROLE_LABELS[value as TeamRole] }));
 
 // Categorical badge classes (defined in index.css). No positive/negative meaning.

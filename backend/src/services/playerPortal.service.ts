@@ -3,6 +3,7 @@ import { EventType } from '@prisma/client';
 import { ownEventsOnly } from '../lib/eventFilters';
 import { assertTeamVisible } from '../lib/teamVisibility';
 import { getUserTeamRole } from './permission.service';
+import { assertEmailVerified } from './emailVerification.service';
 
 // Reuses the same stat derivation logic as the existing analytics engine
 function deriveStats(events: { eventType: EventType }[]) {
@@ -85,6 +86,7 @@ export async function getLinkedPlayers(userId: string) {
  * answer they need, since silently stealing the link is the bug being fixed.
  */
 export async function linkPlayerToUser(playerId: string, userId: string) {
+  await assertEmailVerified(userId);
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player) throw Object.assign(new Error('Player not found'), { statusCode: 404 });
   await assertTeamVisible(player.teamId, userId);
