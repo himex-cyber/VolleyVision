@@ -3,8 +3,8 @@
 --
 -- Why: prod had RLS switched on by hand for most tables; only 2 were ever in a
 -- migration (20260902100000_enable_rls_on_public_tables). A database rebuilt
--- from migrations - staging, a restore, CI - would expose the other 20 tables,
--- _prisma_migrations included, to the anon key through PostgREST.
+-- from migrations - staging, a restore, CI - would expose the other 19 public
+-- tables, _prisma_migrations included, to the anon key through PostgREST.
 --
 -- ENABLE ROW LEVEL SECURITY is idempotent, so on prod that half changes
 -- nothing. The REVOKE is a real change on prod: it removes Supabase's default

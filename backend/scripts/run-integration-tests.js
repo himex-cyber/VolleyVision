@@ -11,11 +11,13 @@ const { spawnSync } = require('child_process');
 const { readdirSync } = require('fs');
 const path = require('path');
 
+const isLocal = (url) => {
+  try { return ['localhost', '127.0.0.1'].includes(new URL(url).hostname); } catch { return false; }
+};
 const databaseUrl = process.env.DATABASE_URL || '';
-let host = '';
-try { host = new URL(databaseUrl).hostname; } catch { /* host stays '' */ }
-if (host !== 'localhost' && host !== '127.0.0.1') {
-  console.error('Refusing to run integration tests: DATABASE_URL must be set and point at localhost or 127.0.0.1.');
+const directUrl = process.env.DIRECT_URL || databaseUrl;
+if (!isLocal(databaseUrl) || !isLocal(directUrl)) {
+  console.error('Refusing to run integration tests: DATABASE_URL (and DIRECT_URL, if set) must point at localhost or 127.0.0.1.');
   process.exit(1);
 }
 
@@ -25,7 +27,7 @@ if (host !== 'localhost' && host !== '127.0.0.1') {
 const childEnv = {
   ...process.env,
   DATABASE_URL: databaseUrl,
-  DIRECT_URL: process.env.DIRECT_URL || databaseUrl,
+  DIRECT_URL: directUrl,
   NETLIFY: '1', // index.ts must not listen; each test starts its own server
   NODE_ENV: 'test', // in-memory rate limiter
   JWT_SECRET: 'integration-test-secret',

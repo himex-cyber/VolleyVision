@@ -43,13 +43,17 @@ async function forgotPasswordLimiterOrder(base: string) {
     }).then((r) => r.status);
 
   // 60 = the global bucket's size. Only 5 get past the per-IP arm.
+  const startedAt = Date.now();
   const flood = await Promise.all(Array.from({ length: 60 }, (_, i) => send('203.0.113.1', `flood${i}@example.test`)));
   assert.equal(flood.filter((s) => s === 200).length, 5);
 
   // A different caller must still get through.
   // TODO(P2): today the global limiter runs first, so the flood drained it and
   // this is 429. Phase 2 (defect 3) reorders them; flip this to 200.
-  assert.equal(await send('198.51.100.7', 'victim@example.test'), 429);
+  // The global bucket refills one token every 15s, so on a runner slow enough
+  // to take that long the drained state is gone; don't assert it there.
+  const victim = await send('198.51.100.7', 'victim@example.test');
+  if (Date.now() - startedAt < 14_000) assert.equal(victim, 429);
 }
 
 async function main() {

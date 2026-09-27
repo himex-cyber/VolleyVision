@@ -16,8 +16,9 @@ import bcrypt from 'bcryptjs';
 import { EventType, Position, TeamRole, UserRole } from '@prisma/client';
 import { stagingGuardError } from '../src/lib/stagingGuard';
 
-// Checked before lib/prisma is imported: Prisma Client loads backend/.env on
-// its own, so an unset variable would otherwise fall through to prod.
+// Prisma Client loads backend/.env (prod) on its own for any variable the shell
+// didn't set, so the guard inspects the resolved DATABASE_URL itself rather
+// than trusting where it came from. lib/prisma is still imported only after it.
 const guardError = stagingGuardError(process.env);
 if (guardError) {
   console.error(`Refusing to seed: ${guardError}`);
@@ -69,7 +70,7 @@ const MATCHES: MatchPlan[] = [
   },
   {
     id: 'staging-falcons-m2', opponent: 'Sample Sharks', matchDate: '2026-08-08T19:00:00Z',
-    setScores: [{ set: 1, home: 23, away: 25 }, { set: 2, home: 25, away: 20 }, { set: 3, home: 18, away: 25 }],
+    setScores: [{ set: 1, home: 23, away: 25 }, { set: 2, home: 25, away: 20 }, { set: 3, home: 18, away: 25 }, { set: 4, home: 21, away: 25 }],
   },
 ];
 
