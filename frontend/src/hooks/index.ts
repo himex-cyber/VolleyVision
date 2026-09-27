@@ -141,7 +141,7 @@ export function usePlayers(teamId: string) {
 export function useCreatePlayer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Omit<Player, 'id' | 'createdAt' | 'updatedAt'>) =>
+    mutationFn: (data: Omit<Player, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) =>
       playersApi.create(data),
     // Invalidate both the roster and the approval queue — a non-head-coach add
     // shows up as pending rather than in the roster.
@@ -341,10 +341,10 @@ export function useTeamAnalytics(teamId: string) {
   });
 }
 
-export function usePlayerAnalytics(playerId: string) {
+export function usePlayerAnalytics(playerId: string, teamId?: string) {
   return useQuery({
-    queryKey: ['analytics', 'player', playerId],
-    queryFn: () => analyticsApi.player(playerId),
+    queryKey: ['analytics', 'player', playerId, teamId ?? null],
+    queryFn: () => analyticsApi.player(playerId, teamId),
     enabled: !!playerId,
   });
 }

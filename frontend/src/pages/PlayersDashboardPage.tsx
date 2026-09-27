@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
+import axios from 'axios';
 import { usePlayerAnalytics, useMatchAnalytics, useTeam } from '../hooks';
 import { StatsCards } from '../components/analytics/StatsOverview';
 import { POSITION_FULL_LABELS } from '../types';
@@ -15,11 +16,14 @@ export default function PlayerDashboardPage() {
   // the coach inside that match's context (back button + player tab bar)
   // instead of the generic career-wide profile view.
   const matchId = searchParams.get('matchId') ?? undefined;
-  const { data, isLoading, isError } = usePlayerAnalytics(playerId!);
+  // The team these stats are scoped to — defaults server-side to the player's
+  // home team when absent (e.g. a bookmarked link from before this param existed).
+  const teamId = searchParams.get('teamId') ?? undefined;
+  const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
   // Roster context (no matchId) gets a full-team tab bar. Guarded by the hook's
   // own `enabled: !!id`, so this stays above the early returns below.
-  const { data: team } = useTeam(data?.player.teamId ?? '');
+  const { data: team } = useTeam(data?.teamId ?? '');
 
   // Only when arriving in match context — restores the previous title on unmount.
   useEffect(() => {
@@ -30,6 +34,13 @@ export default function PlayerDashboardPage() {
   }, [matchId, matchData]);
 
   if (isLoading) return <p className="text-navy-300">Loading analytics…</p>;
+  if (axios.isAxiosError(error) && error.response?.status === 403) {
+    return (
+      <p className="text-error">
+        Individual stats are visible to this team's coaching staff and to the player.
+      </p>
+    );
+  }
   if (isError || !data) return <p className="text-error">Couldn't load player analytics.</p>;
 
   return (
@@ -45,7 +56,7 @@ export default function PlayerDashboardPage() {
           </Link>
         ) : (
           <Link
-            to={`/teams/${data.player.teamId}`}
+            to={`/teams/${data.teamId}`}
             className="btn-secondary inline-flex items-center gap-1.5 text-sm py-1.5 px-3"
           >
             <ArrowLeftIcon className="w-4 h-4" />
@@ -80,7 +91,7 @@ export default function PlayerDashboardPage() {
           {matchData.playerStats.map((row) => (
             <NavLink
               key={row.player.id}
-              to={`/players/${row.player.id}/dashboard?matchId=${matchId}`}
+              to={`/players/${row.player.id}/dashboard?matchId=${matchId}&teamId=${data.teamId}`}
               className={({ isActive }) =>
                 `px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   isActive
@@ -104,7 +115,7 @@ export default function PlayerDashboardPage() {
             .map((p) => (
               <NavLink
                 key={p.id}
-                to={`/players/${p.id}/dashboard`}
+                to={`/players/${p.id}/dashboard?teamId=${data.teamId}`}
                 className={({ isActive }) =>
                   `px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive

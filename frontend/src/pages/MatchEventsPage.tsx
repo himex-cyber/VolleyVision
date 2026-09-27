@@ -86,9 +86,12 @@ export default function MatchEventsPage() {
   const toggleSet = (setNo: number) => setOpenSets((prev) => ({ ...prev, [setNo]: !isOpen(setNo) }));
   // Mirrors PlayerStatsTable: clicking a player's row goes to that player's
   // game-day stats for this match. Opponent events have no player page, so
-  // those fall back to the match dashboard.
+  // those fall back to the match dashboard. The player dashboard 403s for
+  // anyone but tracking staff and the player themself (not knowable per-row
+  // here), so a player-linked row is only clickable when canTrack is true.
+  const canOpenEventTarget = (e: Event) => canTrack || !e.playerId;
   const goToEventTarget = (e: Event) =>
-    navigate(e.playerId ? `/players/${e.playerId}/dashboard?matchId=${matchId}` : `/matches/${matchId}/dashboard`);
+    navigate(e.playerId ? `/players/${e.playerId}/dashboard?matchId=${matchId}&teamId=${match.teamId}` : `/matches/${matchId}/dashboard`);
 
   return (
     <div className="space-y-6">
@@ -196,13 +199,14 @@ export default function MatchEventsPage() {
                         {bySet.get(setNo)!.map((e) => {
                           const meta = META.get(e.eventType);
                           const outcome = meta?.outcome ?? 'neutral';
+                          const canOpen = canOpenEventTarget(e);
                           return (
                             <tr
                               key={e.id}
-                              tabIndex={0}
-                              onClick={() => goToEventTarget(e)}
-                              onKeyDown={(ev) => { if (ev.key === 'Enter') goToEventTarget(e); }}
-                              className="hover:bg-grey-50 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+                              tabIndex={canOpen ? 0 : undefined}
+                              onClick={canOpen ? () => goToEventTarget(e) : undefined}
+                              onKeyDown={canOpen ? (ev) => { if (ev.key === 'Enter') goToEventTarget(e); } : undefined}
+                              className={`transition-colors ${canOpen ? 'hover:bg-grey-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}`}
                             >
                               <td className="px-4 py-4">
                                 <div className="flex items-center gap-3">

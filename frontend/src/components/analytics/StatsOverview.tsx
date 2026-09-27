@@ -129,11 +129,25 @@ export function StatsCards({ stats, trends }: { stats: StatLine; trends?: StatTr
   );
 }
 
-export function PlayerStatsTable({ rows, matchId }: { rows: PlayerStatLine[]; matchId?: string }) {
+export function PlayerStatsTable({
+  rows,
+  matchId,
+  teamId,
+  canOpen,
+}: {
+  rows: PlayerStatLine[];
+  matchId?: string;
+  teamId: string;
+  // Whether the viewer may drill into a player's individual dashboard from
+  // this table — the analytics endpoint 403s for anyone else, so a row that
+  // can't be opened is rendered without click affordances instead.
+  canOpen: boolean;
+}) {
   const navigate = useNavigate();
 
   function goToPlayer(playerId: string) {
-    navigate(matchId ? `/players/${playerId}/dashboard?matchId=${matchId}` : `/players/${playerId}/dashboard`);
+    const params = matchId ? `matchId=${matchId}&teamId=${teamId}` : `teamId=${teamId}`;
+    navigate(`/players/${playerId}/dashboard?${params}`);
   }
 
   return (
@@ -158,10 +172,10 @@ export function PlayerStatsTable({ rows, matchId }: { rows: PlayerStatLine[]; ma
           {rows.map((row) => (
             <tr
               key={row.player.id}
-              tabIndex={0}
-              onClick={() => goToPlayer(row.player.id)}
-              onKeyDown={(e) => { if (e.key === 'Enter') goToPlayer(row.player.id); }}
-              className="hover:bg-grey-50 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+              tabIndex={canOpen ? 0 : undefined}
+              onClick={canOpen ? () => goToPlayer(row.player.id) : undefined}
+              onKeyDown={canOpen ? (e) => { if (e.key === 'Enter') goToPlayer(row.player.id); } : undefined}
+              className={`transition-colors ${canOpen ? 'hover:bg-grey-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}`}
             >
               <td className="px-4 py-4">
                 <div className="flex items-center gap-3">

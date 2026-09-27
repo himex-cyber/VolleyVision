@@ -110,6 +110,10 @@ export default function TeamDetailPage() {
   // Roster access doesn't imply invitation access — the join-codes route 403s
   // without it, so the inline invite block is gated separately.
   const canInvite = useHasPermission(teamId!, 'INVITE_USERS');
+  // Individual player analytics 403 for everyone except this team's tracking
+  // staff and the player themself — mirror that gate here so the row simply
+  // isn't clickable instead of navigating into an error page.
+  const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
 
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferEmail, setTransferEmail] = useState('');
@@ -335,23 +339,26 @@ export default function TeamDetailPage() {
             {team.players?.map((player) => {
               const isEditing = editingId === player.id;
               const playerName = `${player.firstName} ${player.lastName}`;
+              const canOpenDashboard = canTrack || player.userId === user?.id;
 
               return (
                 <div key={player.id}>
-                  {/* ── Summary row — always visible, navigates to the player's dashboard ── */}
+                  {/* ── Summary row — always visible, navigates to the player's dashboard
+                      for staff and the linked player; a non-clickable row (no role/tabIndex)
+                      for everyone else, since the analytics endpoint 403s for them anyway. ── */}
                   <div
-                    role="button"
-                    tabIndex={0}
-                    className={`px-5 py-3 flex items-center gap-4 cursor-pointer transition-colors
-                                hover:bg-grey-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500
+                    role={canOpenDashboard ? 'button' : undefined}
+                    tabIndex={canOpenDashboard ? 0 : undefined}
+                    className={`px-5 py-3 flex items-center gap-4 transition-colors
+                                ${canOpenDashboard ? 'cursor-pointer hover:bg-grey-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}
                                 ${isEditing ? 'bg-grey-50' : ''}`}
-                    onClick={() => navigate(`/players/${player.id}/dashboard`)}
-                    onKeyDown={(e) => {
+                    onClick={canOpenDashboard ? () => navigate(`/players/${player.id}/dashboard?teamId=${teamId}`) : undefined}
+                    onKeyDown={canOpenDashboard ? (e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        navigate(`/players/${player.id}/dashboard`);
+                        navigate(`/players/${player.id}/dashboard?teamId=${teamId}`);
                       }
-                    }}
+                    } : undefined}
                   >
                     {/* Jersey-number avatar. There's no player-photo field in
                         the data model, so this placeholder carries the whole

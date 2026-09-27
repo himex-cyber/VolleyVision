@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import StatLeaderboardChart from '../components/charts/StatLeaderboardChart';
-import { useTeamAnalytics, useTeamTrends } from '../hooks';
+import { useTeamAnalytics, useTeamTrends, useHasPermission } from '../hooks';
 import TeamTrendChart from '../components/charts/TeamTrendChart';
 import CoachInsights from '../components/analytics/CoachInsights';
 import { generateTeamInsights } from '../lib/insights';
@@ -12,6 +12,10 @@ export default function TeamDashboardPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const { data, isLoading, isError } = useTeamAnalytics(teamId!);
   const trends = useTeamTrends(teamId!);
+  // Individual player analytics 403 for anyone but this team's tracking staff
+  // (or the player themself, which this season-wide list has no way to know
+  // per row) — gate the drill-down links the same way.
+  const canOpenPlayerDashboard = useHasPermission(teamId!, 'TRACK_MATCH');
 
   const insights =
   trends.data
@@ -86,24 +90,32 @@ export default function TeamDashboardPage() {
           title="Top Killers"
           players={data.playerStats}
           metric="kills"
+          teamId={teamId!}
+          canOpen={canOpenPlayerDashboard}
         />
 
         <StatLeaderboardChart
           title="Top Aces"
           players={data.playerStats}
           metric="aces"
+          teamId={teamId!}
+          canOpen={canOpenPlayerDashboard}
         />
 
         <StatLeaderboardChart
           title="Top Blocks"
           players={data.playerStats}
           metric="totalBlocks"
+          teamId={teamId!}
+          canOpen={canOpenPlayerDashboard}
         />
 
         <StatLeaderboardChart
           title="Top Digs"
           players={data.playerStats}
           metric="digs"
+          teamId={teamId!}
+          canOpen={canOpenPlayerDashboard}
         />
       </div>
       
@@ -112,7 +124,7 @@ export default function TeamDashboardPage() {
 
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Season Player Statistics</h2>
-        <PlayerStatsTable rows={data.playerStats} />
+        <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayerDashboard} />
       </section>
     </div>
   );

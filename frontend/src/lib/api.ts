@@ -122,7 +122,8 @@ export const playersApi = {
     api.get<Player[]>(`/players/by-team/${teamId}`).then((r) => r.data),
   get: (id: string) => api.get<Player>(`/players/${id}`).then((r) => r.data),
   // Mutations may return a 202 PendingApproval body when the actor is not a head coach.
-  create: (data: Omit<Player, 'id' | 'createdAt' | 'updatedAt'>) =>
+  // userId is set later, via the player-portal link flow, not on creation.
+  create: (data: Omit<Player, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) =>
     api.post<Player | PendingApproval>('/players', data).then((r) => r.data),
   update: (id: string, data: Partial<Player>) =>
     api.patch<Player | PendingApproval>(`/players/${id}`, data).then((r) => r.data),
@@ -198,9 +199,11 @@ export const analyticsApi = {
   team: (teamId: string) =>
     api.get<TeamAnalytics>(`/analytics/teams/${teamId}`).then((r) => r.data),
 
-  player: (playerId: string) =>
+  // teamId scopes stats to that team's matches; defaults server-side to the
+  // player's home team when omitted.
+  player: (playerId: string, teamId?: string) =>
   api
-    .get<PlayerAnalytics>(`/analytics/players/${playerId}`)
+    .get<PlayerAnalytics>(`/analytics/players/${playerId}`, { params: teamId ? { teamId } : {} })
     .then((r) => r.data),
     
   trends: (teamId: string) =>
