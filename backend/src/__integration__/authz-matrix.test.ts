@@ -54,7 +54,7 @@ async function setup() {
   const approval = await prisma.approvalRequest.create({
     data: { teamId: team.id, requestedById: stat.id, action: 'MATCH_UPDATE', payload: { opponent: 'X' }, targetId: match.id },
   });
-  return { team, owner, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, pDel, match, matchDel, event, channel, message, approval };
+  return { team, owner, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, p2, pDel, match, matchDel, event, channel, message, approval };
 }
 
 const ROWS: Row[] = [
@@ -74,7 +74,8 @@ const ROWS: Row[] = [
   { name: 'GET team analytics', method: 'GET', path: (f) => `/api/v1/analytics/teams/${f.team.id}`, expect: READ },
   { name: 'GET team trends', method: 'GET', path: (f) => `/api/v1/analytics/teams/${f.team.id}/trends`, expect: READ },
   // Individual stats: staff and the player themself only (Karlos, 28 Sept). p1 is not the test player's record.
-  { name: 'GET player analytics (someone else)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p1.id}`, expect: STAFF, today: { viewer: 200, player: 200 } },
+  { name: 'GET player analytics (someone else)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p1.id}`, expect: STAFF },
+  { name: 'GET player analytics (own record)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p2.id}`, expect: { outsider: 404, viewer: 403, player: 200 } },
   { name: 'GET team channel', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/channel`, expect: READ, today: OUTSIDER_403 },
   { name: 'GET channel messages', method: 'GET', path: (f) => `/api/v1/channels/${f.channel.id}/messages`, expect: READ, today: OUTSIDER_403 },
 
