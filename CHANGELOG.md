@@ -2,6 +2,28 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## Unreleased
+
+Closes the observability work the September audit left open. No migration.
+
+- **`/health` checks the database.** It returns 503 when the database can't be
+  reached. It used to answer "ok" without touching the database, so it stayed
+  green while Supabase was paused on 27 Sept.
+- **Sentry privacy fix: navigation breadcrumbs are scrubbed.** The browser
+  scrubber cleaned a breadcrumb's `url` but not the `from`/`to` of a
+  navigation breadcrumb. After a visit to `/redeem-invitation?code=…`,
+  `/reset-password?token=…` or `/verify-email?token=…`, the team join code or
+  token could ride along on any later error in the same session.
+- **Backend errors carry their own request.** Netlify's wrapper runs Express
+  without an HTTP server, so Sentry's request instrumentation never ran. Each
+  invocation now gets its own Sentry scope, its method and path (never the
+  query string) and a root span, so backend traces work too.
+- **Admin-only Sentry check** on the Feedback page. One button throws in the
+  browser, the other makes the API fail. Each plants a probe in a query string
+  that must not appear anywhere in Sentry.
+- **`netlify.toml` is tracked again.** It holds no secrets, and deploys should
+  be reproducible from a clone. Its note on the Node version is corrected.
+
 ## v9.2.0 — 2026-09-27
 
 The final release of the September 2026 audit. No migration.
