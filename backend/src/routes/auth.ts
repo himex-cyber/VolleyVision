@@ -23,7 +23,9 @@ router.post('/logout', logout);
 // Public by design — the emailed reset token is itself the credential. Rate
 // limited on IP + email: unauthenticated, and it sends mail, so it is both an
 // email-bombing vector and the obvious endpoint to hammer for enumeration.
-router.post('/forgot-password', forgotPasswordGlobalRateLimit, forgotPasswordRateLimit, forgotPassword);
+// Per-IP/email first: the global cap must only be spent by requests that pass
+// it, or one IP could drain it and block everyone's resets.
+router.post('/forgot-password', forgotPasswordRateLimit, forgotPasswordGlobalRateLimit, forgotPassword);
 // Brute-force defence in depth on the reset token itself (see rateLimit.ts).
 router.post('/reset-password', resetPasswordRateLimit, resetPassword);
 router.get('/me', requireAuth, me);

@@ -129,10 +129,11 @@ export const forgotPasswordRateLimit = createRateLimit({
 });
 
 /**
- * The global cap on outbound reset mail, mounted alongside the per-IP/per-email
- * limiter above. Separate instance because it needs its own budget: a single
- * fixed key in the same bucket map would be drained by the same `max` as an
- * individual caller.
+ * The global cap on outbound reset mail, mounted AFTER the per-IP/per-email
+ * limiter above, so only requests that pass it spend global tokens (mounted
+ * first, one IP could drain it and lock everyone out of resets). Separate
+ * instance because it needs its own budget: a single fixed key in the same
+ * bucket map would be drained by the same `max` as an individual caller.
  */
 export const forgotPasswordGlobalRateLimit = createRateLimit({
   windowMs: 15 * 60 * 1000,
