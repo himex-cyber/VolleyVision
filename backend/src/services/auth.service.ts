@@ -12,6 +12,7 @@ import {
   resetTokenExpiry,
   usableResetTokenWhere,
 } from '../lib/passwordReset';
+import { issueVerificationEmail } from './emailVerification.service';
 
 const SALT_ROUNDS = 12;
 
@@ -30,6 +31,10 @@ export interface AuthPayload {
   userId: string;
   email: string;
   role: string;
+  // Token-revocation version (audit M7 part 2). Optional on the decoded side
+  // only: a token minted before this shipped carries no `tv` at all, and
+  // requireAuth/optionalAuth treat that as tv 0 — see lib/tokenVersion.ts.
+  tv?: number;
 }
 
 export interface AuthResponse {
@@ -42,6 +47,7 @@ export interface AuthResponse {
     role: string;
     profileImage: string | null;
     signupIntent: string | null;
+    emailVerified: boolean;
   };
 }
 
@@ -108,8 +114,14 @@ export async function registerUser(
     },
   });
 
-  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role };
+  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role, tv: user.tokenVersion };
   const token = generateToken(payload);
+
+  // Every account must verify, including this brand-new one.
+  // issueVerificationEmail already swallows a failed *send* (logged, not
+  // thrown) so registration succeeds either way; only its own DB write is
+  // awaited here.
+  await issueVerificationEmail(user);
 
   return {
     token,
@@ -121,6 +133,7 @@ export async function registerUser(
       role: user.role,
       profileImage: user.profileImage,
       signupIntent: user.signupIntent ?? null,
+      emailVerified: user.emailVerifiedAt != null,
     },
   };
 }
@@ -135,7 +148,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) throw new AppError(401, 'Invalid email or password.');
 
-  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role };
+  const payload: AuthPayload = { userId: user.id, email: user.email, role: user.role, tv: user.tokenVersion };
   const token = generateToken(payload);
 
   return {
@@ -148,6 +161,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
       role: user.role,
       profileImage: user.profileImage,
       signupIntent: user.signupIntent ?? null,
+      emailVerified: user.emailVerifiedAt != null,
     },
   };
 }
@@ -245,6 +259,9 @@ export async function resetPassword(token: string, newPassword: string): Promise
     data: {
       passwordHash: await bcrypt.hash(newPassword, SALT_ROUNDS),
       ...CONSUMED_RESET_FIELDS,
+      // Revoke every other outstanding session (M7 part 2) — a password reset
+      // is exactly the moment a stolen token should stop working.
+      tokenVersion: { increment: 1 },
     },
   });
 }
@@ -261,8 +278,10 @@ export async function getCurrentUser(userId: string) {
       profileImage: true,
       signupIntent: true,
       createdAt: true,
+      emailVerifiedAt: true,
     },
   });
   if (!user) throw new AppError(404, 'User not found.');
-  return user;
+  const { emailVerifiedAt, ...rest } = user;
+  return { ...rest, emailVerified: emailVerifiedAt != null };
 }

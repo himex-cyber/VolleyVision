@@ -7,6 +7,7 @@ import {
   requestPasswordReset,
   resetPassword as resetPasswordService,
 } from '../services/auth.service';
+import { verifyEmail as verifyEmailService, resendVerification as resendVerificationService } from '../services/emailVerification.service';
 
 export async function register(req: Request, res: Response, next: NextFunction) {
   try {
@@ -69,6 +70,31 @@ export async function me(req: Request, res: Response, next: NextFunction) {
     if (!req.user) throw new AppError(401, 'Authentication required.');
     const user = await getCurrentUser(req.user.userId);
     res.json(user);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function verifyEmail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { token } = req.body;
+    if (!token) throw new AppError(400, 'Token is required.');
+    await verifyEmailService(token);
+    res.json({ verified: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resendVerification(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) throw new AppError(401, 'Authentication required.');
+    const alreadyVerified = await resendVerificationService(req.user.userId);
+    if (alreadyVerified) {
+      res.json({ verified: true });
+      return;
+    }
+    res.status(204).send();
   } catch (err) {
     next(err);
   }

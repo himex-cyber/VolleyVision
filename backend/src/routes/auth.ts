@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, logout, me, forgotPassword, resetPassword } from '../controllers/auth';
+import { register, login, logout, me, forgotPassword, resetPassword, verifyEmail, resendVerification } from '../controllers/auth';
 import { requireAuth } from '../middleware/auth';
 import {
   forgotPasswordGlobalRateLimit,
@@ -8,6 +8,9 @@ import {
   loginIpRateLimit,
   registerRateLimit,
   resetPasswordRateLimit,
+  verifyEmailRateLimit,
+  resendVerificationRateLimit,
+  resendVerificationIpRateLimit,
 } from '../middleware/rateLimit';
 
 const router = Router();
@@ -24,5 +27,9 @@ router.post('/forgot-password', forgotPasswordGlobalRateLimit, forgotPasswordRat
 // Brute-force defence in depth on the reset token itself (see rateLimit.ts).
 router.post('/reset-password', resetPasswordRateLimit, resetPassword);
 router.get('/me', requireAuth, me);
+// Public by design — the emailed verification token is itself the credential.
+// Rate limited on IP only (defence in depth, see rateLimit.ts).
+router.post('/verify-email', verifyEmailRateLimit, verifyEmail);
+router.post('/resend-verification', requireAuth, resendVerificationRateLimit, resendVerificationIpRateLimit, resendVerification);
 
 export default router;

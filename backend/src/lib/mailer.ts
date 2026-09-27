@@ -139,3 +139,31 @@ export async function sendPasswordResetEmail(user: PasswordResetEmailData, token
 
   return sendMail({ to: user.email, subject: 'Reset your VolleyVision password', html });
 }
+
+// ── Email verification ────────────────────────────────────────────────────────
+
+/**
+ * Sends the branded email-verification email. Same shape as the password-reset
+ * email, just pointed at /verify-email and with the 24h TTL in the copy.
+ * Failure to send must not fail registration — callers swallow the result the
+ * same way requestPasswordReset does.
+ */
+export async function sendVerificationEmail(to: string, firstName: string, token: string): Promise<boolean> {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const verifyUrl = `${clientUrl}/verify-email?token=${encodeURIComponent(token)}`;
+
+  const html = `
+  <div style="font-family:'Inter',system-ui,sans-serif;background:#111C36;color:#E4E9F4;padding:32px;border-radius:12px;max-width:520px;margin:0 auto;">
+    <h1 style="font-family:'Barlow Semi Condensed',sans-serif;color:#FFB81C;font-size:24px;margin:0 0 4px;">VolleyVision</h1>
+    <p style="color:#8FA0C4;font-size:13px;margin:0 0 24px;">See the game. Raise your game.</p>
+    <p style="font-size:15px;line-height:1.5;">
+      Hi ${firstName}, please verify your email address to join teams on VolleyVision.
+    </p>
+    <a href="${verifyUrl}" style="display:inline-block;background:#FFB81C;color:#111C36;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:15px;margin:16px 0;">Verify email</a>
+    <p style="color:#8FA0C4;font-size:12px;line-height:1.5;margin:20px 0 0;">
+      This link expires in 24 hours. If you didn't create a VolleyVision account, you can safely ignore this email.
+    </p>
+  </div>`;
+
+  return sendMail({ to, subject: 'Verify your VolleyVision email address', html });
+}

@@ -2,6 +2,7 @@ import { TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { generateUniqueCode, normalizeCode } from '../lib/joinCode';
 import { addMember, isMember } from './teamMembership.service';
+import { assertEmailVerified } from './emailVerification.service';
 
 export type TeamJoinCodeKind = 'PLAYER' | 'STAFF';
 
@@ -49,6 +50,7 @@ export async function regenerateTeamJoinCode(teamId: string, kind: TeamJoinCodeK
  * pick one of the staff roles.
  */
 export async function redeemTeamJoinCode(code: string, userId: string, role?: TeamRole) {
+  await assertEmailVerified(userId);
   const normalized = normalizeCode(code);
 
   const playerTeam = await prisma.team.findUnique({

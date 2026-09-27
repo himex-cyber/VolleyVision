@@ -3,7 +3,12 @@ import { Request, Response, NextFunction } from 'express';
 export class AppError extends Error {
   constructor(
     public statusCode: number,
-    message: string
+    message: string,
+    // Machine-readable discriminator for responses a client needs to branch
+    // on (e.g. EMAIL_NOT_VERIFIED) rather than string-match the message.
+    // Optional and additive — every existing AppError without one keeps
+    // returning exactly { error } as before.
+    public code?: string
   ) {
     super(message);
     this.name = 'AppError';
@@ -17,7 +22,7 @@ export function errorHandler(
   _next: NextFunction
 ): void {
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({ error: err.message, ...(err.code ? { code: err.code } : {}) });
     return;
   }
 
