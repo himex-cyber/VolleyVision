@@ -10,6 +10,75 @@ import * as Sentry from '@sentry/node';
 // index.ts's later call is a harmless re-read.
 dotenv.config();
 
+// Strip the parts of a captured request that can carry personal data.
+//
+// `sendDefaultPii: false` is NOT "attach nothing" in SDK v10 — it switches the
+// SDK to a DENY-LIST (see @sentry/core/build/cjs/utils/data-collection/).
+// Headers, cookies and query params are all still attached; keys matching a
+// fixed snippet list are replaced with "[Filtered]". That list contains "auth"
+// and "cookie", so `authorization` and `cookie` headers are already scrubbed
+// upstream — the header loop below is defence in depth, not the only guard,
+// and it stays because that list is Sentry's to change, not ours.
+//
+// What the deny-list does NOT cover, and this does:
+//
+//   * `request.url` is attached unconditionally and passes through no filter
+//     whatsoever — requestdata.js sets `url: true` with the comment "No
+//     dataCollection equivalent — URL is always included" — and Express's
+//     `req.url` carries the query string.
+//   * `query_string` IS filtered, but by KEY NAME only. Every sensitive value
+//     this app puts in a query string sits under an innocuous key: `?q=` on
+//     the add-member lookup is a complete email address, `?opponent=` is a
+//     club name. Key matching never fires on those.
+//
+// So the query string is dropped outright, here and on spans. The path alone
+// is what makes an error diagnosable; the values after "?" only ever cost us.
+//
+// The type below is structural, not Sentry.ErrorEvent | Sentry.TransactionEvent: @sentry/node
+// re-exports ErrorEvent but not TransactionEvent, and reaching past it into
+// @sentry/core would mean depending directly on a transitive package. These
+// are the only fields touched, so describing just them costs nothing.
+type ScrubbableEvent = {
+  request?: {
+    url?: string;
+    data?: unknown;
+    cookies?: unknown;
+    query_string?: unknown;
+    headers?: Record<string, unknown>;
+  };
+  spans?: Array<{ data?: Record<string, unknown> }>;
+};
+
+function scrubRequest<T extends ScrubbableEvent>(event: T): T {
+  const request = event.request;
+  if (request) {
+    delete request.data;
+    delete request.cookies;
+    delete request.query_string;
+    if (request.url) request.url = request.url.split('?')[0];
+
+    const headers = request.headers;
+    if (headers) {
+      for (const key of Object.keys(headers)) {
+        const lower = key.toLowerCase();
+        if (lower === 'authorization' || lower === 'cookie') delete headers[key];
+      }
+    }
+  }
+
+  // Spans carry their own copy: processSegmentSpan writes the same unfiltered
+  // URL to url.full and the query to url.query, so clearing event.request
+  // alone would leave the address sitting in the trace.
+  for (const span of event.spans ?? []) {
+    const data = span.data;
+    if (!data) continue;
+    if (typeof data['url.full'] === 'string') data['url.full'] = data['url.full'].split('?')[0];
+    delete data['url.query'];
+  }
+
+  return event;
+}
+
 const dsn = process.env.SENTRY_DSN;
 
 // Fail-soft, same convention as lib/supabase.ts's lazy client: no DSN is the
@@ -27,21 +96,10 @@ if (dsn) {
     // become a second copy of that: no IP/user data by default, and
     // beforeSend below strips what sendDefaultPii alone doesn't cover.
     sendDefaultPii: false,
-    beforeSend(event: Sentry.ErrorEvent) {
-      if (event.request) {
-        delete event.request.data;
-        delete event.request.cookies;
-        const headers = event.request.headers;
-        if (headers) {
-          for (const key of Object.keys(headers)) {
-            if (key.toLowerCase() === 'authorization' || key.toLowerCase() === 'cookie') {
-              delete headers[key];
-            }
-          }
-        }
-      }
-      return event;
-    },
+    beforeSend: scrubRequest,
+    // Errors are not the only events carrying request data: with tracing on,
+    // transactions get the same `request` block and the same span attributes.
+    beforeSendTransaction: scrubRequest,
   });
 }
 
