@@ -6,7 +6,7 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 
 Phase 3 of the rebuild roadmap: the core screens work on a phone. Checked
 on a 360-pixel-wide screen, the narrowest common Android size. No migration.
-Not deployed yet.
+Deployed to production on 2026-09-28, together with v9.4.0–v9.6.0.
 
 - **Live tracking on a phone.**
   - Event buttons sit two across below tablet width, so labels like
@@ -34,7 +34,7 @@ Not deployed yet.
 
 Phase 2 of the rebuild roadmap: security hardening. Closes every
 authorization, rate-limit and reliability defect the roadmap confirmed in
-code. No migration. Not deployed yet.
+code. No migration. Deployed with v9.7.0.
 
 - **Team ids never leak.** Anyone who isn't on a team now gets "not found"
   from every one of its pages and actions, the same as for a team that
@@ -71,8 +71,8 @@ code. No migration. Not deployed yet.
 ## v9.5.0 — 2026-09-28
 
 Phase 1 of the rebuild roadmap: the tooling that proves every later change
-before it reaches real teams. Nothing changes for users. **One migration,
-not yet applied** (see below). Not deployed yet.
+before it reaches real teams. Nothing changes for users. One migration,
+applied to production on 2026-09-28 just before the v9.7.0 deploy.
 
 - **Row-level security on every table, in a migration.** Production had RLS
   switched on by hand for most tables, but only two were ever in a migration,
@@ -80,8 +80,8 @@ not yet applied** (see below). Not deployed yet.
   have left 19 tables readable through Supabase's public API. The new
   migration switches RLS on for every table and removes Supabase's default
   public-role grants. The app never uses those, so nothing it does changes.
-  It must be applied (staging first, then production after a backup) before
-  the next deploy; `deploy.ps1` refuses to deploy while it's pending.
+  Applied to production on 2026-09-28. Staging will get it when staging is
+  created.
 - **Every authorization rule has a test.** A new integration suite runs the
   real app against a real database and calls every team route as an outsider,
   a viewer and a player. Where the app doesn't yet meet the target (outsiders

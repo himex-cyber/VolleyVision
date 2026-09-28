@@ -571,3 +571,32 @@ layouts are unchanged (the tracking grid is back to its 5/3/3/3/2/2 columns).
   on the rule holds: no `.env` reads.
 
 **Deferred until deploys resume:** the phone check on staging (Part C5), and the prod deploy with its smoke check.
+
+### Production deploy: v9.4.0–v9.7.0 (2026-09-28)
+
+Karlos approved deploying and applying the pending RLS migration without a separate backup. On prod the migration
+changed no data: RLS was already on for all 20 tables, so only the default anon/authenticated grants were revoked,
+and one `GRANT` undoes that.
+
+1. Before: 20/20 public tables had RLS; the anon/authenticated roles held grants on 20 tables; migration history was
+   clean up to `20260927130000`.
+2. `npx prisma migrate deploy` applied `20260927221052_enable_rls_all_public_tables`, and `migrate status` reported
+   up to date. After: 0 tables without RLS, and 0 anon/authenticated grants. The Supabase security advisor shows only
+   the expected INFO notice ("RLS enabled, no policy", 20 tables), with no warnings or errors.
+3. `deploy.ps1` ran from a clean `main` at `61f18fc` (tag v9.7.0), with the Netlify CLI signed in as
+   himextradingltd. Deploy message: "v9.7.0 (61f18fc) …".
+
+**Live checks:**
+- The built-in smoke check passed: `/health` reports ok and db ok, the CSP header is present, and an unknown team
+  returns 404 without a token.
+- `/api/v1/training-sessions/by-team/x` returns 404, so the v9.4.0 removal is live (v9.3.2 answered 401).
+- A login with a numeric email returns 400, so the v9.6.0 input fix is live (v9.3.2 answered 500).
+- The production bundles contain the v9.6.0 player-dashboard message and the v9.7.0 tracking grid.
+- Sentry shows no unresolved issues in the 24 hours after the deploy.
+
+**Still for Karlos, signed in on a phone:**
+- Dashboard, a team, a match's stats, team chat.
+- Start a match and tap through a rally on the tracking page.
+- As an assistant coach, confirm there is no staff code.
+
+Staging is still not created: Part C1, the next phase.
