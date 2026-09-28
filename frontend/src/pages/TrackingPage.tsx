@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { useMatch, useEvents, useRecordEvent, useUndoEvent, useUpdateScore, useResetSetScore, useResetMatch, useHasPermission } from '../hooks';
@@ -360,9 +361,9 @@ export default function TrackingPage() {
         )}
 
         {/* ── Recording mode toggle ── */}
-        {/* Both toggles sit on a 36px (h-9) button height — courtside legibility,
-            and in line with the touch targets elsewhere on this screen. They read
-            as one banner, so Us/Opponent and Focus stay sized to match. */}
+        {/* Both toggles sit on a 44px (h-11) button height — the minimum tap
+            target at courtside, on a phone, with a glove or a shaky hand. They
+            read as one banner, so Us/Opponent and Focus stay sized to match. */}
         <div className="flex items-center gap-3 flex-wrap card p-3">
           {/* Each label is grouped with the toggle it labels, so when the row
               wraps they travel together rather than the label being orphaned on
@@ -373,7 +374,7 @@ export default function TrackingPage() {
               <button
                 onClick={() => setIsOpponentMode(false)}
                 className={clsx(
-                  'h-9 px-5 transition-colors',
+                  'h-11 px-5 transition-colors',
                   !isOpponentMode ? 'bg-gold-500 text-navy-900' : 'bg-grey-50 text-grey-600 hover:bg-grey-200'
                 )}
               >
@@ -382,7 +383,7 @@ export default function TrackingPage() {
               <button
                 onClick={() => setIsOpponentMode(true)}
                 className={clsx(
-                  'h-9 px-5 transition-colors',
+                  'h-11 px-5 transition-colors',
                   isOpponentMode ? 'bg-error text-white' : 'bg-grey-50 text-grey-600 hover:bg-grey-200'
                 )}
               >
@@ -398,9 +399,9 @@ export default function TrackingPage() {
               placeholder="Jersey # (opt.)"
               value={opponentJerseyNumber}
               onChange={(e) => setOpponentJerseyNumber(e.target.value)}
-              // .input's own py-2.5 would make this ~42px and leave it standing
-              // taller than the h-9 buttons beside it; py-0 lets h-9 win.
-              className="input h-9 py-0 text-sm w-36 shrink-0"
+              // .input's own py-2.5 would fight a fixed height; py-0 lets h-11 win,
+              // matching the h-11 buttons beside it.
+              className="input h-11 py-0 text-sm w-36 shrink-0"
             />
           )}
 
@@ -418,7 +419,7 @@ export default function TrackingPage() {
                   key={mode}
                   onClick={() => setFocusMode(mode)}
                   className={clsx(
-                    'h-9 px-5 transition-colors',
+                    'h-11 px-5 transition-colors',
                     focusMode === mode ? 'bg-gold-500 text-navy-900' : 'bg-grey-50 text-grey-600 hover:bg-grey-200'
                   )}
                 >
@@ -445,7 +446,7 @@ export default function TrackingPage() {
                 <button
                   key={player.id}
                   onClick={() => setSelectedPlayer(player)}
-                  className="flex items-center gap-1.5 shrink-0 rounded-lg py-1.5 px-2.5 border bg-grey-50 border-grey-200 text-grey-900 hover:border-navy-500 transition-colors"
+                  className="flex items-center gap-1.5 shrink-0 rounded-lg min-h-[44px] py-1.5 px-2.5 border bg-grey-50 border-grey-200 text-grey-900 hover:border-navy-500 transition-colors"
                 >
                   <span className="tabular-nums font-bold text-sm leading-none">
                     #{player.jerseyNumber}
@@ -538,7 +539,14 @@ export default function TrackingPage() {
                 <div className="text-xs font-semibold text-grey-600 mb-2 px-1">
                   {cat.label}
                 </div>
-                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${slots}, 1fr)` }}>
+                {/* Below sm (640px) every category caps at 2 columns regardless of
+                    slot count — 5-wide at 360px crushes labels unreadable.
+                    Tailwind can't take a runtime column count, so --slots feeds
+                    the sm:+ grid-template-columns directly. */}
+                <div
+                  className="grid gap-2 grid-cols-2 sm:[grid-template-columns:repeat(var(--slots),minmax(0,1fr))]"
+                  style={{ '--slots': slots } as CSSProperties}
+                >
                   {isPass ? (
                     <>
                       {renderEventButton('PASS_3')}
