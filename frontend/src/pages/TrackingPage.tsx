@@ -352,7 +352,7 @@ export default function TrackingPage() {
         {flash && (
           <div
             className={clsx(
-              'fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl font-semibold text-sm shadow-xl transition-all',
+              'fixed top-[calc(var(--vv-safe-top)+5rem)] left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl font-semibold text-sm shadow-xl transition-all',
               flash.ok ? 'bg-success text-white' : 'bg-error text-white'
             )}
           >

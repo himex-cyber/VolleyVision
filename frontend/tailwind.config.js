@@ -4,6 +4,11 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      // In the Android app the body is padded by the safe-area insets (index.css),
+      // so a full-height page is the screen minus those. 0 on the web.
+      minHeight: {
+        screen: 'calc(100vh - var(--vv-safe-top) - var(--vv-safe-bottom))',
+      },
       colors: {
         // ── Official brand palette (docs/brand/BRAND-GUIDELINES.md) ──
         // Use these names for all NEW code.

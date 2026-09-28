@@ -10,9 +10,13 @@ export async function initNative(): Promise<void> {
   // Dynamic import: the web bundle never loads @capacitor/app.
   const { App } = await import('@capacitor/app');
   // Android's back gesture/button walks the app's history, and leaves the app
-  // from the first screen instead of doing nothing.
-  await App.addListener('backButton', ({ canGoBack }) => {
-    if (canGoBack) window.history.back();
+  // from the first screen instead of doing nothing. The event's canGoBack is the
+  // WebView's native history, which missed in-app route changes (found on the
+  // emulator: Back on a team dashboard closed the app). React Router records
+  // each entry's index in history.state.idx, so that's the reliable signal.
+  await App.addListener('backButton', () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) window.history.back();
     else void App.exitApp();
   });
 }

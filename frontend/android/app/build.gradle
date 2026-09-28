@@ -52,3 +52,15 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+// Every release build must follow `npm run android:prod`: refuse one whose
+// synced config could still reach plain HTTP or load remote code (the emulator
+// build turns cleartext on). Needs node on PATH, as the sync itself does.
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    doFirst {
+        project.exec {
+            workingDir rootProject.projectDir.parentFile
+            commandLine 'node', 'scripts/check-android-prod.mjs'
+        }
+    }
+}

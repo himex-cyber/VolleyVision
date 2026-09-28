@@ -136,6 +136,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      # The committed gradle-wrapper.jar is a binary we run; check it's Gradle's own.
+      - uses: gradle/actions/wrapper-validation@v4
       - run: npm ci
       - name: Production sync
         run: npm run android:prod
