@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getToken, clearToken } from './tokenStorage';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -216,6 +216,18 @@ export const analyticsApi = {
 
   matchReport: (matchId: string) =>
     api.get<MatchReport>(`/analytics/matches/${matchId}/report`).then((r) => r.data),
+
+  matchZones: (matchId: string) =>
+    api.get<ZoneMap>(`/analytics/matches/${matchId}/zones`).then((r) => r.data),
+
+  teamZones: (teamId: string) =>
+    api.get<ZoneMap>(`/analytics/teams/${teamId}/zones`).then((r) => r.data),
+
+  // Staff, admin or the player themself; same team/match scoping as player().
+  playerZones: (playerId: string, teamId?: string, matchId?: string) =>
+    api
+      .get<ZoneMap>(`/analytics/players/${playerId}/zones`, { params: { ...(teamId ? { teamId } : {}), ...(matchId ? { matchId } : {}) } })
+      .then((r) => r.data),
 };
 
 // ─── Team Chat (foundation) ───────────────────────────────────────────────────
