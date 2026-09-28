@@ -28,6 +28,7 @@ import approvalRoutes from './routes/approvals';
 import { errorHandler } from './middleware/errorHandler';
 import { prisma } from './lib/prisma';
 import { checkDatabase } from './lib/dbHealth';
+import { allowedOrigins } from './lib/corsOrigins';
 
 dotenv.config();
 
@@ -41,7 +42,10 @@ app.use(helmet());
 // response as binary when Content-Encoding is gzip/deflate/br, so the compressed
 // body is base64'd rather than mangled through a utf8 round-trip.
 app.use(compression());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
+// CLIENT_URL plus CORS_EXTRA_ORIGINS (the Android app); see lib/corsOrigins.
+// allowedHeaders is left to cors's default, which echoes the preflight's
+// requested headers, so Authorization and the app's X-Client both pass.
+app.use(cors({ origin: allowedOrigins(process.env) }));
 // Override morgan's built-in :url token (req.originalUrl) with req.path —
 // reset tokens, join codes, etc. sometimes ride in a query string, and that
 // string would otherwise land in plaintext request logs. 'dev' still uses this
