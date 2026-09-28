@@ -15,14 +15,17 @@ export default function TeamDashboardPage() {
   const trends = useTeamTrends(teamId!);
   const zones = useTeamZones(teamId!);
   // Individual player analytics are for this team's staff and the player
-  // themself — gate the drill-down links the same way.
+  // themself — gate the drill-down links the same way. Always fetched (not
+  // just for non-staff): a coach who also has a linked player record on this
+  // team gets their own "My stats" section below alongside the full view.
   const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
-  const myPlayerIds = useMyPlayerIds(!canTrack);
+  const myPlayerIds = useMyPlayerIds();
   const canOpenPlayer = (playerId: string) => canTrack || myPlayerIds.has(playerId);
   // The server decides who gets every row (lib/playerPrivacy): a global admin
   // who isn't a member has no TRACK_MATCH here but still gets them all. Any row
   // that isn't the caller's own means this is the full staff view.
   const fullView = canTrack || (data?.playerStats ?? []).some((r) => !myPlayerIds.has(r.player.id));
+  const myOwnStats = (data?.playerStats ?? []).filter((r) => myPlayerIds.has(r.player.id));
 
   const insights =
   trends.data
@@ -155,6 +158,14 @@ export default function TeamDashboardPage() {
             <h2 className="text-lg font-semibold text-grey-900 mb-3">Season Player Statistics</h2>
             <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} />
           </section>
+          {/* Coach/staff who also have a linked player record on this team — the
+              non-staff branch below already covers "Your Stats" for everyone else. */}
+          {myOwnStats.length > 0 && (
+            <section>
+              <h2 className="text-lg font-semibold text-grey-900 mb-3">My Stats</h2>
+              <PlayerStatsTable rows={myOwnStats} teamId={teamId!} canOpen={canOpenPlayer} />
+            </section>
+          )}
         </>
       ) : data.playerStats[0] ? (
         <section>

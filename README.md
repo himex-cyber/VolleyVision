@@ -40,7 +40,7 @@ backend/                  Express + Prisma API
 frontend/                 Vite + React SPA
   src/pages/               Route-level page components
   src/components/          Shared UI, including PermissionGuard
-  src/context/             AuthContext, ViewModeContext
+  src/context/             AuthContext
   src/hooks/               TanStack Query hooks
   src/lib/                 Axios client, token storage
   src/config/features.ts   Feature flags

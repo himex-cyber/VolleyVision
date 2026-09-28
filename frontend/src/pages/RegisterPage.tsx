@@ -20,8 +20,8 @@ interface IntentOption {
 }
 
 const INTENT_OPTIONS: IntentOption[] = [
-  { value: 'COACH',  label: 'Coach a team',      description: "I'll be managing a team" },
-  { value: 'PLAYER', label: 'Play for a team',    description: "I'll join a team as a player" },
+  { value: 'COACH',  label: 'Coach a team',      description: "I'll be running a team" },
+  { value: 'PLAYER', label: 'Play for a team',    description: "I'll be joining a team" },
   { value: 'UNSURE', label: "Not sure yet",       description: "I'll figure it out later" },
 ];
 
@@ -159,6 +159,9 @@ export default function RegisterPage() {
             {/* ── Sign-up intent picker ── */}
             <div>
               <label className="block text-chalk-400 text-sm font-medium mb-2">I'm signing up to…</label>
+              <p className="text-grey-600 text-xs mb-2">
+                This just tailors your welcome. You can create or join teams either way.
+              </p>
               <div className="space-y-2">
                 {INTENT_OPTIONS.map((opt) => (
                   <button

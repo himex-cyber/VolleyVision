@@ -5,8 +5,6 @@ import type { TeamJoinCodeKind } from '../lib/api';
 import type { CreateTeamInput } from '../lib/api';
 import type { Player, Match, TeamRole, TeamMember, ApprovalStatus } from '../types';
 import type { FeedbackStatus } from '../types/feedback';
-import { useViewMode } from '../context/ViewModeContext';
-import { PLAYER_VIEW_PERMISSIONS } from '../lib/teamRoles';
 
 // ─── Email verification ──────────────────────────────────────────────────────
 
@@ -91,7 +89,7 @@ export function useRejectRequest(teamId: string) {
 /**
  * Every team the current user owns or belongs to. The backend scopes this to
  * the caller's memberships — there are no public teams — so any picker built on
- * it (see PlayerTeamLinksCard, PlayerPortalPage) is membership-scoped for free.
+ * it (see PlayerTeamLinksCard, MyStats) is membership-scoped for free.
  */
 export function useTeams() {
   return useQuery({ queryKey: ['teams'], queryFn: teamsApi.list });
@@ -105,7 +103,10 @@ export function useCreateTeam() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateTeamInput) => teamsApi.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['teams'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams'] });
+      qc.invalidateQueries({ queryKey: ['coach', 'dashboard'] }); // the home page's team cards
+    },
   });
 }
 
@@ -113,7 +114,10 @@ export function useDeleteTeam() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => teamsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['teams'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams'] });
+      qc.invalidateQueries({ queryKey: ['coach', 'dashboard'] }); // the home page's team cards
+    },
   });
 }
 
@@ -423,6 +427,9 @@ export function useUpdateMemberRole(teamId: string) {
       qc.invalidateQueries({ queryKey: ['members', teamId] });
       // Promoting to PLAYER also creates their roster row server-side.
       qc.invalidateQueries({ queryKey: ['teams', teamId] });
+      // A role change (e.g. the coach editing their own role) must be
+      // reflected at once — useTeamRole/PermissionGuard read this key.
+      qc.invalidateQueries({ queryKey: ['permissions', 'team', teamId] });
     },
   });
 }
@@ -457,6 +464,7 @@ export function useTransferOwnership() {
       qc.invalidateQueries({ queryKey: ['teams'] });
       qc.invalidateQueries({ queryKey: ['teams', vars.teamId] });
       qc.invalidateQueries({ queryKey: ['teams', 'my-teams'] });
+      qc.invalidateQueries({ queryKey: ['coach', 'dashboard'] }); // the home page's team cards
     },
   });
 }
@@ -472,7 +480,7 @@ export function useLinkPlayerRecord(teamId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['teams', teamId] });
       qc.invalidateQueries({ queryKey: ['players', teamId] });
-      qc.invalidateQueries({ queryKey: ['player', 'dashboard'] });
+      qc.invalidateQueries({ queryKey: ['player'] }); // records + portal
     },
   });
 }
@@ -484,7 +492,7 @@ export function useUnlinkPlayerRecord(teamId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['teams', teamId] });
       qc.invalidateQueries({ queryKey: ['players', teamId] });
-      qc.invalidateQueries({ queryKey: ['player', 'dashboard'] });
+      qc.invalidateQueries({ queryKey: ['player'] }); // records + portal
     },
   });
 }
@@ -619,28 +627,12 @@ export function useCoachDashboard() {
 // ─── Permissions (Phase 5 Sprint 6) ──────────────────────────────────────────
 
 export function useTeamRole(teamId: string) {
-  const { viewMode } = useViewMode();
-  const query = useQuery({
+  return useQuery({
     queryKey: ['permissions', 'team', teamId],
     queryFn: () => permissionsApi.myTeamRole(teamId),
     enabled: !!teamId,
     staleTime: 60_000, // role changes are infrequent
   });
-
-  // Presentation-only lens: while the Coach/Player toggle is set to "Player",
-  // clamp the permissions the UI offers to TeamRole.PLAYER's real set. Every
-  // gate (useHasPermission, PermissionGuard, TeamMembersCard) reads this hook,
-  // so they all go read-only from one place. This never grants a permission
-  // the user lacks — the backend remains the real authorization boundary.
-  const data = useMemo(() => {
-    if (!query.data || viewMode !== 'player') return query.data;
-    return {
-      ...query.data,
-      permissions: query.data.permissions.filter((p) => PLAYER_VIEW_PERMISSIONS.has(p)),
-    };
-  }, [query.data, viewMode]);
-
-  return { ...query, data };
 }
 
 /**
@@ -649,9 +641,14 @@ export function useTeamRole(teamId: string) {
  * dashboard query (and its cache); `enabled` lets staff, who can open every
  * player anyway, skip the request.
  */
+/** The caller's linked player records only (GET /player/teams), without the portal's stats. */
+export function useMyPlayerRecords(enabled = true) {
+  return useQuery({ queryKey: ['player', 'records'], queryFn: playerPortalApi.teams, enabled });
+}
+
 export function useMyPlayerIds(enabled = true) {
-  const { data } = useQuery({ queryKey: ['player', 'dashboard'], queryFn: playerPortalApi.dashboard, enabled });
-  return useMemo(() => new Set((data?.players ?? []).map((p) => p.id)), [data]);
+  const { data } = useMyPlayerRecords(enabled);
+  return useMemo(() => new Set((data ?? []).map((p) => p.id)), [data]);
 }
 
 /** Convenience: returns true if the user has the given permission on teamId */

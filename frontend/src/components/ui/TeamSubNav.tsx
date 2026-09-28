@@ -1,11 +1,16 @@
 import { NavLink } from 'react-router-dom';
 import { isEnabled } from '../../config/features';
+import { useTeamRole } from '../../hooks';
+import { ROLE_LABELS, ROLE_BADGE } from '../../lib/teamRoles';
+import type { TeamRole } from '../../types';
 
 // Shared tab group for a single team's pages, so Dashboard / Matches / Roster
 // are reachable from any of the three without returning to the Teams grid.
 // `end` on the Roster link keeps it from matching the /dashboard or /matches
 // child routes.
 export default function TeamSubNav({ teamId, teamName }: { teamId: string; teamName?: string }) {
+  const { data: roleData } = useTeamRole(teamId);
+  const role = roleData?.role as TeamRole | null | undefined;
   const tabs = [
     { to: `/teams/${teamId}/dashboard`, label: 'Dashboard', end: false },
     { to: `/teams/${teamId}/matches`, label: 'Matches', end: false },
@@ -14,9 +19,12 @@ export default function TeamSubNav({ teamId, teamName }: { teamId: string; teamN
   ];
 
   return (
-    <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
+    <div className="flex items-center gap-2 border-b border-grey-200 pb-px overflow-x-auto">
       {teamName && (
-        <span className="mr-3 font-display font-semibold text-grey-900 truncate max-w-[40%]">{teamName}</span>
+        <span className="mr-1 font-display font-semibold text-grey-900 truncate max-w-[40%]">{teamName}</span>
+      )}
+      {role && (
+        <span className={`badge ${ROLE_BADGE[role]} shrink-0`}>{ROLE_LABELS[role]}</span>
       )}
       {tabs.map((t) => (
         <NavLink

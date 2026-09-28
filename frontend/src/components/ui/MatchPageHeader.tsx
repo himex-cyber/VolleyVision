@@ -5,7 +5,6 @@ import MatchSubNav from './MatchSubNav';
 import { ArrowLeftIcon, ChevronIcon } from './icons';
 import { isPendingApproval, type MatchStatus } from '../../types';
 import { useHasPermission, useUpdateMatch } from '../../hooks';
-import { useViewMode } from '../../context/ViewModeContext';
 
 // Shared header for all three match sub-pages (Match Stats | Events | Track).
 // Consolidates the back button, title/meta block, and MatchSubNav so every
@@ -56,16 +55,8 @@ export default function MatchPageHeader({
 }: MatchPageHeaderProps) {
   const canManageMatches = useHasPermission(teamId, 'CREATE_MATCH');
   const updateMatch = useUpdateMatch();
-  const { viewMode } = useViewMode();
-  // A dual coach+player account previewing "player" mode sees the Watch tab
-  // even though their real TRACK_MATCH permission still says yes — mirrors
-  // how DashboardPage's toggle already simulates the other portal. Tab-only:
-  // navigating straight to /track still works, nothing is actually blocked.
-  const effectiveCanTrack = canTrack && viewMode !== 'player';
   const mode: 'track' | 'watch' | undefined =
-    effectiveCanTrack && status === 'IN_PROGRESS' ? 'track' :
-    !effectiveCanTrack && status === 'IN_PROGRESS' ? 'watch' :
-    undefined;
+    status === 'IN_PROGRESS' ? (canTrack ? 'track' : 'watch') : undefined;
   const [pendingNotice, setPendingNotice] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
 

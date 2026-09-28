@@ -649,3 +649,65 @@ refused.
 
 **Verified:** backend `tsc` clean, 49 unit test files, build OK; frontend `tsc`, lint and build clean; integration
 2/2 (matrix 72 routes).
+
+### Production deploy: v9.8.0 (2026-09-29)
+
+Karlos approved the G2 review of 4.0.1, 4.0.2 and the portal scoping, and the deploy, on 29 Sept.
+
+1. PRs #31 (Phase 4.0) and #32 (Phase 4) merged into `develop` after `develop` (with #33, the grey-token clean-up)
+   was merged into the Phase 4 branch and its CI passed on the combined code. Release PR #30 merged to `main` (CI 6/6);
+   tag `v9.8.0` on `3dc31b9`.
+2. Before deploying: working tree clean, `main` = `origin/main` = the tag, no code difference from the branch the full
+   local check suite passed on (49 unit test files, integration 2/2 with 72 routes, `npm audit` clean in both), and
+   no new migration. Netlify CLI signed in as himextradingltd, site volleyvision-app.
+3. `deploy.ps1` (prod, now with `--site`): migration check OK, build, publish; its smoke check passed (health ok and db
+   ok, CSP header, unknown team 404).
+
+**Live checks:**
+- `POST /api/v1/teams/x/players/y/link` without a token answers 401: the 4.0.2 staff route exists (v9.7.0 had none).
+- `GET /api/v1/analytics/matches/x/zones` answers the visibility guard's JSON "Match not found." (an unknown route
+  gets the SPA's HTML), so the zone routes are live.
+- The production bundle contains the 4.0.6 Sentry URL folding.
+- Sentry: no issues since the deploy. The two open issues (VOLLEYVISION-5 and -6) date from 28 Sept, right after the
+  v9.7.0 deploy: a tab left open across it loading an old chunk.
+
+**For Karlos (Part C5):** regenerate each team's staff join code (Invitations tab), check the members list for any
+Manager who shouldn't be one, and on a phone: a team dashboard (court zones), a match's stats, the roster's
+Link/Unlink, and as a player account that only your own stats show.
+
+### Phase 4.5 of the rebuild roadmap: per-team roles (branch `rebuild/p4-5-team-roles`, 2026-09-28/29)
+
+Why: Karlos decided (28 Sept) there is no global "coach" or "player" account type. Anyone can create a team and is
+its coach; your role on each team decides what you can do there. Every server check was already per team; the
+frontend's global mode clamped a coach's permissions on every team. Released as v9.9.0. No migration.
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 4.5.1 | `ViewModeContext`, the header toggle, the `useTeamRole` clamp, `PLAYER_VIEW_PERMISSIONS` and `MatchPageHeader`'s view-mode term removed; stale `vv_view_mode` key cleared once | browser check |
+| 4.5.2 (G2) | `createTeam` no longer refuses `signupIntent` PLAYER; `teamCreateRateLimit` 5/h; max 5 owned teams (admin exempt) checked in the create's serializable transaction; transfer checks the receiver's cap | `http.teamCreate.test.ts`; matrix on real Postgres (parallel creates at 4 teams: one 201, one 409) |
+| 4.5.3 | One `/dashboard`: My teams cards (role badge, next match), My stats (`MyStats`, extracted from the old player page), empty state; `/coach` and `/player` redirect | browser check |
+| 4.5.4 | Role badge in team headers; coach-player "My Stats" on the team dashboard; role changes refresh `my-role` | browser check |
+| 4.5.5 | One onboarding page, leading with create or join per the sign-up answer | browser check |
+| 4.5.6 | `lib/viewMode.ts` and its test removed; `lib/homeTeams.ts` (+ test, which also checks the frontend copy hasn't drifted) | `homeTeams.test.ts` |
+
+**Browser check** (local Docker DB, 360x800 and 1280), four accounts: coach only (tools, Track); player only (no
+tools, own stats only, Watch; creates a team and is its Head Coach there); assistant coach who also plays on the same
+team (full view plus My Stats with only their record); Wolves coach who joined the Falcons with the player code (tools
+on Wolves; Player, Watch, own stats on Falcons). A stale `vv_view_mode` is removed; `/coach` and `/player` redirect.
+Fixed along the way: the roster row, owner card and My stats grids overflowed 360px.
+
+**Reviews:**
+- `/code-review high`: 8 findings, all fixed (next match per team, not a global 5; lighter data for the home page and
+  the own-row lookup; create links open the form; sign-up copy and contrast; a simpler ternary; the drift check).
+- Independent Opus review: 1 medium (the same next-match cap, already fixed) and 6 low, all fixed (home-page error
+  state; cards refresh after create/delete/transfer; 360px padding; `runSerializable` retries one serialization
+  conflict; README; sign-up copy).
+- `/security-review`: no findings.
+
+**G1 pending:** the `User.signupIntent` comment in `schema.prisma` still says it gates team creation; the comment-only
+edit waits for Karlos's OK.
+
+**Verified:** backend `tsc` clean, 51 unit test files (the test-file count went down by one when `viewMode.test.ts`
+was deleted with its module, and back up with `homeTeams.test.ts` and the new tests), build OK; frontend `tsc`, lint
+and build clean; integration 2/2 (matrix 72 routes plus the team-creation checks). `/login`'s main chunk shrank from
+224.3 kB to 220.7 kB.

@@ -86,7 +86,10 @@ export async function getCoachRecentMatches(userId: string, limit = 5) {
   });
 }
 
-export async function getCoachUpcomingMatches(userId: string, limit = 5) {
+// The soonest scheduled match of EACH team the user owns or belongs to: the
+// home page's team cards show one per team, and a global "5 soonest" list
+// left a team whose next match wasn't among them showing none.
+export async function getCoachUpcomingMatches(userId: string) {
   const [ownedTeams, memberships] = await Promise.all([
     prisma.team.findMany({ where: { ownerId: userId }, select: { id: true } }),
     prisma.teamMembership.findMany({ where: { userId }, select: { teamId: true } }),
@@ -105,7 +108,7 @@ export async function getCoachUpcomingMatches(userId: string, limit = 5) {
       matchDate: { gte: new Date() },
     },
     orderBy: { matchDate: 'asc' },
-    take: limit,
+    distinct: ['teamId'],
     select: {
       id: true,
       matchDate: true,
