@@ -75,7 +75,7 @@ export default function QuickEmailInvite(props: Props) {
       {notice && (
         <p className="text-xs text-grey-900 flex items-center justify-between gap-3">
           <span>{notice}</span>
-          <button type="button" className="text-grey-500 hover:text-grey-900 shrink-0" onClick={() => setNotice('')}>
+          <button type="button" className="text-grey-600 hover:text-grey-900 shrink-0" onClick={() => setNotice('')}>
             Dismiss
           </button>
         </p>
