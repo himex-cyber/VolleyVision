@@ -89,8 +89,12 @@ export async function linkPlayerRecord(teamId: string, playerId: string, userId:
   return runSerializable(async (tx) => {
     const current = await tx.player.findUniqueOrThrow({ where: { id: playerId }, select: { userId: true } });
     if (current.userId) throw new AppError(409, 'This player record is already linked to someone. Unlink it first.');
-    const existing = await tx.player.findFirst({ where: { userId, teamId, NOT: { id: playerId } }, select: { id: true } });
-    if (existing) throw new AppError(409, 'That member already has a player record on this team.');
+    // Typically the record a code-joined player got automatically: say which,
+    // so staff can unlink or delete it (if it has no stats) and link the right one.
+    const existing = await tx.player.findFirst({ where: { userId, teamId, NOT: { id: playerId } }, select: { jerseyNumber: true } });
+    if (existing) {
+      throw new AppError(409, `That member is already linked to player #${existing.jerseyNumber} on this team. Unlink that record first, or delete it if it has no stats.`);
+    }
     return tx.player.update({ where: { id: playerId }, data: { userId } });
   });
 }
@@ -103,13 +107,29 @@ export async function unlinkPlayerRecord(teamId: string, playerId: string) {
   return prisma.player.update({ where: { id: playerId }, data: { userId: null } });
 }
 
-export async function getPlayerCareerStats(userId: string) {
-  const players = await prisma.player.findMany({ where: { userId }, select: { id: true } });
-  if (!players.length) return null;
+/**
+ * The viewer's records and the teams whose matches the portal may count: the
+ * ones they own or belong to. A record can also be linked to other teams
+ * (PlayerTeamLink), and staff can relink a record (4.0.2), so whoever holds a
+ * link must not read another team's matches here unless they're on it
+ * (Karlos, 28 Sept). Every event read below filters on `match`.
+ */
+async function portalScope(userId: string) {
+  const [players, owned, memberships] = await Promise.all([
+    prisma.player.findMany({ where: { userId }, select: { id: true } }),
+    prisma.team.findMany({ where: { ownerId: userId }, select: { id: true } }),
+    prisma.teamMembership.findMany({ where: { userId }, select: { teamId: true } }),
+  ]);
+  const teamIds = [...new Set([...owned.map((t) => t.id), ...memberships.map((m) => m.teamId)])];
+  return { playerIds: players.map((p) => p.id), teamIds, match: { teamId: { in: teamIds } } };
+}
 
-  const playerIds = players.map((p) => p.id);
+export async function getPlayerCareerStats(userId: string) {
+  const { playerIds, match } = await portalScope(userId);
+  if (!playerIds.length) return null;
+
   const events = await prisma.event.findMany({
-    where: { playerId: { in: playerIds }, ...ownEventsOnly },
+    where: { playerId: { in: playerIds }, match, ...ownEventsOnly },
     select: { eventType: true },
   });
 
@@ -117,16 +137,15 @@ export async function getPlayerCareerStats(userId: string) {
 }
 
 export async function getPlayerRecentMatches(userId: string, limit = 5) {
-  const players = await prisma.player.findMany({ where: { userId }, select: { id: true } });
-  if (!players.length) return [];
+  const { playerIds, match } = await portalScope(userId);
+  if (!playerIds.length) return [];
 
-  const playerIds = players.map((p) => p.id);
 
   // Get distinct match IDs from events for these players
   const matchEvents = await prisma.event.findMany({
     // ownEventsOnly excludes training events (matchId null), so every returned
     // matchId is a real match; the filter below narrows the type accordingly.
-    where: { playerId: { in: playerIds }, ...ownEventsOnly },
+    where: { playerId: { in: playerIds }, match, ...ownEventsOnly },
     select: { matchId: true },
     distinct: ['matchId'],
   });
@@ -154,16 +173,15 @@ export async function getPlayerRecentMatches(userId: string, limit = 5) {
 }
 
 export async function getDevelopmentMetrics(userId: string, matchCount = 5) {
-  const players = await prisma.player.findMany({ where: { userId }, select: { id: true } });
-  if (!players.length) return [];
+  const { playerIds, match } = await portalScope(userId);
+  if (!playerIds.length) return [];
 
-  const playerIds = players.map((p) => p.id);
 
   // Get the most recent matches for these players
   const matchEvents = await prisma.event.findMany({
     // ownEventsOnly excludes training events (matchId null), so every returned
     // matchId is a real match; the filter below narrows the type accordingly.
-    where: { playerId: { in: playerIds }, ...ownEventsOnly },
+    where: { playerId: { in: playerIds }, match, ...ownEventsOnly },
     select: { matchId: true },
     distinct: ['matchId'],
   });
@@ -180,15 +198,15 @@ export async function getDevelopmentMetrics(userId: string, matchCount = 5) {
 
   // For each match, derive stats for these players
   const results = await Promise.all(
-    recentMatches.map(async (match) => {
+    recentMatches.map(async (m) => {
       const events = await prisma.event.findMany({
-        where: { matchId: match.id, playerId: { in: playerIds }, ...ownEventsOnly },
+        where: { matchId: m.id, playerId: { in: playerIds }, match, ...ownEventsOnly },
         select: { eventType: true },
       });
       return {
-        matchId: match.id,
-        opponent: match.opponent,
-        matchDate: match.matchDate,
+        matchId: m.id,
+        opponent: m.opponent,
+        matchDate: m.matchDate,
         ...deriveStats(events),
       };
     }),
@@ -200,15 +218,14 @@ export async function getDevelopmentMetrics(userId: string, matchCount = 5) {
 // Career-best single-match performances across all linked player records.
 // null when the user has no linked players or no recorded matches.
 export async function getPlayerBests(userId: string) {
-  const players = await prisma.player.findMany({ where: { userId }, select: { id: true } });
-  if (!players.length) return null;
+  const { playerIds, match } = await portalScope(userId);
+  if (!playerIds.length) return null;
 
-  const playerIds = players.map((p) => p.id);
 
   const matchEvents = await prisma.event.findMany({
     // ownEventsOnly excludes training events (matchId null), so every returned
     // matchId is a real match; the filter below narrows the type accordingly.
-    where: { playerId: { in: playerIds }, ...ownEventsOnly },
+    where: { playerId: { in: playerIds }, match, ...ownEventsOnly },
     select: { matchId: true },
     distinct: ['matchId'],
   });
@@ -225,7 +242,7 @@ export async function getPlayerBests(userId: string) {
   const perMatch = await Promise.all(
     matchIds.map(async (matchId) => {
       const events = await prisma.event.findMany({
-        where: { matchId, playerId: { in: playerIds }, ...ownEventsOnly },
+        where: { matchId, playerId: { in: playerIds }, match, ...ownEventsOnly },
         select: { eventType: true },
       });
       return { matchId, stats: deriveStats(events) };
@@ -272,6 +289,7 @@ export async function getPlayerBests(userId: string) {
 // Per-team stat breakdown: one StatLine per linked player record, derived from
 // that record's events only. A player on multiple teams has one entry per team.
 export async function getPlayerStatsByTeam(userId: string) {
+  const { match } = await portalScope(userId);
   const players = await prisma.player.findMany({
     where: { userId },
     select: {
@@ -284,7 +302,7 @@ export async function getPlayerStatsByTeam(userId: string) {
   return Promise.all(
     players.map(async (p) => {
       const events = await prisma.event.findMany({
-        where: { playerId: p.id, ...ownEventsOnly },
+        where: { playerId: p.id, match, ...ownEventsOnly },
         select: { eventType: true },
       });
       return {
@@ -308,7 +326,9 @@ export async function getPlayerUpcomingMatches(userId: string, limit = 5) {
     where: { playerId: { in: players.map((p) => p.id) } },
     select: { teamId: true },
   });
-  const teamIds = [...new Set([...players.map((p) => p.teamId), ...links.map((l) => l.teamId)])];
+  // ...but only the ones the viewer is on (portalScope).
+  const { teamIds: mine } = await portalScope(userId);
+  const teamIds = [...new Set([...players.map((p) => p.teamId), ...links.map((l) => l.teamId)])].filter((id) => mine.includes(id));
 
   return prisma.match.findMany({
     where: {

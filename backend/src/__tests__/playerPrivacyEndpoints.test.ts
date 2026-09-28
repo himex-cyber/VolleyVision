@@ -38,7 +38,8 @@ function world() {
 async function call(handler: any, userId: string, params: Record<string, string>) {
   let body: any;
   let error: any;
-  const res: any = { status: () => res, json: (b: any) => { body = b; return res; } };
+  // locals.visibleTeamId is what visibleByMatchParam hands on in the real app.
+  const res: any = { status: () => res, json: (b: any) => { body = b; return res; }, locals: { visibleTeamId: 'T' } };
   await handler({ params, query: {}, user: { userId } } as any, res, (err: any) => { error = err; });
   if (error) throw error;
   return body;

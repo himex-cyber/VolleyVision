@@ -2,10 +2,11 @@ import { useEffect } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import axios from 'axios';
-import { usePlayerAnalytics, useMatchAnalytics, useTeam, useHasPermission } from '../hooks';
+import { usePlayerAnalytics, useMatchAnalytics, useTeam, useHasPermission, usePlayerZones } from '../hooks';
 import { StatsCards } from '../components/analytics/StatsOverview';
 import { POSITION_FULL_LABELS } from '../types';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
+import CourtHeatMap from '../components/analytics/CourtHeatMap';
 import type { StatLine } from '../types';
 import { ArrowLeftIcon } from '../components/ui/icons';
 
@@ -21,6 +22,8 @@ export default function PlayerDashboardPage() {
   const teamId = searchParams.get('teamId') ?? undefined;
   const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
+  // Waits for the stats: a caller refused those (403) is refused the map too.
+  const zones = usePlayerZones(data ? playerId! : '', teamId, matchId);
   // Roster context (no matchId) gets a full-team tab bar. Guarded by the hook's
   // own `enabled: !!id`, so this stays above the early returns below.
   const { data: team } = useTeam(data?.teamId ?? '');
@@ -135,6 +138,16 @@ export default function PlayerDashboardPage() {
 
       <StatsCards stats={data.stats} />
       <PlayerRadarChart stats={data.stats} />
+
+      <section id="zones">
+        {zones.isLoading ? (
+          <p className="text-sm text-grey-600">Loading court zones…</p>
+        ) : zones.isError || !zones.data ? (
+          <p className="text-sm text-error">Couldn't load court zones. Try refreshing the page.</p>
+        ) : (
+          <CourtHeatMap data={zones.data} title="Court zones" canTrack={canTrack} />
+        )}
+      </section>
 
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Set Breakdown</h2>

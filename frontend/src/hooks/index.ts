@@ -365,13 +365,37 @@ export function useMatchReport(matchId: string) {
   });
 }
 
+export function useMatchZones(matchId: string) {
+  return useQuery({
+    queryKey: ['analytics', 'zones', 'match', matchId],
+    queryFn: () => analyticsApi.matchZones(matchId),
+    enabled: !!matchId,
+  });
+}
+
+export function useTeamZones(teamId: string) {
+  return useQuery({
+    queryKey: ['analytics', 'zones', 'team', teamId],
+    queryFn: () => analyticsApi.teamZones(teamId),
+    enabled: !!teamId,
+  });
+}
+
+export function usePlayerZones(playerId: string, teamId?: string, matchId?: string) {
+  return useQuery({
+    queryKey: ['analytics', 'zones', 'player', playerId, teamId ?? null, matchId ?? null],
+    queryFn: () => analyticsApi.playerZones(playerId, teamId, matchId),
+    enabled: !!playerId,
+  });
+}
+
 // ─── Memberships (Phase 5 Sprint 3) ──────────────────────────────────────────
 
-export function useTeamMembers(teamId: string) {
+export function useTeamMembers(teamId: string, enabled = true) {
   return useQuery({
     queryKey: ['members', teamId],
     queryFn: () => membershipsApi.listByTeam(teamId),
-    enabled: !!teamId,
+    enabled: enabled && !!teamId,
   });
 }
 

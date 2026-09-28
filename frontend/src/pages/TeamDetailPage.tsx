@@ -115,6 +115,7 @@ function LinkMemberSelect({
   return (
     <>
       <select
+        aria-label="Team member to link to this player record"
         className="input text-sm min-h-[44px] flex-1 min-w-[160px]"
         value={selected}
         onChange={(e) => setSelected(e.target.value)}
@@ -154,7 +155,8 @@ export default function TeamDetailPage() {
   const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
   // Player-record linking (Phase 4) — staff-only, gated below via
   // PermissionGuard (MANAGE_MEMBERS), separate from MANAGE_TEAM.
-  const { data: members } = useTeamMembers(teamId!);
+  const canManageMembers = useHasPermission(teamId!, 'MANAGE_MEMBERS');
+  const { data: members } = useTeamMembers(teamId!, canManageMembers);
   const linkPlayerRecord = useLinkPlayerRecord(teamId!);
   const unlinkPlayerRecord = useUnlinkPlayerRecord(teamId!);
 

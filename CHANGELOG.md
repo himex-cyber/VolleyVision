@@ -2,7 +2,7 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.8.0 — unreleased
+## v9.8.0 — 2026-09-29
 
 Phase 4.0 of the rebuild roadmap (carry-over security fixes from an
 independent review of v9.3.0–v9.7.0) and Phase 4 (court zones and heat maps).
@@ -13,6 +13,13 @@ staff and the player themself. That was true only on the player stats page.
 The team and match dashboards, the match report and the event log still sent
 every player's numbers to every member. v9.8.0 completes the rule there.
 
+- **Court zones and heat maps.** The match and team dashboards now show where
+  on the court things happen: tap Attack, Serve, Pass or Defence to see each
+  zone's count, attempts and efficiency on a 4 3 2 / 5 6 1 court. Coaches and
+  the player themself also get a player's own map on the player page. Every map
+  says how many actions it's based on, since picking a zone is optional while
+  tracking. The match report's "attacks originated from Zone N" line links to
+  the map.
 - **Each player's numbers are theirs and their coaches'.** Players and viewers
   see the team's totals plus only their own stats. The team and match
   dashboards show them a "Your stats" card instead of the leaderboards and the
@@ -26,16 +33,23 @@ every player's numbers to every member. v9.8.0 completes the rule there.
   teammate's stats. Now staff link a member to their record from the roster
   ("Link to member" / "Unlink"). Players who join with the player code still
   get their own record automatically.
+- **Your player page shows the teams you're on.** Career stats, recent
+  matches, bests and upcoming games on your player page now count only teams
+  you belong to. A record that another team also plays for keeps that team's
+  numbers with that team's coaches.
 - **Invite codes stay out of error reports.** Join codes and invitation
   links in a request's path are replaced with placeholders before an error
   reaches Sentry, on the server and in the browser.
 - **No reload loop in private browsing.** After a deploy, a stale tab reloads
   once to pick up the new version. With browser storage blocked it can't tell
   it already tried, so it now shows the error instead of reloading forever.
+- **Text colours that never showed.** About 50 labels used grey shades the
+  design system doesn't define, so they rendered in the wrong colour. They now
+  use the defined greys.
 - **Behind the scenes.** Production deploys always name the target site. The
   integration tests refuse to run against anything but a local database, even
   when started directly. CI now checks that Supabase's public roles hold no
-  table grants. The authorization test matrix covers 68 routes, including the
+  table grants. The authorization test matrix covers 72 routes, including the
   player and coach portals and the invitation routes.
 
 ## v9.7.0 — 2026-09-28

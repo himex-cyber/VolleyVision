@@ -388,6 +388,20 @@ export interface SetScore {
   away: number;
 }
 
+// Court-zone map (backend lib/heatmap.ts). Keyed by zone '1'-'6'.
+export interface ZoneAttack  { kills: number; errors: number; attempts: number; hittingPct: number | null }
+export interface ZoneServe   { aces: number; errors: number; serveIn: number; attempts: number; efficiency: number | null }
+export interface ZonePass    { pass3: number; pass2: number; pass1: number; pass0: number; attempts: number; rating: number | null }
+export interface ZoneDefence { digs: number; soloBlocks: number; blockAssists: number; total: number }
+export interface ZoneMap {
+  attack: Record<string, ZoneAttack>;
+  serve: Record<string, ZoneServe>;
+  pass: Record<string, ZonePass>;
+  defence: Record<string, ZoneDefence>;
+  /** Of the actions the map shows, how many had a zone picked. */
+  coverage: { tagged: number; total: number };
+}
+
 export interface MatchReport {
   generatedAt: string;
   result: {

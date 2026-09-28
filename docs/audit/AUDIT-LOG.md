@@ -600,3 +600,52 @@ and one `GRANT` undoes that.
 - As an assistant coach, confirm there is no staff code.
 
 Staging is still not created: Part C1, the next phase.
+
+### Phases 4.0 and 4 of the rebuild roadmap: carry-over fixes, court zones and heat maps (branches `rebuild/p4-0-carryover`, `rebuild/p4-heat-maps`, 2026-09-28)
+
+Why: an independent review of v9.3.0–v9.7.0 found the per-player data rule applied only to the player page, and
+that any player could claim a teammate's record. Phase 4 then brings back court-zone heat maps from data tracking
+already records. Released together as v9.8.0. No migration.
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 4.0.1 Per-player rule | Match/team analytics, the match report and the event log give non-staff team totals plus only their own row (`lib/playerPrivacy.ts`, `seesEveryPlayer`); UI shows "Your Stats" | `playerPrivacy.test.ts`, `playerPrivacyEndpoints.test.ts`, matrix shape checks |
+| 4.0.2 Record claims | Self-claim/unlink answer 403; staff link/unlink via `POST/DELETE /teams/:id/players/:playerId/link` (MANAGE_MEMBERS, rate-limited, serializable) | `http.playerRecordLink.test.ts`, matrix rows |
+| 4.0.3 Deploy | Prod always passes `--site` | — (script) |
+| 4.0.4 Harness guard | `lib/localDb.ts` + `requireLocalDb` first import; a direct run is refused | `localDb.test.ts` |
+| 4.0.5 Grants | CI creates Supabase roles before migrating; `rls.test.ts` asserts no anon/authenticated grants | proven on a throwaway local DB (fails on a table without REVOKE) |
+| 4.0.6 Sentry | Join codes and invitation tokens folded out of URLs (`lib/scrubUrl.ts`, browser copy) | `scrubUrl.test.ts` |
+| 4.0.7 Chunk reload | No reload when storage is blocked | — |
+| 4.0.8 Matrix | Portal, `/users/me`, invitation and attachment routes, anonymous spot checks; no leaks | matrix (68 routes) |
+| 4.1 Heat map | `lib/heatmap.ts` ported, with coverage `{ tagged, total }` | `heatmap.test.ts` (real function) |
+| 4.2 Scope | `resolvePlayerScope` shared by player stats and the player map | `playerAnalyticsScope.test.ts` unchanged |
+| 4.3 Routes | `/analytics/{matches,teams}/:id/zones` (all members), `/analytics/players/:id/zones` (staff/self) | `zoneRoutes.test.ts`, matrix (72 routes) |
+| 4.4–4.6 UI | Hooks, `CourtHeatMap` (restyled, 360px, 44px tabs, aria-labels, coverage), wired into three dashboards; report links to the map | browser check |
+
+Deviations:
+- `VALID_ZONE_FILTER` was not carried over: queries use no zone filter so coverage can count untagged rows.
+- In the event log, notes are also hidden from non-staff on own-team events with no player (stricter than the spec).
+- The dashboard sections are not lazy-loaded individually (no section is); each page is a lazy route chunk, and
+  `CourtHeatMap` is its own 4.2 kB chunk, not in `/login`'s initial chunks.
+
+**Browser check** (local Docker DB with staging seed, 360x800 and 1280): width stays 360, tabs 44px, square cells;
+seed attack counts per zone match SQL; the empty state shows on an untagged match; as the seed player, team and match
+dashboards show only their own row, the event log names only their own events, and a teammate's map and stats are
+refused.
+
+**Reviews:**
+- `/code-review high`: 10 findings, 9 fixed (report highlight counts tips/free balls like the map; the guard hands
+  the team id on; the staff rule reused; link 409 names the existing record; undefined colour classes and contrast;
+  fewer wasted requests), 1 parked for Karlos (players on a team only via `PlayerTeamLink` have no own row; staff
+  tables also omit them).
+- Independent Opus review: no high or medium; 6 low, 4 fixed, 2 for the G2 review (link routes check role, not the
+  roster access tier, like the member routes; the heat-map CHANGELOG bullet was added).
+- `/security-review`: nothing at or above the reporting threshold. One candidate (7/10): home-team staff can now
+  unlink a claimed record and link it to another member, whose player portal then showed that record's stats from other
+  teams (the portal read by `userId` across teams; the unclaimed-record path existed before). **Karlos (G2): scope the
+  portal.** Every portal read now counts only matches of teams the viewer owns or belongs to (`portalScope`,
+  `playerPortalScope.test.ts`). Karlos also kept the link routes on role only (like the member routes) and parked the
+  linked-player rows for a later phase.
+
+**Verified:** backend `tsc` clean, 49 unit test files, build OK; frontend `tsc`, lint and build clean; integration
+2/2 (matrix 72 routes).

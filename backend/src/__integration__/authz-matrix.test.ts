@@ -88,6 +88,11 @@ const ROWS: Row[] = [
   // Individual stats: staff and the player themself only (Karlos, 28 Sept). p1 is not the test player's record.
   { name: 'GET player analytics (someone else)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p1.id}`, expect: STAFF },
   { name: 'GET player analytics (own record)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p2.id}`, expect: { outsider: 404, viewer: 403, player: 200 } },
+  // Court-zone maps (Phase 4): team maps for every member; a player's map for staff and the player.
+  { name: 'GET match zones', method: 'GET', path: (f) => `/api/v1/analytics/matches/${f.match.id}/zones`, expect: READ },
+  { name: 'GET team zones', method: 'GET', path: (f) => `/api/v1/analytics/teams/${f.team.id}/zones`, expect: READ },
+  { name: 'GET player zones (someone else)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p1.id}/zones`, expect: STAFF },
+  { name: 'GET player zones (own record)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p2.id}/zones`, expect: { outsider: 404, viewer: 403, player: 200 } },
   { name: 'GET team channel', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/channel`, expect: READ },
   { name: 'GET channel messages', method: 'GET', path: (f) => `/api/v1/channels/${f.channel.id}/messages`, expect: READ },
 

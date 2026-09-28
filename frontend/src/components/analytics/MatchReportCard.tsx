@@ -211,7 +211,15 @@ export default function MatchReportCard({ report }: Props) {
               />
             )}
             {heatMapHighlight && (
-              <Highlight icon="🗺️" text={heatMapHighlight} />
+              <div className="flex items-start gap-2 text-sm text-grey-900">
+                <span className="shrink-0 text-navy-700">🗺️</span>
+                <span>
+                  {heatMapHighlight}{' '}
+                  <a href="#zones" className="text-navy-700 font-medium underline underline-offset-2">
+                    View court zones
+                  </a>
+                </span>
+              </div>
             )}
             {/* Fallback if no events yet */}
             {attack.attempts === 0 && serve.attempts === 0 && !momentum && !heatMapHighlight && (

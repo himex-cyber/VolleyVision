@@ -1,22 +1,28 @@
 import { useParams } from 'react-router-dom';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import StatLeaderboardChart from '../components/charts/StatLeaderboardChart';
-import { useTeamAnalytics, useTeamTrends, useHasPermission, useMyPlayerIds } from '../hooks';
+import { useTeamAnalytics, useTeamTrends, useTeamZones, useHasPermission, useMyPlayerIds } from '../hooks';
 import TeamTrendChart from '../components/charts/TeamTrendChart';
 import CoachInsights from '../components/analytics/CoachInsights';
 import { generateTeamInsights } from '../lib/insights';
 import PlayerInsights from '../components/analytics/PlayerInsights';
 import TeamSubNav from '../components/ui/TeamSubNav';
+import CourtHeatMap from '../components/analytics/CourtHeatMap';
 
 export default function TeamDashboardPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const { data, isLoading, isError } = useTeamAnalytics(teamId!);
   const trends = useTeamTrends(teamId!);
+  const zones = useTeamZones(teamId!);
   // Individual player analytics are for this team's staff and the player
   // themself — gate the drill-down links the same way.
   const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
   const myPlayerIds = useMyPlayerIds(!canTrack);
   const canOpenPlayer = (playerId: string) => canTrack || myPlayerIds.has(playerId);
+  // The server decides who gets every row (lib/playerPrivacy): a global admin
+  // who isn't a member has no TRACK_MATCH here but still gets them all. Any row
+  // that isn't the caller's own means this is the full staff view.
+  const fullView = canTrack || (data?.playerStats ?? []).some((r) => !myPlayerIds.has(r.player.id));
 
   const insights =
   trends.data
@@ -47,6 +53,17 @@ export default function TeamDashboardPage() {
       </div>
 
       <StatsCards stats={data.teamStats} />
+
+      <section id="zones">
+        {zones.isLoading ? (
+          <p className="text-sm text-grey-600">Loading court zones…</p>
+        ) : zones.isError || !zones.data ? (
+          <p className="text-sm text-error">Couldn't load court zones. Try refreshing the page.</p>
+        ) : (
+          <CourtHeatMap data={zones.data} title="Court zones" canTrack={canTrack} />
+        )}
+      </section>
+
         {trends.data && trends.data.length === 0 && (
         <div className="card p-6 text-center text-grey-600 text-sm">
           Complete matches to see performance trends over time.
@@ -89,7 +106,7 @@ export default function TeamDashboardPage() {
       {/* Individual player breakdowns are staff-only — the server now sends
           non-staff viewers 0 or 1 playerStats rows (their own), so leaderboards
           and cross-player insights have nothing meaningful to show them. */}
-      {canTrack && (
+      {fullView && (
         <div className="grid md:grid-cols-2 gap-4">
           <StatLeaderboardChart
             title="Top Killers"
@@ -131,7 +148,7 @@ export default function TeamDashboardPage() {
 
       <CoachInsights insights={insights} />
 
-      {canTrack ? (
+      {fullView ? (
         <>
           <PlayerInsights players={data.playerStats} />
           <section>
