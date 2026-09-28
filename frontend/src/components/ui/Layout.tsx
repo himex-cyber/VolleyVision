@@ -126,7 +126,7 @@ function NavOverflow({ pendingCount }: { pendingCount: number }) {
             to={to}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium transition-colors ${
-                isActive ? 'text-navy-700 bg-navy-100' : 'text-grey-700 hover:bg-grey-50'
+                isActive ? 'text-navy-700 bg-navy-100' : 'text-grey-900 hover:bg-grey-50'
               }`}
           >
             <Icon className="w-[18px] h-[18px] shrink-0" />
@@ -162,16 +162,16 @@ function AvatarMenu({ user, onSignOut }: {
         <ChevronIcon className={`hidden sm:block w-4 h-4 text-grey-400 transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       <Dropdown open={open} onClose={() => setOpen(false)} className="right-0 w-44 py-1.5">
-        <Link to="/profile" className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors">
+        <Link to="/profile" className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-grey-900 hover:bg-grey-50 transition-colors">
           <UserIcon className="w-4 h-4" /> Profile
         </Link>
-        <Link to="/feedback" className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors">
+        <Link to="/feedback" className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-grey-900 hover:bg-grey-50 transition-colors">
           <FeedbackIcon className="w-4 h-4" /> Feedback
         </Link>
         <button
           type="button"
           onClick={onSignOut}
-          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-grey-700 hover:text-error hover:bg-grey-50 transition-colors"
+          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-grey-900 hover:text-error hover:bg-grey-50 transition-colors"
         >
           <LogoutIcon className="w-4 h-4" /> Sign out
         </button>

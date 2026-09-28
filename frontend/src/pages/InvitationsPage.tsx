@@ -35,7 +35,7 @@ function InvitationCard({ inv }: { inv: Invitation }) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-grey-900 text-base">{inv.team?.name}</p>
-          <p className="text-grey-500 text-xs mt-0.5">{inv.team?.division} · Season {inv.team?.season}</p>
+          <p className="text-grey-600 text-xs mt-0.5">{inv.team?.division} · Season {inv.team?.season}</p>
           <p className="text-grey-600 text-sm mt-2">
             Invited by <span className="text-grey-900 font-medium">{inv.invitedBy?.firstName} {inv.invitedBy?.lastName}</span>
           </p>
@@ -43,7 +43,7 @@ function InvitationCard({ inv }: { inv: Invitation }) {
         <span className={`badge shrink-0 mt-0.5 ${ROLE_BADGE[inv.role]}`}>{ROLE_LABELS[inv.role]}</span>
       </div>
 
-      <p className="text-grey-500 text-xs">
+      <p className="text-grey-600 text-xs">
         Expires in {daysLeft(inv.expiresAt)} day{daysLeft(inv.expiresAt) !== 1 ? 's' : ''}
       </p>
 
@@ -138,7 +138,7 @@ function TeamSentInvitations({ teamId }: { teamId: string }) {
       {notice && (
         <div className="px-5 py-3 border-b border-grey-200 text-sm text-grey-900 bg-gold-500/10 flex items-center justify-between gap-3">
           <span>{notice}</span>
-          <button className="text-grey-500 hover:text-grey-900 text-xs" onClick={() => setNotice('')}>Dismiss</button>
+          <button className="text-grey-600 hover:text-grey-900 text-xs" onClick={() => setNotice('')}>Dismiss</button>
         </div>
       )}
 
@@ -152,7 +152,7 @@ function TeamSentInvitations({ teamId }: { teamId: string }) {
             <div key={inv.id} className="flex items-center gap-4 px-5 py-3">
               <div className="flex-1 min-w-0">
                 <p className="text-grey-900 text-sm font-medium truncate">{inv.email}</p>
-                <p className="text-grey-500 text-xs">
+                <p className="text-grey-600 text-xs">
                   {ROLE_LABELS[inv.role]} · {new Date(inv.createdAt).toLocaleDateString()}
                 </p>
               </div>
