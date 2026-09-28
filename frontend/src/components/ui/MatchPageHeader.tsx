@@ -85,14 +85,14 @@ export default function MatchPageHeader({
       <div>
         <Link
           to={`/teams/${teamId}/matches`}
-          className="btn-secondary inline-flex items-center gap-1.5 text-sm py-1.5 px-3"
+          className="btn-secondary inline-flex items-center gap-1.5 text-sm py-1.5 px-3 min-h-[44px]"
         >
           <ArrowLeftIcon className="w-4 h-4" />
           Back to Matches
         </Link>
         <div className="mt-3 flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-grey-900">
+            <h1 className="text-2xl font-bold text-grey-900 break-words">
               {teamName ? `${teamName} vs ${opponent}` : `vs ${opponent}`}
             </h1>
             <p className="text-sm text-grey-600 mt-1">
@@ -110,10 +110,14 @@ export default function MatchPageHeader({
                 aria-haspopup="listbox"
                 aria-expanded={menuOpen}
                 aria-label="Match status"
-                className={`badge ${STATUS_STYLES[status]} pr-6 pl-2 cursor-pointer disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 relative`}
+                // The tappable area is this button (>=44x44); the `badge` styling below is
+                // purely visual so the compact pill look is unchanged at rest.
+                className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-1 cursor-pointer disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 rounded"
               >
-                {status.replace('_', ' ')}
-                <ChevronIcon className="w-3 h-3 rotate-90 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <span className={`badge ${STATUS_STYLES[status]} pr-6 pl-2 relative`}>
+                  {status.replace('_', ' ')}
+                  <ChevronIcon className="w-3 h-3 rotate-90 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </span>
               </button>
 
               {menuOpen && (
@@ -128,7 +132,7 @@ export default function MatchPageHeader({
                         role="option"
                         aria-selected={s === status}
                         onClick={() => handleStatusChange(s)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-grey-900 hover:bg-grey-50 transition-colors text-left"
+                        className="w-full flex items-center gap-2 min-h-[44px] px-3 py-2 text-sm text-grey-900 hover:bg-grey-50 transition-colors text-left"
                       >
                         <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[s]}`} aria-hidden />
                         {s.replace('_', ' ')}
@@ -145,7 +149,7 @@ export default function MatchPageHeader({
         {pendingNotice && (
           <div className="mt-3 card p-3 border border-gold-500/40 bg-gold-500/10 text-sm text-grey-900 flex items-center justify-between gap-3">
             <span>{pendingNotice}</span>
-            <button className="text-grey-500 hover:text-grey-900 text-xs" onClick={() => setPendingNotice('')}>Dismiss</button>
+            <button className="inline-flex items-center min-h-[44px] px-2 text-grey-600 hover:text-grey-900 text-xs shrink-0" onClick={() => setPendingNotice('')}>Dismiss</button>
           </div>
         )}
       </div>

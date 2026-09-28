@@ -1,6 +1,7 @@
 // Shared by src/__tests__/http.*.test.ts: the whole Express app on a random
 // port, and a signed token for a fake user. Import installFakePrisma BEFORE
 // this file, so the app never constructs a real PrismaClient.
+import './testEnv'; // must precede ../index
 import http from 'http';
 import { AddressInfo } from 'net';
 import app from '../index';

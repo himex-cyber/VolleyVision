@@ -25,10 +25,10 @@ export default function TeamTrendChart({ title, data, dataKey }: Props) {
   const gradientId = `trend-fill-${dataKey}`;
 
   return (
-    <div className="card p-4">
+    <div className="card p-4 min-w-0">
       <h3 className="font-display font-semibold text-grey-900 mb-3">{title}</h3>
 
-      <div className="h-72">
+      <div className="h-72 min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
             <defs>

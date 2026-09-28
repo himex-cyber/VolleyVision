@@ -85,7 +85,7 @@ export default function PlayerInsights({ players }: Props) {
 
   return (
     <div className="card p-4">
-      <h2 className="text-lg font-semibold text-chalk-100 mb-4">
+      <h2 className="text-lg font-semibold text-grey-900 mb-4">
         Player Insights
       </h2>
 
@@ -93,13 +93,13 @@ export default function PlayerInsights({ players }: Props) {
         {cards.map((card) => (
           <div
             key={card.title}
-            className="rounded-lg border border-court-700 p-3"
+            className="rounded-lg border border-grey-200 p-3 min-w-0"
           >
-            <p className="text-xs text-chalk-400">
+            <p className="text-xs text-grey-600">
               {card.title}
             </p>
 
-            <p className="mt-1 text-sm text-chalk-100">
+            <p className="mt-1 text-sm text-grey-900 break-words">
               {card.text}
             </p>
           </div>

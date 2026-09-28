@@ -41,8 +41,8 @@ export default function StatLeaderboardChart({
     }));
 
   return (
-    <div className="card p-4">
-      <h2 className="font-semibold text-chalk-100 mb-3">
+    <div className="card p-4 min-w-0">
+      <h2 className="font-semibold text-grey-900 mb-3">
         {title}
       </h2>
       {canOpenAll && (
@@ -51,15 +51,22 @@ export default function StatLeaderboardChart({
         </p>
       )}
 
-      <div className="h-64">
+      <div className="h-64 min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <XAxis
               dataKey="name"
-              tick={{ fill: CHART_TICK, fontSize: 12 }}
+              // Every bar keeps its label (recharts would otherwise drop some on
+              // a narrow card), so long names are shortened instead: at 360px
+              // five bars leave ~49px per label, 7 characters at 11px. The
+              // tooltip still shows the full name.
+              tick={{ fill: CHART_TICK, fontSize: 11 }}
+              interval={0}
+              tickFormatter={(name: string) => (name.length > 7 ? `${name.slice(0, 6)}…` : name)}
             />
             <YAxis
-              tick={{ fill: CHART_TICK, fontSize: 12 }}
+              tick={{ fill: CHART_TICK, fontSize: 11 }}
+              width={32}
             />
             <Tooltip
               formatter={(value) => [value, title]}

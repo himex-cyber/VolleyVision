@@ -2,6 +2,34 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.7.0 — 2026-09-28
+
+Phase 3 of the rebuild roadmap: the core screens work on a phone. Checked
+on a 360-pixel-wide screen, the narrowest common Android size. No migration.
+Not deployed yet.
+
+- **Live tracking on a phone.**
+  - Event buttons sit two across below tablet width, so labels like
+    "Attack Error" stay readable. Tablets and desktops keep the full row.
+  - Every toggle, chip and checkbox is at least 44 pixels tall, big enough
+    to hit mid-rally.
+- **Live scoreboard.**
+  - Set buttons and Undo/End Set/Reset controls are full-size touch targets.
+  - The score shrinks slightly on small phones so nothing is cut off.
+  - Long team names now shorten with "…" instead of pushing the layout.
+- **Match and team dashboards.**
+  - Grey-on-white text that was hard to read now has proper contrast.
+  - Long team names shorten cleanly.
+  - Charts fit the screen and show every player's name.
+  - Leftover old-style colours are gone from the dashboard cards.
+- **Header and match navigation.**
+  - Menu, bell and profile buttons, the Stats/Events/Track tabs, "Back to
+    Matches" and the match status menu are all easy to tap.
+  - The signed-out header no longer squashes "Sign in" onto two lines.
+- **Tests can't reach production by accident.** Running a single HTTP test
+  directly (not through `npm test`) now uses the same safe settings as the
+  test runner.
+
 ## v9.6.0 — 2026-09-28
 
 Phase 2 of the rebuild roadmap: security hardening. Closes every
