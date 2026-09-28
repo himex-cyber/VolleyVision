@@ -68,7 +68,7 @@ export default function TeamChatPage() {
         </p>
       </div>
 
-      <div className="card flex flex-col h-[calc(100vh-16.5rem)] min-h-[24rem] overflow-hidden">
+      <div className="card flex flex-col h-[calc(100vh-16.5rem-var(--vv-safe-top)-var(--vv-safe-bottom))] min-h-[24rem] overflow-hidden">
         {channelError || messagesError ? (
           <div className="flex-1 flex items-center justify-center p-8">
             <p className="text-error text-sm">Couldn't load the team chat. Please try again.</p>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import type { MatchReport } from '../../types';
 import { POSITION_LABELS } from '../../types';
+import { copyText } from '../../lib/clipboard';
 
 interface Props {
   report: MatchReport;
@@ -26,7 +27,7 @@ function Highlight({ icon, text }: { icon: string; text: string }) {
 }
 
 export default function MatchReportCard({ report }: Props) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   // Build plain-text version for export/copy
   function buildPlainText(): string {
@@ -87,11 +88,9 @@ export default function MatchReportCard({ report }: Props) {
     return lines.join('\n');
   }
 
-  function handleCopy() {
-    navigator.clipboard.writeText(buildPlainText()).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  async function handleCopy() {
+    setCopied((await copyText(buildPlainText())) ? 'copied' : 'failed');
+    setTimeout(() => setCopied('idle'), 2000);
   }
 
   const { result, topPerformer, momentum, attack, serve, heatMapHighlight, bestRotation } = report;
@@ -112,7 +111,7 @@ export default function MatchReportCard({ report }: Props) {
           onClick={handleCopy}
           className="inline-flex items-center min-h-[44px] text-xs font-medium px-3 rounded-lg bg-grey-50 hover:bg-grey-200 border border-grey-200 text-grey-600 transition-colors shrink-0"
         >
-          {copied ? '✓ Copied' : '↗ Copy Report'}
+          {copied === 'copied' ? '✓ Copied' : copied === 'failed' ? "Couldn't copy. Try again" : '↗ Copy Report'}
         </button>
       </div>
 

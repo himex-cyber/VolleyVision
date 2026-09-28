@@ -50,6 +50,10 @@ exports.handler = async (event, context) => {
       scope.setSDKProcessingMetadata({
         normalizedRequest: { method, url: host ? `https://${host}${path}` : path },
       });
+      // The Android app sends X-Client: android/<version>; web requests don't.
+      // Capped: it's client-supplied and only a label.
+      const client = event.headers && (event.headers['x-client'] || event.headers['X-Client']);
+      scope.setTag('client', client ? String(client).slice(0, 40) : 'web');
       return Sentry.startSpan(
         { name: `${method} ${path.replace(CUID_SEGMENT, '/:id')}`, op: 'http.server' },
         async (span) => {
