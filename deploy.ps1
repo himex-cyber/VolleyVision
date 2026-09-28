@@ -194,9 +194,13 @@ if (-not $Message) {
 }
 
 $netlifyArgs = @('netlify-cli@26.2.0', 'deploy', '--prod', '--build', '--message', "$Message")
+# --prod publishes to the site's production URL; --site always names the site,
+# so a stale local .netlify link can't publish prod code to another site while
+# the smoke check passes against the unchanged prod URL.
 if ($Target -eq 'staging') {
-  # --prod publishes to that site's production URL; --site picks the staging site.
   $netlifyArgs += @('--site', $stagingVars['NETLIFY_STAGING_SITE_ID'])
+} else {
+  $netlifyArgs += @('--site', $ProdSiteId)
 }
 
 Write-Host "Deploying to $Target with message: $Message"
