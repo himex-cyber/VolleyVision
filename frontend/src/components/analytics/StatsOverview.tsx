@@ -129,11 +129,25 @@ export function StatsCards({ stats, trends }: { stats: StatLine; trends?: StatTr
   );
 }
 
-export function PlayerStatsTable({ rows, matchId }: { rows: PlayerStatLine[]; matchId?: string }) {
+export function PlayerStatsTable({
+  rows,
+  matchId,
+  teamId,
+  canOpen,
+}: {
+  rows: PlayerStatLine[];
+  matchId?: string;
+  teamId: string;
+  // Whether the viewer may drill into this player's individual dashboard —
+  // the analytics endpoint 403s for anyone but staff and the player, so a row
+  // that can't be opened is rendered without click affordances instead.
+  canOpen: (playerId: string) => boolean;
+}) {
   const navigate = useNavigate();
 
   function goToPlayer(playerId: string) {
-    navigate(matchId ? `/players/${playerId}/dashboard?matchId=${matchId}` : `/players/${playerId}/dashboard`);
+    const params = matchId ? `matchId=${matchId}&teamId=${teamId}` : `teamId=${teamId}`;
+    navigate(`/players/${playerId}/dashboard?${params}`);
   }
 
   return (
@@ -155,13 +169,15 @@ export function PlayerStatsTable({ rows, matchId }: { rows: PlayerStatLine[]; ma
           </tr>
         </thead>
         <tbody className="divide-y divide-grey-200">
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const canOpenRow = canOpen(row.player.id);
+            return (
             <tr
               key={row.player.id}
-              tabIndex={0}
-              onClick={() => goToPlayer(row.player.id)}
-              onKeyDown={(e) => { if (e.key === 'Enter') goToPlayer(row.player.id); }}
-              className="hover:bg-grey-50 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+              tabIndex={canOpenRow ? 0 : undefined}
+              onClick={canOpenRow ? () => goToPlayer(row.player.id) : undefined}
+              onKeyDown={canOpenRow ? (e) => { if (e.key === 'Enter') goToPlayer(row.player.id); } : undefined}
+              className={`transition-colors ${canOpenRow ? 'hover:bg-grey-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}`}
             >
               <td className="px-4 py-4">
                 <div className="flex items-center gap-3">
@@ -190,7 +206,8 @@ export function PlayerStatsTable({ rows, matchId }: { rows: PlayerStatLine[]; ma
               <td className="stat-cell">{row.digs}</td>
               <td className="stat-cell">{row.assists}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
       {!rows.length && <p className="text-grey-600 text-sm p-5">No player statistics yet.</p>}

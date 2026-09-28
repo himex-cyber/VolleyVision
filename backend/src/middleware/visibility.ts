@@ -35,7 +35,7 @@ export function visibleByMatchParam(paramName = 'matchId') {
         select: { teamId: true },
       });
       // Missing match → 404 via a teamId that can never be visible.
-      await assertTeamVisible(match?.teamId ?? '__none__', userId(req));
+      await assertTeamVisible(match?.teamId ?? '__none__', userId(req), 'Match not found.');
       next();
     } catch (err) { next(err); }
   };
@@ -49,7 +49,7 @@ export function visibleByPlayerParam(paramName = 'playerId') {
         where: { id: req.params[paramName] },
         select: { teamId: true },
       });
-      await assertTeamVisible(player?.teamId ?? '__none__', userId(req));
+      await assertTeamVisible(player?.teamId ?? '__none__', userId(req), 'Player not found.');
       next();
     } catch (err) { next(err); }
   };

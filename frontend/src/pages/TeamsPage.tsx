@@ -19,13 +19,15 @@ interface TeamCardProps {
   matches?: number;
   badge?: { label: string; className: string };
   canManage: boolean;
+  /** Owner only: the server refuses anyone else, managers included. */
+  canDelete?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }
 
 // Card links straight to the team dashboard (Task 7). Edit/Delete for managers
 // sit outside the link so there's no nested-interactive markup.
-function TeamCard({ id, name, division, season, players, matches, badge, canManage, onEdit, onDelete }: TeamCardProps) {
+function TeamCard({ id, name, division, season, players, matches, badge, canManage, canDelete, onEdit, onDelete }: TeamCardProps) {
   return (
     <div className="card p-5 flex flex-col gap-4 hover:border-navy-500 transition-colors">
       <Link to={`/teams/${id}/dashboard`} className="flex flex-col gap-4">
@@ -53,9 +55,11 @@ function TeamCard({ id, name, division, season, players, matches, badge, canMana
           <button className="btn-icon" onClick={onEdit} aria-label={`Edit ${name}`} title="Edit team">
             <PencilIcon className="w-4 h-4" />
           </button>
-          <button className="btn-icon-danger" onClick={onDelete} aria-label={`Delete ${name}`} title="Delete team">
-            <TrashIcon className="w-4 h-4" />
-          </button>
+          {canDelete && (
+            <button className="btn-icon-danger" onClick={onDelete} aria-label={`Delete ${name}`} title="Delete team">
+              <TrashIcon className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -257,6 +261,7 @@ export default function TeamsPage() {
                       matches={team._count?.matches}
                       badge={{ label: 'Owner', className: 'badge-accent' }}
                       canManage
+                      canDelete
                       onEdit={() => startEdit(team)}
                       onDelete={() => confirmDelete(team.id, team.name)}
                     />

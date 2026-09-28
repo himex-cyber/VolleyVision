@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import StatLeaderboardChart from '../components/charts/StatLeaderboardChart';
-import { useTeamAnalytics, useTeamTrends } from '../hooks';
+import { useTeamAnalytics, useTeamTrends, useHasPermission, useMyPlayerIds } from '../hooks';
 import TeamTrendChart from '../components/charts/TeamTrendChart';
 import CoachInsights from '../components/analytics/CoachInsights';
 import { generateTeamInsights } from '../lib/insights';
@@ -12,6 +12,11 @@ export default function TeamDashboardPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const { data, isLoading, isError } = useTeamAnalytics(teamId!);
   const trends = useTeamTrends(teamId!);
+  // Individual player analytics are for this team's staff and the player
+  // themself — gate the drill-down links the same way.
+  const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
+  const myPlayerIds = useMyPlayerIds(!canTrack);
+  const canOpenPlayer = (playerId: string) => canTrack || myPlayerIds.has(playerId);
 
   const insights =
   trends.data
@@ -86,24 +91,36 @@ export default function TeamDashboardPage() {
           title="Top Killers"
           players={data.playerStats}
           metric="kills"
+          teamId={teamId!}
+          canOpen={canOpenPlayer}
+          canOpenAll={canTrack}
         />
 
         <StatLeaderboardChart
           title="Top Aces"
           players={data.playerStats}
           metric="aces"
+          teamId={teamId!}
+          canOpen={canOpenPlayer}
+          canOpenAll={canTrack}
         />
 
         <StatLeaderboardChart
           title="Top Blocks"
           players={data.playerStats}
           metric="totalBlocks"
+          teamId={teamId!}
+          canOpen={canOpenPlayer}
+          canOpenAll={canTrack}
         />
 
         <StatLeaderboardChart
           title="Top Digs"
           players={data.playerStats}
           metric="digs"
+          teamId={teamId!}
+          canOpen={canOpenPlayer}
+          canOpenAll={canTrack}
         />
       </div>
       
@@ -112,7 +129,7 @@ export default function TeamDashboardPage() {
 
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Season Player Statistics</h2>
-        <PlayerStatsTable rows={data.playerStats} />
+        <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} />
       </section>
     </div>
   );

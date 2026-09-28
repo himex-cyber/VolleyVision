@@ -77,7 +77,7 @@ export default function TeamMembersCard({ teamId }: Props) {
 
       {showInvite && canInvite && staffInviteRoles.length > 0 && (
         <div className="px-5 py-4 border-b border-grey-200 bg-grey-50 space-y-2">
-          <p className="text-xs text-grey-600">Share the staff code, or send an email invite:</p>
+          <p className="text-xs text-grey-600">Invite staff by email.</p>
           <TeamJoinCodes teamId={teamId} only="STAFF" />
           <QuickEmailInvite
             teamId={teamId}

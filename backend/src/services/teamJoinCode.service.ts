@@ -7,8 +7,11 @@ import { assertEmailVerified } from './emailVerification.service';
 export type TeamJoinCodeKind = 'PLAYER' | 'STAFF';
 
 // Roles a staff code may grant. HEAD_COACH is deliberately excluded — head
-// coaches come from ownership or an explicit per-email invitation.
-const STAFF_ROLES: TeamRole[] = [TeamRole.ASSISTANT_COACH, TeamRole.MANAGER, TeamRole.STATISTICIAN];
+// coaches come from ownership or an explicit per-email invitation. So is
+// MANAGER: it carries head-coach authority (approvals, member management,
+// team delete), so it comes only from an email invite, which goes through
+// canInviteRole and the approval queue — never from a code anyone can forward.
+const STAFF_ROLES: TeamRole[] = [TeamRole.ASSISTANT_COACH, TeamRole.STATISTICIAN];
 
 /** Generate a code unique within the given team-code column. */
 export function generateTeamJoinCode(kind: TeamJoinCodeKind): Promise<string> {
@@ -21,10 +24,14 @@ export function generateTeamJoinCode(kind: TeamJoinCodeKind): Promise<string> {
   });
 }
 
-export async function getTeamJoinCodes(teamId: string) {
+/**
+ * The team's codes. The staff code is left out unless `includeStaff` — callers
+ * pass it only for members with FULL_ACCESS on invitations (see the controller).
+ */
+export async function getTeamJoinCodes(teamId: string, includeStaff: boolean) {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: { playerJoinCode: true, staffJoinCode: true },
+    select: includeStaff ? { playerJoinCode: true, staffJoinCode: true } : { playerJoinCode: true },
   });
   if (!team) throw Object.assign(new Error('Team not found'), { statusCode: 404 });
   return team;
@@ -72,7 +79,7 @@ export async function redeemTeamJoinCode(code: string, userId: string, role?: Te
   if (staffTeam) {
     if (!role || !STAFF_ROLES.includes(role)) {
       throw Object.assign(
-        new Error('Pick a staff role: Assistant Coach, Manager, or Statistician'),
+        new Error('Pick a staff role: Assistant Coach or Statistician. Managers join by email invitation.'),
         { statusCode: 400 },
       );
     }

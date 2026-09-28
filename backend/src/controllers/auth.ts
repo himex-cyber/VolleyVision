@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../middleware/errorHandler';
+import { isEmailAddress, normalizeEmail } from '../lib/email';
 import {
   registerUser,
   loginUser,
@@ -15,6 +16,10 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     if (!email || !password || !firstName || !lastName) {
       throw new AppError(400, 'email, password, firstName, and lastName are required.');
     }
+    // A JSON body can carry any type; a non-string reached .trim() and 500'd.
+    if (typeof email !== 'string' || typeof password !== 'string' || !isEmailAddress(normalizeEmail(email))) {
+      throw new AppError(400, 'Enter a valid email address and password.');
+    }
     const result = await registerUser(email, password, firstName, lastName, signupIntent ?? null);
     res.status(201).json(result);
   } catch (err) {
@@ -25,7 +30,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
       throw new AppError(400, 'email and password are required.');
     }
     const result = await loginUser(email, password);
@@ -40,7 +45,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 export async function forgotPassword(req: Request, res: Response, next: NextFunction) {
   try {
     const { email } = req.body;
-    if (!email) throw new AppError(400, 'Email is required.');
+    if (typeof email !== 'string' || !email) throw new AppError(400, 'Email is required.');
     await requestPasswordReset(email);
     res.json({ message: "If an account exists for that email, we've sent a reset link." });
   } catch (err) {
@@ -51,7 +56,9 @@ export async function forgotPassword(req: Request, res: Response, next: NextFunc
 export async function resetPassword(req: Request, res: Response, next: NextFunction) {
   try {
     const { token, password } = req.body;
-    if (!token || !password) throw new AppError(400, 'Token and password are required.');
+    if (typeof token !== 'string' || typeof password !== 'string' || !token || !password) {
+      throw new AppError(400, 'Token and password are required.');
+    }
     await resetPasswordService(token, password);
     res.json({ message: 'Password updated. You can now sign in.' });
   } catch (err) {

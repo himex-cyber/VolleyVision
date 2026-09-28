@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { useMatch, useEvents, useHasPermission } from '../hooks';
+import { useMatch, useEvents, useHasPermission, useMyPlayerIds } from '../hooks';
 import { EVENT_META, type Event, type EventMeta } from '../types';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import { ChevronIcon, SearchIcon, SortIcon } from '../components/ui/icons';
@@ -40,6 +40,7 @@ export default function MatchEventsPage() {
   const { data: match, isLoading: matchLoading } = useMatch(matchId!);
   const { data: events, isLoading: eventsLoading } = useEvents(matchId!);
   const canTrack = useHasPermission(match?.teamId ?? '', 'TRACK_MATCH');
+  const myPlayerIds = useMyPlayerIds(!canTrack);
   const [openSets, setOpenSets] = useState<Record<number, boolean>>({});
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<EventMeta['category'] | 'all'>('all');
@@ -86,9 +87,11 @@ export default function MatchEventsPage() {
   const toggleSet = (setNo: number) => setOpenSets((prev) => ({ ...prev, [setNo]: !isOpen(setNo) }));
   // Mirrors PlayerStatsTable: clicking a player's row goes to that player's
   // game-day stats for this match. Opponent events have no player page, so
-  // those fall back to the match dashboard.
+  // those fall back to the match dashboard. The player dashboard is for staff
+  // and the player themself, so a player-linked row is clickable only for them.
+  const canOpenEventTarget = (e: Event) => canTrack || !e.playerId || myPlayerIds.has(e.playerId);
   const goToEventTarget = (e: Event) =>
-    navigate(e.playerId ? `/players/${e.playerId}/dashboard?matchId=${matchId}` : `/matches/${matchId}/dashboard`);
+    navigate(e.playerId ? `/players/${e.playerId}/dashboard?matchId=${matchId}&teamId=${match.teamId}` : `/matches/${matchId}/dashboard`);
 
   return (
     <div className="space-y-6">
@@ -196,13 +199,14 @@ export default function MatchEventsPage() {
                         {bySet.get(setNo)!.map((e) => {
                           const meta = META.get(e.eventType);
                           const outcome = meta?.outcome ?? 'neutral';
+                          const canOpen = canOpenEventTarget(e);
                           return (
                             <tr
                               key={e.id}
-                              tabIndex={0}
-                              onClick={() => goToEventTarget(e)}
-                              onKeyDown={(ev) => { if (ev.key === 'Enter') goToEventTarget(e); }}
-                              className="hover:bg-grey-50 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500"
+                              tabIndex={canOpen ? 0 : undefined}
+                              onClick={canOpen ? () => goToEventTarget(e) : undefined}
+                              onKeyDown={canOpen ? (ev) => { if (ev.key === 'Enter') goToEventTarget(e); } : undefined}
+                              className={`transition-colors ${canOpen ? 'hover:bg-grey-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}`}
                             >
                               <td className="px-4 py-4">
                                 <div className="flex items-center gap-3">

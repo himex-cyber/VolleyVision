@@ -7,9 +7,8 @@
 // non-empty: instrument.ts calls dotenv.config() and Prisma Client loads
 // backend/.env by itself, so an unset variable would silently fall through to
 // the production database, and these tests create and delete rows.
-const { spawnSync } = require('child_process');
-const { readdirSync } = require('fs');
 const path = require('path');
+const { runTestFiles, srcDir } = require('./test-runner');
 
 const isLocal = (url) => {
   try { return ['localhost', '127.0.0.1'].includes(new URL(url).hostname); } catch { return false; }
@@ -39,33 +38,4 @@ const childEnv = {
   SUPABASE_SERVICE_ROLE_KEY: '',
 };
 
-const dir = path.join(__dirname, '..', 'src', '__integration__');
-const testFiles = readdirSync(dir)
-  .filter((f) => f.endsWith('.test.ts'))
-  .map((f) => path.join(dir, f))
-  .sort();
-
-if (testFiles.length === 0) {
-  console.error('No test files found in src/__integration__.');
-  process.exit(1);
-}
-
-const tsNodeBin = require.resolve('ts-node/dist/bin.js', {
-  paths: [path.join(__dirname, '..')],
-});
-
-for (const fullPath of testFiles) {
-  const file = path.relative(path.join(__dirname, '..', 'src'), fullPath);
-  console.log(`\n── ${file} ──`);
-  const result = spawnSync(
-    process.execPath,
-    [tsNodeBin, '--transpile-only', fullPath],
-    { stdio: 'inherit', cwd: path.join(__dirname, '..'), env: childEnv },
-  );
-  if (result.status !== 0) {
-    console.error(`\nFAILED: ${file}`);
-    process.exit(result.status ?? 1);
-  }
-}
-
-console.log(`\nAll ${testFiles.length} integration test files passed.`);
+runTestFiles({ dirs: [path.join(srcDir, '__integration__')], env: childEnv, label: 'integration test' });

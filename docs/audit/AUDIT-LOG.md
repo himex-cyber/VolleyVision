@@ -473,3 +473,54 @@ Deviations from the handoff:
 2. Apply the RLS migration to staging, check the advisor, back up prod, then apply it to prod.
 3. Seed staging.
 4. `deploy.ps1 -Target staging`, then a prod deploy with its smoke check.
+
+### Phase 2 of the rebuild roadmap: security hardening (branch `rebuild/p2-security-hardening`, 2026-09-28)
+
+Why: close every authorization, rate-limit and reliability defect the roadmap confirmed in code before real teams
+use the app. Players can be minors.
+
+Karlos's decisions:
+- Released as v9.6.0.
+- Approved per phase, not per item.
+- Not deployed. The staging two-browser check (Part C4) is deferred until deploys resume.
+- 2026-09-28: fix every minor review finding in the phase that raised it, rather than carrying it forward.
+
+| Defect | Fix | Test (fails before) |
+|---|---|---|
+| 1. Staff join code | Returned only at FULL_ACCESS on invitations; can't grant MANAGER | `teamJoinCode.test.ts`, matrix role checks |
+| 2. Team delete | Owner only (`requireTeamOwner` mounted) | `http.teamDelete.test.ts` |
+| 3. Forgot-password limiters | Per-IP/email before global | `http.routing.test.ts` |
+| 4. Unlink guard | URL teamId wins; mismatching body 400 | `http.teamLinkGuard.test.ts` |
+| 5. Approvals | Atomic claim (`updateMany where PENDING`), revert on failed apply | `approvalAtomic.test.ts` |
+| 6. Player analytics | Scoped to one team; staff, admin or the player only; no home-team id leak | `playerAnalyticsScope.test.ts`, matrix |
+| 7. Low severity | SMTP timeouts; invitation limiter (20/h per user); email normalised before dup check; event-write limiter (600/10 min per user); chat 404; non-string email 400; audit limit clamp | `http.hardening.test.ts`, `invitationDuplicate.test.ts` |
+| Outsiders get 404 | Visibility before role in every team-scoped guard (one owner+membership lookup), `my-role` gated, resource-specific not-found wording | `permissions.test.ts`, authz matrix (no TODO(P2) left) |
+
+Deviations and extras:
+- The invitation limiter is per user only. A shared per-team bucket let one member block the head coach.
+- Frontend: player dashboards take `?teamId`. Links into them show only for staff or the player's own records, and the
+  tab bars are staff-only.
+- Clean-up of findings carried over from earlier phases:
+  - both test runners share `scripts/test-runner.js`
+  - the `eventFilters.ts` comment no longer names removed features
+  - `CLAUDE.md` says Node 24
+  - the stale `gh-https` remote is removed, and merged local branches whose remotes were gone are deleted
+
+**Reviews:**
+- `/code-review high` raised 6 findings, all resolved:
+  - Fixed (4): duplicate DB reads in the guards; the multer error handler (it turned DB errors into a 400); the
+    404 wording that revealed whether an id existed; players unable to open their own row.
+  - Fixed (1): the access tier read twice on the join-codes route.
+  - No change needed (1): sign-up now requires a full address. The CHANGELOG says so.
+- Independent Opus review: PASS, with 1 medium and 5 low findings, all fixed.
+- `/security-review`: no findings.
+
+**Verified:**
+- Backend: `tsc` clean, 40/40 unit test files, no import cycles, build OK.
+- Frontend: `tsc`, lint and build clean. `npm audit --omit=dev --audit-level=high` is clean in both packages.
+- Integration tests against Docker postgres:17 pass 2/2; the authz matrix covers 48 routes x outsider/viewer/player,
+  plus role checks.
+
+**Deferred until deploys resume:**
+- The staging two-browser check (Part C4).
+- The prod deploy with its smoke check.
