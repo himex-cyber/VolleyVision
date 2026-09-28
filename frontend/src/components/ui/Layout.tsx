@@ -115,7 +115,7 @@ function NavOverflow({ pendingCount }: { pendingCount: number }) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu"
         aria-expanded={open}
-        className="w-10 h-10 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
+        className="w-11 h-11 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
       >
         <MenuIcon className="w-5 h-5" />
       </button>
@@ -153,7 +153,7 @@ function AvatarMenu({ user, onSignOut }: {
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
         aria-expanded={open}
-        className="flex items-center gap-2.5 pl-[5px] pr-2.5 py-[5px] rounded-xl bg-grey-50 border border-grey-200 hover:bg-grey-200/60 transition-colors"
+        className="flex items-center gap-2.5 pl-[5px] pr-2.5 py-[5px] min-h-[44px] rounded-xl bg-grey-50 border border-grey-200 hover:bg-grey-200/60 transition-colors"
       >
         <Initials user={user} size="sm" />
         <span className="hidden sm:block text-[13px] font-semibold text-grey-900 max-w-[120px] truncate">
@@ -186,14 +186,16 @@ function PublicShell() {
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 bg-white border-b border-grey-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5 min-h-[44px] min-w-[44px]">
             <BrandMark />
-            <span className="font-display font-bold text-lg tracking-tight text-navy-700">VolleyVision</span>
+            {/* Below sm the mark alone, as in the signed-in header: the wordmark
+                plus three links doesn't fit 360px and "Sign in" wrapped. */}
+            <span className="hidden sm:inline font-display font-bold text-lg tracking-tight text-navy-700">VolleyVision</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <NavLink to="/teams" className={({ isActive }) => navPillClass(isActive)}>Teams</NavLink>
-            <NavLink to="/login" className={({ isActive }) => navPillClass(isActive)}>Sign in</NavLink>
-            <NavLink to="/register" className="btn-primary text-sm px-4 py-2">Register</NavLink>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <NavLink to="/teams" className={({ isActive }) => `${navPillClass(isActive)} min-h-[44px] inline-flex items-center`}>Teams</NavLink>
+            <NavLink to="/login" className={({ isActive }) => `${navPillClass(isActive)} min-h-[44px] inline-flex items-center`}>Sign in</NavLink>
+            <NavLink to="/register" className="btn-primary text-sm px-4 py-2 min-h-[44px] inline-flex items-center">Register</NavLink>
           </div>
         </div>
       </header>
@@ -205,15 +207,14 @@ function PublicShell() {
 }
 
 export default function Layout() {
-  const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { data: invitations } = useMyInvitations();
 
-  const isTracking = location.pathname.startsWith('/track/');
-
-  // The tracking screen is chrome-free and tablet-optimised — never wrapped.
-  if (isTracking) return <SuspendedOutlet />;
+  // Live tracking (/matches/:matchId/track) renders inside this shell like the
+  // other match pages: it carries MatchPageHeader and the Stats/Events/Track
+  // tabs and relies on <main>'s padding. The old chrome-free branch keyed on
+  // /track/, which is now only a redirect, so it was dead code.
   if (!user) return <PublicShell />;
 
   const pendingCount = invitations?.length ?? 0;
@@ -230,7 +231,7 @@ export default function Layout() {
         <div className="h-[60px] px-4 sm:px-6 flex items-center justify-between gap-4">
           {/* Left: brand + nav */}
           <div className="flex items-center gap-5 min-w-0">
-            <Link to="/dashboard" className="flex items-center gap-2.5 shrink-0">
+            <Link to="/dashboard" className="flex items-center gap-2.5 shrink-0 min-h-[44px] min-w-[44px]">
               <BrandMark />
               <span className="font-display font-bold text-lg tracking-tight text-navy-700 hidden sm:block">
                 VolleyVision
@@ -256,7 +257,7 @@ export default function Layout() {
             <Link
               to="/invitations"
               aria-label={pendingCount > 0 ? `Invitations (${pendingCount} pending)` : 'Invitations'}
-              className="relative w-10 h-10 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
+              className="relative w-11 h-11 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
             >
               <BellIcon className="w-[18px] h-[18px]" />
               {pendingCount > 0 && (

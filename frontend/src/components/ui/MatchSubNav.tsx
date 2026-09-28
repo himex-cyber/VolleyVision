@@ -21,7 +21,7 @@ export default function MatchSubNav({ matchId, mode }: { matchId: string; mode?:
             key={t.to}
             to={t.to}
             className={({ isActive }) =>
-              `px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              `inline-flex items-center min-h-[44px] px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 isActive
                   ? 'border-gold-500 text-navy-700 font-semibold'
                   : 'border-transparent text-grey-600 hover:text-navy-700'

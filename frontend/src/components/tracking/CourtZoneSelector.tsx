@@ -26,7 +26,7 @@ export default function CourtZoneSelector({ value, onChange }: Props) {
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="text-xs text-grey-600 hover:text-navy-700 transition-colors"
+            className="inline-flex items-center min-h-[44px] px-2 -mr-2 text-xs text-grey-600 hover:text-navy-700 transition-colors"
           >
             Clear
           </button>
