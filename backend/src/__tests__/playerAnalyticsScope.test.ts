@@ -65,6 +65,7 @@ async function main() {
   const linked = await call('linkedCoach', { teamId: 'LINKED' });
   assert.equal(linked.status, 200);
   assert.deepEqual(callsFor('event', 'findMany')[0][0].where.match, { teamId: 'LINKED' });
+  assert.equal(linked.body.player.teamId, 'LINKED', "the home team's id must not leak to a linked team's staff");
   // ...but not via the home team.
   assert.equal((await call('linkedCoach')).status, 404);
 

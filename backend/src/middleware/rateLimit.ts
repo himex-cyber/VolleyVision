@@ -248,15 +248,15 @@ export const sentryTestRateLimit = createRateLimit({
 
 /**
  * Creating an invitation mails an address the caller picks, so without a cap
- * it's a way to send VolleyVision mail to anyone, at any volume. Per team (the
- * inbox-flood budget a team can spend) and per user (one account across many
- * teams). Mounted after the access check, so an outsider can't spend a team's
- * budget. 20 an hour is far above a coach inviting a squad.
+ * it's a way to send VolleyVision mail to anyone, at any volume. Per user, not
+ * per team: a shared team bucket let one member (say a statistician whose
+ * requests only queue for approval) spend it and block the head coach from
+ * inviting anyone for an hour. 20 an hour is far above a coach inviting a squad.
  */
 export const invitationCreateRateLimit = createRateLimit({
   windowMs: 60 * 60 * 1000,
   max: 20,
-  keyFn: (req) => (req.user?.userId ? [`invite:user:${req.user.userId}`, `invite:team:${req.params.id}`] : null), // requireAuth handles the 401
+  keyFn: (req) => (req.user?.userId ? [`invite:user:${req.user.userId}`] : null), // requireAuth handles the 401
   message: 'Too many invitations sent in the last hour. Try again later.',
 });
 

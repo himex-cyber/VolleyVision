@@ -156,6 +156,8 @@ export async function getPlayerAnalytics(req: Request, res: Response, next: Next
       where: { playerId: player.id, match: { teamId }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
       select: eventSelect,
     });
-    res.json({ player, teamId, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events) });
+    // player.teamId is the team in scope: the home team may be one this caller
+    // can't see (a linked team's staff), and its id must not leak.
+    res.json({ player: { ...player, teamId }, teamId, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events) });
   } catch (err) { next(err); }
 }

@@ -16,7 +16,7 @@ function world() {
 }
 
 // Each invitation mails an address the caller picks, so an unlimited endpoint
-// is a mail cannon. 20 per hour per team (and per user).
+// is a mail cannon. 20 per hour per user.
 async function invitationsAreRateLimited(base: string) {
   world();
   const token = tokenFor('coach');
