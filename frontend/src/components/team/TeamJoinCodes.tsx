@@ -29,7 +29,7 @@ function JoinCodeRow({ label, hint, code, kind, teamId, rowClass }: {
     <div className={`flex items-center gap-3 ${rowClass}`}>
       <div className="flex-1 min-w-0">
         <p className="text-grey-900 text-sm font-medium">{label}</p>
-        <p className="text-grey-500 text-xs">{hint}</p>
+        <p className="text-grey-600 text-xs">{hint}</p>
       </div>
       <span className="badge badge-neutral font-mono tracking-widest text-sm px-3 py-1">
         {code ?? '—'}
@@ -38,7 +38,7 @@ function JoinCodeRow({ label, hint, code, kind, teamId, rowClass }: {
         {copied ? 'Copied ✓' : 'Copy'}
       </button>
       <button
-        className="text-grey-500 hover:text-grey-900 text-xs px-2 py-1.5"
+        className="text-grey-600 hover:text-grey-900 text-xs px-2 py-1.5"
         onClick={handleRegenerate}
         disabled={regenerate.isPending}
       >
@@ -94,7 +94,7 @@ export default function TeamJoinCodes({ teamId, only }: Props) {
       {isLoading ? (
         <p className="text-grey-600 text-sm px-5 py-3">Loading codes…</p>
       ) : (
-        <div className="divide-y divide-grey-100">
+        <div className="divide-y divide-grey-200">
           {rows.PLAYER}
           {rows.STAFF}
         </div>

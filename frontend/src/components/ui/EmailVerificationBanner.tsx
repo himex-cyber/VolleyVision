@@ -49,7 +49,7 @@ export default function EmailVerificationBanner() {
         <button type="button" className="btn-secondary text-xs px-3 py-1.5" onClick={handleResend} disabled={resend.isPending}>
           {resend.isPending ? 'Sending…' : 'Resend email'}
         </button>
-        <button type="button" aria-label="Dismiss verification reminder" className="text-grey-500 hover:text-grey-900" onClick={dismiss}>
+        <button type="button" aria-label="Dismiss verification reminder" className="text-grey-600 hover:text-grey-900" onClick={dismiss}>
           ✕
         </button>
       </div>

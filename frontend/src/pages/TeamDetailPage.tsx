@@ -194,7 +194,7 @@ export default function TeamDetailPage() {
       {pendingNotice && (
         <div className="card p-4 border border-gold-500/30 bg-gold-500/10 text-sm text-grey-900 flex items-center justify-between gap-3">
           <span>{pendingNotice}</span>
-          <button className="text-grey-500 hover:text-grey-900 text-xs" onClick={() => setPendingNotice('')}>Dismiss</button>
+          <button className="text-grey-600 hover:text-grey-900 text-xs" onClick={() => setPendingNotice('')}>Dismiss</button>
         </div>
       )}
 

@@ -110,7 +110,7 @@ export default function MatchEventsPage() {
       {/* Total count — moved here off the match card (it's detail, not something
           the matches list needs to carry on every row). */}
       {!eventsLoading && totalEventCount > 0 && (
-        <p className="text-xs text-grey-500 tabular-nums text-right">{totalEventCount} events total</p>
+        <p className="text-xs text-grey-600 tabular-nums text-right">{totalEventCount} events total</p>
       )}
 
       {/* Filter + sort toolbar — only worth showing once there's something to sift through. */}
@@ -215,7 +215,7 @@ export default function MatchEventsPage() {
                                       even when there's no number so row height is uniform. */}
                                   <div
                                     className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
-                                      e.player ? 'bg-navy-100 text-navy-700' : 'bg-grey-200 text-grey-500'
+                                      e.player ? 'bg-navy-100 text-navy-700' : 'bg-grey-200 text-grey-600'
                                     }`}
                                   >
                                     <span className="tabular-nums font-bold text-base">
@@ -233,8 +233,8 @@ export default function MatchEventsPage() {
                                   <span className="font-medium text-grey-900">{meta?.label ?? e.eventType}</span>
                                 </div>
                               </td>
-                              <td className="stat-cell text-grey-500">{e.rallyNumber ?? '—'}</td>
-                              <td className="stat-cell text-grey-500">{format(new Date(e.recordedAt), 'HH:mm')}</td>
+                              <td className="stat-cell text-grey-600">{e.rallyNumber ?? '—'}</td>
+                              <td className="stat-cell text-grey-600">{format(new Date(e.recordedAt), 'HH:mm')}</td>
                             </tr>
                           );
                         })}
