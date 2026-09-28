@@ -9,7 +9,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:native:local": "tsc && vite build --mode native-local",
+    "build:native:prod": "tsc && vite build --mode native-prod"
   },
   "dependencies": {
     "@sentry/react": "^10.73.0",
