@@ -81,6 +81,10 @@ jobs:
         run: psql "$DATABASE_URL" -c 'CREATE DATABASE ci_shadow'
       - run: npm ci
       - run: npx prisma generate
+      # Supabase's anon/authenticated roles and default grants, BEFORE the
+      # migrations run, so rls.test.ts proves every table's grants are revoked.
+      - name: Create the Supabase roles
+        run: npx prisma db execute --url "$DATABASE_URL" --file scripts/supabase-roles.sql
       - name: Apply every migration from zero
         run: npx prisma migrate deploy
       # Exit code 2 on any difference. The one thing schema.prisma can't express,
