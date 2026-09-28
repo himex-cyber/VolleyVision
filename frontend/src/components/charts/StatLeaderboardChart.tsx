@@ -41,8 +41,8 @@ export default function StatLeaderboardChart({
     }));
 
   return (
-    <div className="card p-4">
-      <h2 className="font-semibold text-chalk-100 mb-3">
+    <div className="card p-4 min-w-0">
+      <h2 className="font-semibold text-grey-900 mb-3">
         {title}
       </h2>
       {canOpenAll && (
@@ -51,15 +51,20 @@ export default function StatLeaderboardChart({
         </p>
       )}
 
-      <div className="h-64">
+      <div className="h-64 min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <XAxis
               dataKey="name"
-              tick={{ fill: CHART_TICK, fontSize: 12 }}
+              // Smaller than the desktop-tuned 12px: 5 bars in a ~300px-wide
+              // card at 360px viewport leave ~55px per label, so a full name
+              // overlaps at the old size.
+              tick={{ fill: CHART_TICK, fontSize: 10 }}
+              interval={0}
             />
             <YAxis
-              tick={{ fill: CHART_TICK, fontSize: 12 }}
+              tick={{ fill: CHART_TICK, fontSize: 10 }}
+              width={28}
             />
             <Tooltip
               formatter={(value) => [value, title]}
