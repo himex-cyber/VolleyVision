@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useMatchAnalytics, useMatchReport, useHasPermission } from '../hooks';
+import { useMatchAnalytics, useMatchReport, useHasPermission, useMyPlayerIds } from '../hooks';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import MatchReportCard from '../components/analytics/MatchReportCard';
@@ -12,6 +12,8 @@ export default function MatchDashboardPage() {
   // re-runs when it resolves. Track is offered only to those who can track a
   // live match (players never can — Iteration 3 Task 6).
   const canTrack = useHasPermission(data?.match.teamId ?? '', 'TRACK_MATCH');
+  // Staff open any player's stats; a player opens only their own.
+  const myPlayerIds = useMyPlayerIds(!canTrack);
 
   if (isLoading) return <p className="text-grey-600">Loading analytics...</p>;
   if (isError || !data) return <p className="text-error">Couldn't load match analytics.</p>;
@@ -115,7 +117,7 @@ export default function MatchDashboardPage() {
 
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Player Statistics</h2>
-        <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={canTrack} />
+        <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={(id) => canTrack || myPlayerIds.has(id)} />
       </section>
     </div>
   );

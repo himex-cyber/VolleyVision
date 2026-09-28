@@ -607,6 +607,17 @@ export function useTeamRole(teamId: string) {
   return { ...query, data };
 }
 
+/**
+ * Ids of the roster entries linked to the signed-in user - their own player
+ * records, whose individual stats they may open. Shares the player-portal
+ * dashboard query (and its cache); `enabled` lets staff, who can open every
+ * player anyway, skip the request.
+ */
+export function useMyPlayerIds(enabled = true) {
+  const { data } = useQuery({ queryKey: ['player', 'dashboard'], queryFn: playerPortalApi.dashboard, enabled });
+  return useMemo(() => new Set((data?.players ?? []).map((p) => p.id)), [data]);
+}
+
 /** Convenience: returns true if the user has the given permission on teamId */
 export function useHasPermission(teamId: string, permission: string) {
   const { data } = useTeamRole(teamId);

@@ -138,10 +138,10 @@ export function PlayerStatsTable({
   rows: PlayerStatLine[];
   matchId?: string;
   teamId: string;
-  // Whether the viewer may drill into a player's individual dashboard from
-  // this table — the analytics endpoint 403s for anyone else, so a row that
-  // can't be opened is rendered without click affordances instead.
-  canOpen: boolean;
+  // Whether the viewer may drill into this player's individual dashboard —
+  // the analytics endpoint 403s for anyone but staff and the player, so a row
+  // that can't be opened is rendered without click affordances instead.
+  canOpen: (playerId: string) => boolean;
 }) {
   const navigate = useNavigate();
 
@@ -169,13 +169,15 @@ export function PlayerStatsTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-grey-200">
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const canOpenRow = canOpen(row.player.id);
+            return (
             <tr
               key={row.player.id}
-              tabIndex={canOpen ? 0 : undefined}
-              onClick={canOpen ? () => goToPlayer(row.player.id) : undefined}
-              onKeyDown={canOpen ? (e) => { if (e.key === 'Enter') goToPlayer(row.player.id); } : undefined}
-              className={`transition-colors ${canOpen ? 'hover:bg-grey-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}`}
+              tabIndex={canOpenRow ? 0 : undefined}
+              onClick={canOpenRow ? () => goToPlayer(row.player.id) : undefined}
+              onKeyDown={canOpenRow ? (e) => { if (e.key === 'Enter') goToPlayer(row.player.id); } : undefined}
+              className={`transition-colors ${canOpenRow ? 'hover:bg-grey-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}`}
             >
               <td className="px-4 py-4">
                 <div className="flex items-center gap-3">
@@ -204,7 +206,8 @@ export function PlayerStatsTable({
               <td className="stat-cell">{row.digs}</td>
               <td className="stat-cell">{row.assists}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
       {!rows.length && <p className="text-grey-600 text-sm p-5">No player statistics yet.</p>}

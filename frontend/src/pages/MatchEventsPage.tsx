@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { useMatch, useEvents, useHasPermission } from '../hooks';
+import { useMatch, useEvents, useHasPermission, useMyPlayerIds } from '../hooks';
 import { EVENT_META, type Event, type EventMeta } from '../types';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import { ChevronIcon, SearchIcon, SortIcon } from '../components/ui/icons';
@@ -40,6 +40,7 @@ export default function MatchEventsPage() {
   const { data: match, isLoading: matchLoading } = useMatch(matchId!);
   const { data: events, isLoading: eventsLoading } = useEvents(matchId!);
   const canTrack = useHasPermission(match?.teamId ?? '', 'TRACK_MATCH');
+  const myPlayerIds = useMyPlayerIds(!canTrack);
   const [openSets, setOpenSets] = useState<Record<number, boolean>>({});
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<EventMeta['category'] | 'all'>('all');
@@ -86,10 +87,9 @@ export default function MatchEventsPage() {
   const toggleSet = (setNo: number) => setOpenSets((prev) => ({ ...prev, [setNo]: !isOpen(setNo) }));
   // Mirrors PlayerStatsTable: clicking a player's row goes to that player's
   // game-day stats for this match. Opponent events have no player page, so
-  // those fall back to the match dashboard. The player dashboard 403s for
-  // anyone but tracking staff and the player themself (not knowable per-row
-  // here), so a player-linked row is only clickable when canTrack is true.
-  const canOpenEventTarget = (e: Event) => canTrack || !e.playerId;
+  // those fall back to the match dashboard. The player dashboard is for staff
+  // and the player themself, so a player-linked row is clickable only for them.
+  const canOpenEventTarget = (e: Event) => canTrack || !e.playerId || myPlayerIds.has(e.playerId);
   const goToEventTarget = (e: Event) =>
     navigate(e.playerId ? `/players/${e.playerId}/dashboard?matchId=${matchId}&teamId=${match.teamId}` : `/matches/${matchId}/dashboard`);
 

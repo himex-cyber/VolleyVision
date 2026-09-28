@@ -16,9 +16,10 @@ interface Props {
   metric: 'kills' | 'aces' | 'digs' | 'totalBlocks';
   teamId: string;
   // Whether the viewer may drill into a bar's player dashboard — the analytics
-  // endpoint 403s for anyone but this team's tracking staff, so bars render
-  // without click affordances instead of navigating into an error page.
-  canOpen: boolean;
+  // endpoint 403s for anyone but this team's staff and the player themself.
+  canOpen: (playerId: string) => boolean;
+  /** Staff can open every bar, so the hint and pointer show for them only. */
+  canOpenAll: boolean;
 }
 
 export default function StatLeaderboardChart({
@@ -27,6 +28,7 @@ export default function StatLeaderboardChart({
   metric,
   teamId,
   canOpen,
+  canOpenAll,
 }: Props) {
   const navigate = useNavigate();
   const data = [...players]
@@ -43,7 +45,7 @@ export default function StatLeaderboardChart({
       <h2 className="font-semibold text-chalk-100 mb-3">
         {title}
       </h2>
-      {canOpen && (
+      {canOpenAll && (
         <p className="text-xs text-grey-500 mb-2">
           Click a player bar to view details
         </p>
@@ -76,10 +78,10 @@ export default function StatLeaderboardChart({
               dataKey="value"
               fill={CHART_SERIES[0]}
               radius={[4, 4, 0, 0]}
-              cursor={canOpen ? 'pointer' : 'default'}
-              onClick={canOpen ? (data) => {
-                navigate(`/players/${data.id}/dashboard?teamId=${teamId}`);
-              } : undefined}
+              cursor={canOpenAll ? 'pointer' : 'default'}
+              onClick={(data) => {
+                if (data.id && canOpen(data.id)) navigate(`/players/${data.id}/dashboard?teamId=${teamId}`);
+              }}
             />
           </BarChart>
         </ResponsiveContainer>
