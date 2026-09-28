@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
-import { isSerializationConflict } from './serializationConflict';
+import { isSerializationConflict, retryOnConflict } from './serializationConflict';
 
 // Singleton pattern prevents connection pool exhaustion during hot reloads in
 // development. In production (Node.js process stays alive) this is just a
@@ -34,7 +34,7 @@ if (process.env.NODE_ENV !== 'production') {
  */
 export async function runSerializable<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   try {
-    return await prisma.$transaction(fn, { isolationLevel: 'Serializable' });
+    return await retryOnConflict(() => prisma.$transaction(fn, { isolationLevel: 'Serializable' }));
   } catch (err) {
     if (isSerializationConflict(err)) {
       throw new AppError(409, 'Someone else changed this at the same moment. Please try again.');

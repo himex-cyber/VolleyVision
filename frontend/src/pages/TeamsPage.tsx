@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   useMyTeams, useMyMemberships, useMyInvitations,
   useCreateTeam, useUpdateTeam, useDeleteTeam,
 } from '../hooks';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../lib/api';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
 import { PencilIcon, TrashIcon } from '../components/ui/icons';
 import { ROLE_LABELS, ROLE_BADGE } from '../lib/teamRoles';
@@ -83,13 +84,11 @@ export default function TeamsPage() {
 
   const pendingCount = invitations?.length ?? 0;
 
-  // Players join a team with a code or a coach's invitation — they never found
-  // one, so no create-team affordance is rendered for them. Mirrors the 403 in
-  // createTeam. Only PLAYER is gated; UNSURE and pre-existing (null) users aren't.
-  const isPlayer = user?.signupIntent === 'PLAYER';
-
-  const [showForm, setShowForm] = useState(false);
+  // ?new=1 (home and onboarding "Create a team") opens the form straight away.
+  const [searchParams] = useSearchParams();
+  const [showForm, setShowForm] = useState(searchParams.get('new') === '1');
   const [form, setForm] = useState<TeamForm>(emptyForm);
+  const [createError, setCreateError] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<TeamForm>(emptyForm);
@@ -105,11 +104,17 @@ export default function TeamsPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name || !form.season) return;
-    await createTeam.mutateAsync({
-      name: form.name, division: form.division, season: form.season,
-    });
-    setForm(emptyForm);
-    setShowForm(false);
+    setCreateError('');
+    try {
+      await createTeam.mutateAsync({
+        name: form.name, division: form.division, season: form.season,
+      });
+      setForm(emptyForm);
+      setShowForm(false);
+    } catch (err) {
+      // Surfaces the 409 "own up to 5 teams" cap and the 429 rate-limit message.
+      setCreateError(getApiErrorMessage(err, "Couldn't create the team. Try again."));
+    }
   }
 
   function startEdit(team: { id: string; name: string; division?: string; season: string }) {
@@ -176,11 +181,9 @@ export default function TeamsPage() {
               </span>
             )}
           </Link>
-          {!isPlayer && (
-            <button className={showForm ? 'btn-secondary' : 'btn-primary'} onClick={() => setShowForm(!showForm)}>
-              {showForm ? 'Cancel' : '+ New team'}
-            </button>
-          )}
+          <button className={showForm ? 'btn-secondary' : 'btn-primary'} onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : '+ New team'}
+          </button>
         </div>
       </div>
 
@@ -201,6 +204,9 @@ export default function TeamsPage() {
               <label className="block text-xs text-grey-600 mb-1">Season *</label>
               <input className="input" placeholder="e.g. 2025/26" value={form.season} onChange={(e) => setForm({ ...form, season: e.target.value })} required />
             </div>
+            {createError && (
+              <p className="sm:col-span-2 text-error text-xs">{createError}</p>
+            )}
             <div className="sm:col-span-2">
               <button type="submit" className="btn-primary" disabled={createTeam.isPending}>
                 {createTeam.isPending ? 'Creating…' : 'Create team'}
@@ -220,27 +226,16 @@ export default function TeamsPage() {
                 d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
-          {isPlayer ? (
-            <>
-              <div>
-                <p className="text-grey-900 font-medium">You're not part of any team yet</p>
-                <p className="text-grey-600 text-sm mt-1">
-                  Enter the join code your coach gave you, or check your invitations above.
-                </p>
-              </div>
-              <div className="max-w-md mx-auto text-left">
-                <JoinByCodeCard />
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <p className="text-grey-900 font-medium">You're not part of any team yet</p>
-                <p className="text-grey-600 text-sm mt-1">Create one, or ask a coach to send you an invitation.</p>
-              </div>
-              <button className="btn-primary" onClick={() => setShowForm(true)}>Create a team</button>
-            </>
-          )}
+          <div>
+            <p className="text-grey-900 font-medium">You're not part of any team yet</p>
+            <p className="text-grey-600 text-sm mt-1">
+              Create one, or enter a join code from your coach.
+            </p>
+          </div>
+          <button className="btn-primary" onClick={() => setShowForm(true)}>Create a team</button>
+          <div className="max-w-md mx-auto text-left">
+            <JoinByCodeCard />
+          </div>
         </div>
       ) : (
         <>

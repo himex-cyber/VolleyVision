@@ -9,7 +9,7 @@ import { requireAuth, optionalAuth } from '../middleware/auth';
 import { requireTeamPermission, requireTeamAccess } from '../middleware/permissions';
 import { visibleByTeamParam } from '../middleware/visibility';
 import { requireTeamOwner } from '../middleware/teamOwner';
-import { invitationCreateRateLimit, playerLinkRateLimit } from '../middleware/rateLimit';
+import { invitationCreateRateLimit, playerLinkRateLimit, teamCreateRateLimit } from '../middleware/rateLimit';
 import { Permission, getUserTeamRole, getEffectivePermissions } from '../services/permission.service';
 
 const router = Router();
@@ -22,7 +22,7 @@ router.get('/my-teams', requireAuth, myTeams);
 // empty list / 404 rather than a hard 401.
 router.get('/', optionalAuth, getTeams);
 router.get('/:id', optionalAuth, visibleByTeamParam('id'), getTeam);
-router.post('/', requireAuth, createTeam);
+router.post('/', requireAuth, teamCreateRateLimit, createTeam);
 router.patch('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), updateTeam);
 // Delete takes the roster, matches and every event with it, so it's the
 // owner's call alone (a MANAGER holds MANAGE_TEAM too).

@@ -1,7 +1,8 @@
 import { prisma, runSerializable } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { normalizeEmail } from '../lib/email';
-import { defaultAccessTiers } from './permission.service';
+import { Prisma } from '@prisma/client';
+import { defaultAccessTiers, isGlobalAdmin } from './permission.service';
 import { roleSlotError } from '../lib/roleSlots';
 
 const ownerSelect = {
@@ -12,6 +13,24 @@ const ownerSelect = {
   role: true,
   profileImage: true,
 } as const;
+
+/**
+ * Anyone can create a team (Phase 4.5), so ownership is capped instead of
+ * gated: an account owns at most 5 teams, and a global admin is exempt. Run it
+ * inside the same serializable transaction as the write that adds a team, so
+ * two parallel creates (or a create racing a transfer) can't both see 4.
+ */
+export const MAX_OWNED_TEAMS = 5;
+
+export async function assertRoomForAnotherTeam(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  isAdmin: boolean,
+  message = `You can own up to ${MAX_OWNED_TEAMS} teams. Transfer or delete one to create another.`,
+) {
+  if (isAdmin) return;
+  if ((await tx.team.count({ where: { ownerId: userId } })) >= MAX_OWNED_TEAMS) throw new AppError(409, message);
+}
 
 /** All teams owned by a given user. */
 export async function getOwnedTeams(userId: string) {
@@ -56,6 +75,7 @@ export async function transferOwnership(teamId: string, requesterId: string, new
     throw new AppError(404, 'No member of this team uses that email address. Add them to the team first.');
   }
   if (membership.userId === requesterId) throw new AppError(400, 'You already own this team.');
+  const receiverIsAdmin = await isGlobalAdmin(membership.userId);
 
   // One transaction, demote before promote: the partial unique index allows
   // only one HEAD_COACH per team, and it used to be left with two — the old
@@ -64,6 +84,8 @@ export async function transferOwnership(teamId: string, requesterId: string, new
   // pushing someone out (Karlos, 2026-09-27). The new owner's own slot counts
   // as free, since they are leaving it.
   return runSerializable(async (tx) => {
+    await assertRoomForAnotherTeam(tx, membership.userId, receiverIsAdmin,
+      `They already own ${MAX_OWNED_TEAMS} teams, the most one account can. They'd need to transfer or delete one first.`);
     const assistants = await tx.teamMembership.count({
       where: { teamId, role: 'ASSISTANT_COACH', userId: { notIn: [requesterId, membership.userId] } },
     });
