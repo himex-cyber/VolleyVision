@@ -103,7 +103,7 @@ function TeamPanel({ name, score, setsWon, side, onScore, busy }: TeamPanelProps
           : undefined
       }
       className={clsx(
-        'flex flex-col p-5 sm:p-6 transition-colors outline-none',
+        'flex flex-col min-w-0 p-5 sm:p-6 transition-colors outline-none',
         isHome
           ? 'border-l-4 border-gold-500 bg-gradient-to-b from-gold-500/10 to-transparent'
           : 'border-r-4 border-navy-500 items-end text-right',
@@ -111,8 +111,8 @@ function TeamPanel({ name, score, setsWon, side, onScore, busy }: TeamPanelProps
         interactive && (isHome ? 'hover:bg-gold-500/15' : 'hover:bg-navy-500/5'),
       )}
     >
-      <div className={clsx('flex items-center gap-2.5 min-h-[26px]', !isHome && 'flex-row-reverse')}>
-        <span className="font-display font-bold text-lg sm:text-2xl uppercase tracking-wide leading-none text-navy-700 truncate">
+      <div className={clsx('flex items-center gap-2.5 min-w-0 min-h-[26px]', !isHome && 'flex-row-reverse')}>
+        <span className="flex-1 min-w-0 font-display font-bold text-lg sm:text-2xl uppercase tracking-wide leading-none text-navy-700 truncate">
           {name}
         </span>
         <span className="text-[10px] font-bold tracking-widest text-grey-600 border border-grey-200 rounded px-1.5 py-0.5 shrink-0">
@@ -126,7 +126,7 @@ function TeamPanel({ name, score, setsWon, side, onScore, busy }: TeamPanelProps
 
       {/* Zero-padded so the digits hold their width and the two sides stay
           visually level as scores cross from one digit to two. */}
-      <div className="font-display tabular-nums font-extrabold leading-[0.92] tracking-tight text-grey-900 mt-auto pt-4 text-[clamp(56px,11vw,120px)]">
+      <div className="font-display tabular-nums font-extrabold leading-[0.92] tracking-tight text-grey-900 mt-auto pt-4 text-[clamp(40px,11vw,120px)] sm:text-[clamp(56px,11vw,120px)]">
         {String(score).padStart(2, '0')}
       </div>
     </div>
@@ -201,7 +201,7 @@ export default function LiveScoreboard({
                 onClick={() => onSelectSet(s)}
                 aria-pressed={currentSet === s}
                 className={clsx(
-                  'w-8 h-8 rounded-lg text-sm tabular-nums font-bold transition-colors border',
+                  'w-11 h-11 rounded-lg text-sm tabular-nums font-bold transition-colors border',
                   currentSet === s
                     ? 'bg-gold-500 border-gold-500 text-navy-900'
                     : 'bg-grey-50 border-grey-200 text-grey-600 hover:bg-grey-200',
@@ -240,7 +240,7 @@ export default function LiveScoreboard({
           busy={busy}
         />
 
-        <div className="flex flex-col items-center justify-center gap-1 px-4 sm:px-5 py-6 bg-grey-50 border-x border-grey-200 min-w-[92px]">
+        <div className="flex flex-col items-center justify-center gap-1 px-4 sm:px-5 py-6 bg-grey-50 border-x border-grey-200 min-w-[76px] sm:min-w-[92px]">
           <div className="text-[11px] font-bold tracking-[0.24em] text-navy-700">SET</div>
           <div className="font-display tabular-nums font-extrabold leading-none text-grey-900 text-[clamp(32px,5vw,56px)]">
             {currentSet}
@@ -282,7 +282,7 @@ export default function LiveScoreboard({
                 onClick={onUndoEvent}
                 disabled={busy || !canUndoEvent}
                 title="Undo the last recorded stat event"
-                className="text-sm font-medium text-grey-600 hover:text-navy-700 bg-grey-50 border border-grey-200 hover:border-grey-400 disabled:opacity-40 disabled:hover:text-grey-600 disabled:hover:border-grey-200 rounded-xl px-4 py-2.5 transition-colors"
+                className="min-h-[44px] text-sm font-medium text-grey-600 hover:text-navy-700 bg-grey-50 border border-grey-200 hover:border-grey-400 disabled:opacity-40 disabled:hover:text-grey-600 disabled:hover:border-grey-200 rounded-xl px-4 py-2.5 transition-colors"
               >
                 ↩ Undo Event
               </button>
@@ -296,7 +296,7 @@ export default function LiveScoreboard({
                 // A tied set has no winner to award it to; the backend rejects it
                 // too, but disabling here explains why rather than erroring.
                 title={tied ? 'Scores are tied — no winner to award the set to' : 'Award this set to whoever leads'}
-                className="font-display font-bold text-[15px] tracking-wide text-navy-900 bg-gold-500 hover:bg-gold-600 disabled:opacity-40 disabled:hover:bg-gold-500 rounded-xl px-6 py-2.5 transition-colors"
+                className="min-h-[44px] font-display font-bold text-[15px] tracking-wide text-navy-900 bg-gold-500 hover:bg-gold-600 disabled:opacity-40 disabled:hover:bg-gold-500 rounded-xl px-6 py-2.5 transition-colors"
               >
                 END SET →
               </button>
@@ -308,7 +308,7 @@ export default function LiveScoreboard({
                 onClick={onResetMatch}
                 disabled={busy}
                 title="Zero the whole match — every set and its history"
-                className="text-sm font-semibold text-error-strong bg-error/10 hover:bg-error/20 border border-error/30 disabled:opacity-40 rounded-xl px-4 py-2.5 transition-colors"
+                className="min-h-[44px] text-sm font-semibold text-error-strong bg-error/10 hover:bg-error/20 border border-error/30 disabled:opacity-40 rounded-xl px-4 py-2.5 transition-colors"
               >
                 Reset Match
               </button>
@@ -320,7 +320,7 @@ export default function LiveScoreboard({
                 onClick={onResetSet}
                 disabled={busy}
                 title="Zero this set's score only"
-                className="text-sm font-medium text-grey-600 hover:text-navy-700 bg-grey-50 border border-grey-200 hover:border-grey-400 disabled:opacity-40 rounded-xl px-4 py-2.5 transition-colors"
+                className="min-h-[44px] text-sm font-medium text-grey-600 hover:text-navy-700 bg-grey-50 border border-grey-200 hover:border-grey-400 disabled:opacity-40 rounded-xl px-4 py-2.5 transition-colors"
               >
                 Reset Set
               </button>
