@@ -437,6 +437,34 @@ export function useTransferOwnership() {
   });
 }
 
+// Phase 4 — staff-only player record linking, from the team roster
+// (TeamDetailPage). Mirrors useUpdatePlayer's invalidation: the roster shown
+// there comes from useTeam (['teams', teamId]), not usePlayers.
+export function useLinkPlayerRecord(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ playerId, userId }: { playerId: string; userId: string }) =>
+      teamsApi.linkPlayerRecord(teamId, playerId, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams', teamId] });
+      qc.invalidateQueries({ queryKey: ['players', teamId] });
+      qc.invalidateQueries({ queryKey: ['player', 'dashboard'] });
+    },
+  });
+}
+
+export function useUnlinkPlayerRecord(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: string) => teamsApi.unlinkPlayerRecord(teamId, playerId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams', teamId] });
+      qc.invalidateQueries({ queryKey: ['players', teamId] });
+      qc.invalidateQueries({ queryKey: ['player', 'dashboard'] });
+    },
+  });
+}
+
 // ─── Invitations (Phase 5 Sprint 4) ──────────────────────────────────────────
 
 export function useTeamInvitations(teamId: string) {
@@ -556,22 +584,6 @@ export function usePlayerDashboard() {
 
 export function usePlayerBests() {
   return useQuery({ queryKey: ['player', 'bests'], queryFn: playerPortalApi.bests });
-}
-
-export function useLinkPlayer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (playerId: string) => playerPortalApi.linkPlayer(playerId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['player', 'dashboard'] }),
-  });
-}
-
-export function useUnlinkPlayer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (playerId: string) => playerPortalApi.unlinkPlayer(playerId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['player', 'dashboard'] }),
-  });
 }
 
 // ─── Coach Portal (Phase 5 Sprint 5) ─────────────────────────────────────────

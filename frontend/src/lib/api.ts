@@ -114,6 +114,11 @@ export const teamsApi = {
   owner: (id: string) => api.get<TeamOwner | null>(`/teams/${id}/owner`).then((r) => r.data),
   transfer: (id: string, newOwnerEmail: string) =>
     api.post<Team>(`/teams/${id}/transfer`, { newOwnerEmail }).then((r) => r.data),
+  // Phase 4 — staff-only player record linking (players can no longer self-link/unlink).
+  linkPlayerRecord: (teamId: string, playerId: string, userId: string) =>
+    api.post<Player>(`/teams/${teamId}/players/${playerId}/link`, { userId }).then((r) => r.data),
+  unlinkPlayerRecord: (teamId: string, playerId: string) =>
+    api.delete<Player>(`/teams/${teamId}/players/${playerId}/link`).then((r) => r.data),
 };
 
 // ─── Players ──────────────────────────────────────────────────────────────────
@@ -342,10 +347,6 @@ export const playerPortalApi = {
   stats: () => api.get('/player/stats').then((r) => r.data),
   bests: () => api.get<PlayerBests | null>('/player/bests').then((r) => r.data),
   teams: () => api.get('/player/teams').then((r) => r.data),
-  linkPlayer: (playerId: string) =>
-    api.post('/player/link', { playerId }).then((r) => r.data),
-  unlinkPlayer: (playerId: string) =>
-    api.delete(`/player/link/${playerId}`).then((r) => r.data),
 };
 
 // ─── Coach Portal (Phase 5 Sprint 5) ─────────────────────────────────────────
