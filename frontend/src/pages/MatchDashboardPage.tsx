@@ -115,10 +115,19 @@ export default function MatchDashboardPage() {
         )}
       </section>
 
-      <section>
-        <h2 className="text-lg font-semibold text-grey-900 mb-3">Player Statistics</h2>
-        <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={(id) => canTrack || myPlayerIds.has(id)} />
-      </section>
+      {/* Non-staff get 0 or 1 playerStats rows (their own) from the server —
+          the full roster table is staff-only; a player sees just their own line. */}
+      {canTrack ? (
+        <section>
+          <h2 className="text-lg font-semibold text-grey-900 mb-3">Player Statistics</h2>
+          <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={(id) => canTrack || myPlayerIds.has(id)} />
+        </section>
+      ) : data.playerStats[0] ? (
+        <section>
+          <h2 className="text-lg font-semibold text-grey-900 mb-3">Your Stats</h2>
+          <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={(id) => myPlayerIds.has(id)} />
+        </section>
+      ) : null}
     </div>
   );
 }

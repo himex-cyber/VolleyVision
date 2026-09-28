@@ -86,51 +86,65 @@ export default function TeamDashboardPage() {
             />
           </div>
         )}
-      <div className="grid md:grid-cols-2 gap-4">
-        <StatLeaderboardChart
-          title="Top Killers"
-          players={data.playerStats}
-          metric="kills"
-          teamId={teamId!}
-          canOpen={canOpenPlayer}
-          canOpenAll={canTrack}
-        />
+      {/* Individual player breakdowns are staff-only — the server now sends
+          non-staff viewers 0 or 1 playerStats rows (their own), so leaderboards
+          and cross-player insights have nothing meaningful to show them. */}
+      {canTrack && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <StatLeaderboardChart
+            title="Top Killers"
+            players={data.playerStats}
+            metric="kills"
+            teamId={teamId!}
+            canOpen={canOpenPlayer}
+            canOpenAll={canTrack}
+          />
 
-        <StatLeaderboardChart
-          title="Top Aces"
-          players={data.playerStats}
-          metric="aces"
-          teamId={teamId!}
-          canOpen={canOpenPlayer}
-          canOpenAll={canTrack}
-        />
+          <StatLeaderboardChart
+            title="Top Aces"
+            players={data.playerStats}
+            metric="aces"
+            teamId={teamId!}
+            canOpen={canOpenPlayer}
+            canOpenAll={canTrack}
+          />
 
-        <StatLeaderboardChart
-          title="Top Blocks"
-          players={data.playerStats}
-          metric="totalBlocks"
-          teamId={teamId!}
-          canOpen={canOpenPlayer}
-          canOpenAll={canTrack}
-        />
+          <StatLeaderboardChart
+            title="Top Blocks"
+            players={data.playerStats}
+            metric="totalBlocks"
+            teamId={teamId!}
+            canOpen={canOpenPlayer}
+            canOpenAll={canTrack}
+          />
 
-        <StatLeaderboardChart
-          title="Top Digs"
-          players={data.playerStats}
-          metric="digs"
-          teamId={teamId!}
-          canOpen={canOpenPlayer}
-          canOpenAll={canTrack}
-        />
-      </div>
-      
+          <StatLeaderboardChart
+            title="Top Digs"
+            players={data.playerStats}
+            metric="digs"
+            teamId={teamId!}
+            canOpen={canOpenPlayer}
+            canOpenAll={canTrack}
+          />
+        </div>
+      )}
+
       <CoachInsights insights={insights} />
-      <PlayerInsights players={data.playerStats} />
 
-      <section>
-        <h2 className="text-lg font-semibold text-grey-900 mb-3">Season Player Statistics</h2>
-        <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} />
-      </section>
+      {canTrack ? (
+        <>
+          <PlayerInsights players={data.playerStats} />
+          <section>
+            <h2 className="text-lg font-semibold text-grey-900 mb-3">Season Player Statistics</h2>
+            <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} />
+          </section>
+        </>
+      ) : data.playerStats[0] ? (
+        <section>
+          <h2 className="text-lg font-semibold text-grey-900 mb-3">Your Stats</h2>
+          <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} />
+        </section>
+      ) : null}
     </div>
   );
 }
