@@ -2,7 +2,7 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.8.0 — unreleased
+## v9.8.0 — 2026-09-29
 
 Phase 4.0 of the rebuild roadmap (carry-over security fixes from an
 independent review of v9.3.0–v9.7.0) and Phase 4 (court zones and heat maps).
@@ -43,6 +43,9 @@ every player's numbers to every member. v9.8.0 completes the rule there.
 - **No reload loop in private browsing.** After a deploy, a stale tab reloads
   once to pick up the new version. With browser storage blocked it can't tell
   it already tried, so it now shows the error instead of reloading forever.
+- **Text colours that never showed.** About 50 labels used grey shades the
+  design system doesn't define, so they rendered in the wrong colour. They now
+  use the defined greys.
 - **Behind the scenes.** Production deploys always name the target site. The
   integration tests refuse to run against anything but a local database, even
   when started directly. CI now checks that Supabase's public roles hold no
