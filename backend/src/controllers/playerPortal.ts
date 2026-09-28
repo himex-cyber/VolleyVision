@@ -4,9 +4,8 @@ import {
   getPlayerCareerStats,
   getPlayerBests,
   getLinkedPlayers,
-  linkPlayerToUser,
-  unlinkPlayer,
 } from '../services/playerPortal.service';
+import { AppError } from '../middleware/errorHandler';
 
 export async function playerDashboardHandler(req: Request, res: Response, next: NextFunction) {
   try {
@@ -44,22 +43,15 @@ export async function playerTeamsHandler(req: Request, res: Response, next: Next
   }
 }
 
-export async function linkPlayerHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { playerId } = req.body as { playerId: string };
-    if (!playerId) return res.status(400).json({ error: 'playerId is required' });
-    const player = await linkPlayerToUser(playerId, req.user!.userId);
-    res.json(player);
-  } catch (err) {
-    next(err);
-  }
+// Players no longer claim or unlink records themselves (4.0.2): staff assign
+// them on the roster (POST/DELETE /teams/:id/players/:playerId/link). The
+// routes stay so an older client gets a message it can show.
+const ASK_YOUR_COACH = 'Ask your coach to link your player record.';
+
+export function linkPlayerHandler(_req: Request, _res: Response, next: NextFunction) {
+  next(new AppError(403, ASK_YOUR_COACH));
 }
 
-export async function unlinkPlayerHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const player = await unlinkPlayer(req.params.playerId, req.user!.userId);
-    res.json(player);
-  } catch (err) {
-    next(err);
-  }
+export function unlinkPlayerHandler(_req: Request, _res: Response, next: NextFunction) {
+  next(new AppError(403, ASK_YOUR_COACH));
 }

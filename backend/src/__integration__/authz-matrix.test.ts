@@ -108,6 +108,11 @@ const ROWS: Row[] = [
   { name: 'POST chat upload (no files)', method: 'POST', path: (f) => `/api/v1/channels/${f.channel.id}/messages/upload`, body: () => ({}), expect: { outsider: 404, viewer: 403, player: 400 } },
   { name: 'PATCH message (not author)', method: 'PATCH', path: (f) => `/api/v1/messages/${f.message.id}`, body: () => ({ body: 'edited' }), expect: STAFF },
   { name: 'DELETE message (not author)', method: 'DELETE', path: (f) => `/api/v1/messages/${f.message.id}`, expect: STAFF },
+  // 4.0.2: players no longer claim records; staff link them on the roster.
+  { name: 'POST self-claim record', method: 'POST', path: () => '/api/v1/player/link', body: (f) => ({ playerId: f.p1.id }), expect: { outsider: 403, viewer: 403, player: 403 } },
+  { name: 'DELETE self-unlink record', method: 'DELETE', path: (f) => `/api/v1/player/link/${f.p2.id}`, expect: { outsider: 403, viewer: 403, player: 403 } },
+  { name: 'POST staff link record', method: 'POST', path: (f) => `/api/v1/teams/${f.team.id}/players/${f.p1.id}/link`, body: (f) => ({ userId: f.users.viewer.id }), expect: STAFF },
+  { name: 'DELETE staff unlink record', method: 'DELETE', path: (f) => `/api/v1/teams/${f.team.id}/players/${f.p2.id}/link`, expect: STAFF },
   { name: 'POST approve request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/approve`, expect: STAFF },
   { name: 'POST reject request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/reject`, expect: STAFF },
   // Destructive rows last, each against a target nothing else uses.
