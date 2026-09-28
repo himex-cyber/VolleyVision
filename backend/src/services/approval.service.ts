@@ -68,7 +68,7 @@ async function loadResolvable(requestId: string, resolverId: string) {
   if (!request) throw new AppError(404, 'Approval request not found.');
   // Visibility and permission before the status, so an outsider learns neither
   // that the request exists nor whether it was resolved.
-  await assertTeamVisible(request.teamId, resolverId);
+  await assertTeamVisible(request.teamId, resolverId, 'Approval request not found.');
   const allowed = await isApprovalAuthority(resolverId, request.teamId);
   if (!allowed) throw new AppError(403, 'Only an owner, head coach, or manager can resolve approval requests.');
 

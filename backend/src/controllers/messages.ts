@@ -98,7 +98,7 @@ async function getVisibleMessageTeamId(messageId: string, userId: string): Promi
     select: { channel: { select: { teamId: true } } },
   });
   if (!message) throw new AppError(404, 'Message not found.');
-  await assertTeamVisible(message.channel.teamId, userId);
+  await assertTeamVisible(message.channel.teamId, userId, 'Message not found.');
   return message.channel.teamId;
 }
 

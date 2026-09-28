@@ -133,7 +133,7 @@ export async function getPlayerAnalytics(req: Request, res: Response, next: Next
     const { userId: linkedUserId, ...player } = found;
 
     const teamId = typeof req.query.teamId === 'string' && req.query.teamId ? req.query.teamId : player.teamId;
-    await assertTeamVisible(teamId, userId); // 404 for outsiders and anonymous callers
+    await assertTeamVisible(teamId, userId, 'Player not found.'); // 404 for outsiders and anonymous callers
 
     // The player must play for the team in scope: home team or a PlayerTeamLink
     // (the same rule recordEvent uses to attribute a stat).

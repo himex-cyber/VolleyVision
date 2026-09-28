@@ -68,7 +68,7 @@ export function requireMatchAccess(category: AccessCategory) {
     if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const match = await prisma.match.findUnique({ where: { id: req.params.id }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
-    await assertTeamVisible(match.teamId, req.user.userId);
+    await assertTeamVisible(match.teamId, req.user.userId, 'Match not found.');
     if (!(await canActInCategory(req.user.userId, match.teamId, category))) { res.status(403).json(FORBIDDEN); return; }
     next();
   });
@@ -89,7 +89,7 @@ export function requireChannelPermission(permission: Permission) {
       select: { teamId: true },
     });
     if (!channel) { res.status(404).json({ error: 'Channel not found.' }); return; }
-    const role = await getVisibleTeamRole(req.user.userId, channel.teamId);
+    const role = await getVisibleTeamRole(req.user.userId, channel.teamId, 'Channel not found.');
     const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
@@ -109,7 +109,7 @@ export function requireMatchPermission(permission: Permission, paramName = 'id')
     const matchId = req.params[paramName];
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
-    const role = await getVisibleTeamRole(req.user.userId, match.teamId);
+    const role = await getVisibleTeamRole(req.user.userId, match.teamId, 'Match not found.');
     const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
@@ -126,7 +126,7 @@ export function requireEventPermission(permission: Permission) {
     if (!matchId) { res.status(400).json({ error: 'matchId is required.' }); return; }
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
-    const role = await getVisibleTeamRole(req.user.userId, match.teamId);
+    const role = await getVisibleTeamRole(req.user.userId, match.teamId, 'Match not found.');
     const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
@@ -161,7 +161,7 @@ export function requireEventDeletePermission(permission: Permission) {
     }
 
     if (!teamId) { res.status(404).json({ error: 'Resource not found.' }); return; }
-    const role = await getVisibleTeamRole(req.user.userId, teamId);
+    const role = await getVisibleTeamRole(req.user.userId, teamId, 'Resource not found.');
     const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();

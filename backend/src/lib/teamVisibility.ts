@@ -41,9 +41,11 @@ export async function isTeamVisibleTo(teamId: string, userId: string | null): Pr
 /**
  * Throws AppError(404) when the caller may not see the team. Use this in
  * controllers/middleware so hidden teams are indistinguishable from teams that
- * do not exist.
+ * do not exist. When the team was resolved from another id (a match, message,
+ * ...), pass that resource's own not-found message, so a real id on a hidden
+ * team gets the same answer as an id that doesn't exist.
  */
-export async function assertTeamVisible(teamId: string, userId: string | null): Promise<void> {
+export async function assertTeamVisible(teamId: string, userId: string | null, notFound = 'Team not found.'): Promise<void> {
   const visible = await isTeamVisibleTo(teamId, userId);
-  if (!visible) throw new AppError(404, 'Team not found.');
+  if (!visible) throw new AppError(404, notFound);
 }

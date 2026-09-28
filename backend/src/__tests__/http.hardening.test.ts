@@ -91,6 +91,35 @@ async function auditLimitIsClamped(base: string) {
   assert.deepEqual(takes, [50, 50, 1, 200, 25]); // 0 isn't a usable limit, so it's the default
 }
 
+// An outsider must not be able to tell a real id on someone else's team from a
+// made-up one: both get the same 404 body, not "Match not found." for one and
+// "Team not found." for the other.
+async function notFoundLooksTheSameEitherWay(base: string) {
+  world();
+  const exists: Record<string, any> = {
+    match: { id: 'M', teamId: 'T' }, channel: { id: 'C', teamId: 'T' },
+    message: { id: 'MSG', channel: { teamId: 'T' } }, approvalRequest: { id: 'A', teamId: 'T', requestedById: 'x', status: 'PENDING' },
+  };
+  for (const model of Object.keys(exists)) db[model].findUnique = async (args: any) => (args.where.id === exists[model].id ? exists[model] : null);
+  const outsider = tokenFor('outsider');
+  const body = async (method: string, path: string, payload?: unknown) => {
+    const res = await fetch(`${base}${path}`, {
+      method, headers: { authorization: `Bearer ${outsider}`, 'content-type': 'application/json' },
+      body: payload === undefined ? undefined : JSON.stringify(payload),
+    });
+    return `${res.status} ${await res.text()}`;
+  };
+  for (const [method, real, fake, payload] of [
+    ['PATCH', '/api/v1/matches/M', '/api/v1/matches/NOPE', { opponent: 'x' }],
+    ['POST', '/api/v1/matches/M/score/reset', '/api/v1/matches/NOPE/score/reset', {}],
+    ['GET', '/api/v1/channels/C/messages', '/api/v1/channels/NOPE/messages', undefined],
+    ['PATCH', '/api/v1/messages/MSG', '/api/v1/messages/NOPE', { body: 'x' }],
+    ['POST', '/api/v1/approval-requests/A/approve', '/api/v1/approval-requests/NOPE/approve', {}],
+  ] as const) {
+    assert.equal(await body(method, real, payload), await body(method, fake, payload), `${method} ${real}`);
+  }
+}
+
 async function main() {
   await withServer(async (base) => {
     await invitationsAreRateLimited(base);
@@ -98,6 +127,7 @@ async function main() {
     await chatIsNotFoundForOutsiders(base);
     await nonStringEmailIs400(base);
     await auditLimitIsClamped(base);
+    await notFoundLooksTheSameEitherWay(base);
   });
   console.log('http.hardening.test.ts passed');
 }

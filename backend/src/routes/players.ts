@@ -55,7 +55,7 @@ const requireRosterAccess = asyncHandler(async (req: Request, res: Response, nex
     teamId = player.teamId;
     // Visibility before the mismatch check, or its 400 would confirm to an
     // outsider that the player exists.
-    await assertTeamVisible(teamId, req.user.userId);
+    await assertTeamVisible(teamId, req.user.userId, 'Player not found.');
     if (req.body?.teamId && req.body.teamId !== teamId) {
       res.status(400).json({ error: 'teamId does not match this player\'s team.' });
       return;

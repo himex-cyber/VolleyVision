@@ -35,7 +35,7 @@ export async function getUserTeamRole(
  * the same answer as a missing id. A global admin who isn't a member sees the
  * team but has no role (null), so role checks still refuse them.
  */
-export async function getVisibleTeamRole(userId: string, teamId: string): Promise<string | null> {
+export async function getVisibleTeamRole(userId: string, teamId: string, notFound = 'Team not found.'): Promise<string | null> {
   const [team, membership] = await Promise.all([
     prisma.team.findUnique({ where: { id: teamId }, select: { ownerId: true } }),
     prisma.teamMembership.findUnique({
@@ -46,7 +46,7 @@ export async function getVisibleTeamRole(userId: string, teamId: string): Promis
   if (team && team.ownerId === userId) return 'HEAD_COACH';
   if (team && membership) return membership.role;
   if (team && (await isGlobalAdmin(userId))) return null;
-  throw new AppError(404, 'Team not found.');
+  throw new AppError(404, notFound); // see assertTeamVisible on the message
 }
 
 export async function hasTeamPermission(
