@@ -207,19 +207,14 @@ function PublicShell() {
 }
 
 export default function Layout() {
-  const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { data: invitations } = useMyInvitations();
 
-  // Live tracking lives at /matches/:matchId/track; /track/:matchId is kept
-  // only as a redirect (see main.tsx) but is matched too so it doesn't flash
-  // the full chrome for the instant before it navigates away.
-  const isTracking = /^\/matches\/[^/]+\/track\/?$/.test(location.pathname)
-    || location.pathname.startsWith('/track/');
-
-  // The tracking screen is chrome-free and tablet-optimised — never wrapped.
-  if (isTracking) return <SuspendedOutlet />;
+  // Live tracking (/matches/:matchId/track) renders inside this shell like the
+  // other match pages: it carries MatchPageHeader and the Stats/Events/Track
+  // tabs and relies on <main>'s padding. The old chrome-free branch keyed on
+  // /track/, which is now only a redirect, so it was dead code.
   if (!user) return <PublicShell />;
 
   const pendingCount = invitations?.length ?? 0;
