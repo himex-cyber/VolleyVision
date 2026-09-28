@@ -105,12 +105,12 @@ function ZoneCell({ zone, data, category, color, maxVolume }: {
       role="group"
       aria-label={label}
       className={clsx(
-        'relative aspect-square flex flex-col items-center justify-center border border-grey-100 p-1',
+        'relative aspect-square flex flex-col items-center justify-center border border-grey-200 p-1',
         volume === 0 && 'bg-grey-50'
       )}
       style={cellStyle(volume, maxVolume, color)}
     >
-      <span className="absolute top-1 left-1.5 text-[10px] font-mono font-bold text-grey-500">{zone}</span>
+      <span className="absolute top-1 left-1.5 text-[10px] font-mono font-bold text-grey-600">{zone}</span>
       <span className="font-mono font-bold text-grey-900 text-sm leading-tight">{main}</span>
       <span className="font-mono text-grey-600 text-[10px] leading-tight">{sub}</span>
       {badge && (
@@ -177,7 +177,7 @@ export default function CourtHeatMap({ data, title, defaultCategory = 'attack' }
               <ZoneCell key={zone} zone={zone} data={data} category={category} color={cat.color} maxVolume={maxVolume} />
             ))}
           </div>
-          <p className={clsx('text-xs text-center', lowCoverage ? 'text-gold-600' : 'text-grey-600')}>
+          <p className={clsx('text-xs text-center', lowCoverage ? 'text-warning-strong font-medium' : 'text-grey-600')}>
             {lowCoverage
               ? `Based on the ${tagged} actions that have a zone.`
               : `Based on ${tagged} of ${total} actions (${Math.round((tagged / total) * 100)}%) that have a zone.`}

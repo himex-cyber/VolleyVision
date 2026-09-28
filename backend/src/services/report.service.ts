@@ -121,8 +121,13 @@ export function generateMatchReport(
       : null;
 
   // ── Heat Map Highlight ───────────────────────────────────────────────────
+  // Counted like the court map it links to (lib/heatmap.ts): tips and free
+  // balls are attack attempts there too, so the two agree.
+  const zoneAttackEvents = events.filter((e) =>
+    ['KILL', 'ATTACK_ERROR', 'ATTACK_ATTEMPT', 'TIP', 'FREE_BALL'].includes(e.eventType),
+  );
   const zoneCounts: Record<number, number> = {};
-  for (const e of attackEvents) {
+  for (const e of zoneAttackEvents) {
     if (e.courtZone != null && e.courtZone >= 1 && e.courtZone <= 6) {
       zoneCounts[e.courtZone] = (zoneCounts[e.courtZone] ?? 0) + 1;
     }

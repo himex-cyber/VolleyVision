@@ -35,7 +35,7 @@ every player's numbers to every member. v9.8.0 completes the rule there.
 - **Behind the scenes.** Production deploys always name the target site. The
   integration tests refuse to run against anything but a local database, even
   when started directly. CI now checks that Supabase's public roles hold no
-  table grants. The authorization test matrix covers 68 routes, including the
+  table grants. The authorization test matrix covers 72 routes, including the
   player and coach portals and the invitation routes.
 
 ## v9.7.0 — 2026-09-28

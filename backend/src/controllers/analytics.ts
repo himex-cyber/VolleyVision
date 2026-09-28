@@ -5,7 +5,7 @@ import { calculatePlayerStats, calculateSetStats, calculateStats } from '../lib/
 import { ownEventsOnly } from '../lib/eventFilters';
 import { generateMatchReport } from '../services/report.service';
 import { assertTeamVisible } from '../lib/teamVisibility';
-import { hasTeamPermission, isGlobalAdmin, Permission, seesEveryPlayer } from '../services/permission.service';
+import { seesEveryPlayer } from '../services/permission.service';
 import { visiblePlayers } from '../lib/playerPrivacy';
 import { buildDetailedHeatmap } from '../lib/heatmap';
 
@@ -36,15 +36,19 @@ const eventSelect = {
 
 export async function getMatchAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
-    const match = await prisma.match.findUnique({
-      where: { id: req.params.matchId },
-      include: {
-        team: { include: { players: { select: playerWithUser, orderBy: { jerseyNumber: 'asc' } } } },
-        events: { where: ownEventsOnly, select: eventSelect },
-      },
-    });
+    const userId = req.user?.userId ?? null;
+    const [match, isStaff] = await Promise.all([
+      prisma.match.findUnique({
+        where: { id: req.params.matchId },
+        include: {
+          team: { include: { players: { select: playerWithUser, orderBy: { jerseyNumber: 'asc' } } } },
+          events: { where: ownEventsOnly, select: eventSelect },
+        },
+      }),
+      seesEveryPlayer(userId, res.locals.visibleTeamId), // set by visibleByMatchParam
+    ]);
     if (!match) throw new AppError(404, 'Match not found.');
-    const players = visiblePlayers(match.team.players, await seesEveryPlayer(req.user?.userId ?? null, match.teamId), req.user?.userId ?? null);
+    const players = visiblePlayers(match.team.players, isStaff, userId);
     res.json({
       match: {
         id: match.id, matchDate: match.matchDate, opponent: match.opponent,
@@ -62,16 +66,21 @@ export async function getMatchAnalytics(req: Request, res: Response, next: NextF
 
 export async function getTeamAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
-    const team = await prisma.team.findUnique({
-      where: { id: req.params.teamId },
-      include: {
-        players: { select: playerWithUser, orderBy: { jerseyNumber: 'asc' } },
-        matches: { select: { id: true, status: true, setScores: true } },
-      },
-    });
+    const userId = req.user?.userId ?? null;
+    const { teamId } = req.params;
+    const [team, events, isStaff] = await Promise.all([
+      prisma.team.findUnique({
+        where: { id: teamId },
+        include: {
+          players: { select: playerWithUser, orderBy: { jerseyNumber: 'asc' } },
+          matches: { select: { id: true, status: true, setScores: true } },
+        },
+      }),
+      prisma.event.findMany({ where: { match: { teamId }, ...ownEventsOnly }, select: eventSelect }),
+      seesEveryPlayer(userId, teamId),
+    ]);
     if (!team) throw new AppError(404, 'Team not found.');
-    const events = await prisma.event.findMany({ where: { match: { teamId: team.id }, ...ownEventsOnly }, select: eventSelect });
-    const players = visiblePlayers(team.players, await seesEveryPlayer(req.user?.userId ?? null, team.id), req.user?.userId ?? null);
+    const players = visiblePlayers(team.players, isStaff, userId);
     res.json({
       team: { id: team.id, name: team.name, division: team.division, season: team.season },
       matchSummary: {
@@ -105,7 +114,7 @@ export async function getTeamTrends(req: Request, res: Response, next: NextFunct
 export async function getMatchReport(req: Request, res: Response, next: NextFunction) {
   try {
     const { matchId } = req.params;
-    const [match, events, players] = await Promise.all([
+    const [match, events, players, isStaff] = await Promise.all([
       prisma.match.findUnique({ where: { id: matchId }, include: { team: { select: { name: true } } } }),
       prisma.event.findMany({
         where: { matchId, ...ownEventsOnly },
@@ -116,6 +125,7 @@ export async function getMatchReport(req: Request, res: Response, next: NextFunc
         where: { team: { matches: { some: { id: matchId } } } },
         select: { id: true, firstName: true, lastName: true, jerseyNumber: true, position: true },
       }),
+      seesEveryPlayer(req.user?.userId ?? null, res.locals.visibleTeamId), // set by visibleByMatchParam
     ]);
     if (!match) throw new AppError(404, 'Match not found.');
     const report = generateMatchReport(
@@ -126,7 +136,7 @@ export async function getMatchReport(req: Request, res: Response, next: NextFunc
       players,
     );
     // The top performer names one player; the rest of the report is team-level.
-    if (!(await seesEveryPlayer(req.user?.userId ?? null, match.teamId))) report.topPerformer = null;
+    if (!isStaff) report.topPerformer = null;
     res.json(report);
   } catch (err) { next(err); }
 }
@@ -155,9 +165,7 @@ async function resolvePlayerScope(req: Request) {
     || !!(await prisma.playerTeamLink.findUnique({ where: { playerId_teamId: { playerId: player.id, teamId } } }));
   if (!onTeam) throw new AppError(404, 'Player not found.');
 
-  const allowed = linkedUserId === userId
-    || await hasTeamPermission(userId!, teamId, Permission.TRACK_MATCH)
-    || await isGlobalAdmin(userId!);
+  const allowed = linkedUserId === userId || await seesEveryPlayer(userId, teamId);
   if (!allowed) throw new AppError(403, "Only this team's coaching staff and the player can see individual stats.");
 
   const matchId = typeof req.query.matchId === 'string' && req.query.matchId ? req.query.matchId : undefined;

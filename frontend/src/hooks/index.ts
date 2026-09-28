@@ -391,11 +391,11 @@ export function usePlayerZones(playerId: string, teamId?: string, matchId?: stri
 
 // ─── Memberships (Phase 5 Sprint 3) ──────────────────────────────────────────
 
-export function useTeamMembers(teamId: string) {
+export function useTeamMembers(teamId: string, enabled = true) {
   return useQuery({
     queryKey: ['members', teamId],
     queryFn: () => membershipsApi.listByTeam(teamId),
-    enabled: !!teamId,
+    enabled: enabled && !!teamId,
   });
 }
 

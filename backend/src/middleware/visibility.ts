@@ -28,7 +28,7 @@ export function visibleByTeamParam(paramName = 'teamId') {
 
 /** Team id resolved from a match id in req.params[paramName] (default "matchId"). */
 export function visibleByMatchParam(paramName = 'matchId') {
-  return async (req: Request, _res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const match = await prisma.match.findUnique({
         where: { id: req.params[paramName] },
@@ -36,6 +36,8 @@ export function visibleByMatchParam(paramName = 'matchId') {
       });
       // Missing match → 404 via a teamId that can never be visible.
       await assertTeamVisible(match?.teamId ?? '__none__', userId(req), 'Match not found.');
+      // Handed on so match-scoped controllers needn't look the match up again.
+      res.locals.visibleTeamId = match!.teamId;
       next();
     } catch (err) { next(err); }
   };

@@ -89,8 +89,12 @@ export async function linkPlayerRecord(teamId: string, playerId: string, userId:
   return runSerializable(async (tx) => {
     const current = await tx.player.findUniqueOrThrow({ where: { id: playerId }, select: { userId: true } });
     if (current.userId) throw new AppError(409, 'This player record is already linked to someone. Unlink it first.');
-    const existing = await tx.player.findFirst({ where: { userId, teamId, NOT: { id: playerId } }, select: { id: true } });
-    if (existing) throw new AppError(409, 'That member already has a player record on this team.');
+    // Typically the record a code-joined player got automatically: say which,
+    // so staff can unlink or delete it (if it has no stats) and link the right one.
+    const existing = await tx.player.findFirst({ where: { userId, teamId, NOT: { id: playerId } }, select: { jerseyNumber: true } });
+    if (existing) {
+      throw new AppError(409, `That member is already linked to player #${existing.jerseyNumber} on this team. Unlink that record first, or delete it if it has no stats.`);
+    }
     return tx.player.update({ where: { id: playerId }, data: { userId } });
   });
 }

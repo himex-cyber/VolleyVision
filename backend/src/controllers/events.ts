@@ -107,21 +107,21 @@ export async function recordEvent(req: Request, res: Response, next: NextFunctio
 export async function getEventsByMatch(req: Request, res: Response, next: NextFunction) {
   try {
     const { setNumber } = req.query;
-    const events = await prisma.event.findMany({
-      where: {
-        matchId: req.params.matchId,
-        ...(setNumber ? { setNumber: Number(setNumber) } : {}),
-      },
-      include: {
-        player: { select: { firstName: true, lastName: true, jerseyNumber: true, userId: true } },
-      },
-      orderBy: { recordedAt: 'asc' },
-    });
-    // The visibility guard already resolved the match; this re-read is one
-    // indexed lookup for its team, which the per-player rule needs.
-    const match = await prisma.match.findUnique({ where: { id: req.params.matchId }, select: { teamId: true } });
     const userId = req.user?.userId ?? null;
-    res.json(redactEvents(events, !!match && await seesEveryPlayer(userId, match.teamId), userId));
+    const [events, isStaff] = await Promise.all([
+      prisma.event.findMany({
+        where: {
+          matchId: req.params.matchId,
+          ...(setNumber ? { setNumber: Number(setNumber) } : {}),
+        },
+        include: {
+          player: { select: { firstName: true, lastName: true, jerseyNumber: true, userId: true } },
+        },
+        orderBy: { recordedAt: 'asc' },
+      }),
+      seesEveryPlayer(userId, res.locals.visibleTeamId), // set by visibleByMatchParam
+    ]);
+    res.json(redactEvents(events, isStaff, userId));
   } catch (err) {
     next(err);
   }

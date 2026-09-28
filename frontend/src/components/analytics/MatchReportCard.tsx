@@ -211,7 +211,7 @@ export default function MatchReportCard({ report }: Props) {
               />
             )}
             {heatMapHighlight && (
-              <div className="flex items-start gap-2 text-sm text-grey-700">
+              <div className="flex items-start gap-2 text-sm text-grey-900">
                 <span className="shrink-0 text-navy-700">🗺️</span>
                 <span>
                   {heatMapHighlight}{' '}

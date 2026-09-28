@@ -24,7 +24,7 @@ function world() {
   db.player.findUnique = async (args: any) => PLAYERS[args.where.id] ?? null;
   db.player.findUniqueOrThrow = async (args: any) => PLAYERS[args.where.id];
   db.player.findFirst = async (args: any) =>
-    Object.values(PLAYERS).find((p) => p.userId === args.where.userId && p.teamId === args.where.teamId && p.id !== args.where.NOT?.id) ?? null;
+    Object.values(PLAYERS).map((p) => ({ ...p, jerseyNumber: 2 })).find((p) => p.userId === args.where.userId && p.teamId === args.where.teamId && p.id !== args.where.NOT?.id) ?? null;
   db.player.update = async (args: any) => ({ ...PLAYERS[args.where.id], ...args.data });
 }
 

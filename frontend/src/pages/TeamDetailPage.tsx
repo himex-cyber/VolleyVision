@@ -154,7 +154,8 @@ export default function TeamDetailPage() {
   const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
   // Player-record linking (Phase 4) — staff-only, gated below via
   // PermissionGuard (MANAGE_MEMBERS), separate from MANAGE_TEAM.
-  const { data: members } = useTeamMembers(teamId!);
+  const canManageMembers = useHasPermission(teamId!, 'MANAGE_MEMBERS');
+  const { data: members } = useTeamMembers(teamId!, canManageMembers);
   const linkPlayerRecord = useLinkPlayerRecord(teamId!);
   const unlinkPlayerRecord = useUnlinkPlayerRecord(teamId!);
 

@@ -22,7 +22,8 @@ export default function PlayerDashboardPage() {
   const teamId = searchParams.get('teamId') ?? undefined;
   const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
-  const zones = usePlayerZones(playerId!, teamId, matchId);
+  // Waits for the stats: a caller refused those (403) is refused the map too.
+  const zones = usePlayerZones(data ? playerId! : '', teamId, matchId);
   // Roster context (no matchId) gets a full-team tab bar. Guarded by the hook's
   // own `enabled: !!id`, so this stays above the early returns below.
   const { data: team } = useTeam(data?.teamId ?? '');
