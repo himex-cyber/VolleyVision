@@ -28,7 +28,7 @@ function AttachmentView({
   if (attachment.kind === 'IMAGE') {
     if (!attachment.signedUrl) {
       return (
-        <div className="w-40 h-24 rounded-lg border border-grey-200 bg-grey-100 flex items-center justify-center">
+        <div className="w-40 h-24 rounded-lg border border-grey-200 bg-grey-50 flex items-center justify-center">
           <span className="text-xs text-grey-600">Image unavailable</span>
         </div>
       );
@@ -48,7 +48,7 @@ function AttachmentView({
               ? { aspectRatio: `${attachment.width} / ${attachment.height}` }
               : undefined
           }
-          className="max-h-64 max-w-full w-auto rounded-lg border border-grey-200 bg-grey-100 object-contain"
+          className="max-h-64 max-w-full w-auto rounded-lg border border-grey-200 bg-grey-50 object-contain"
         />
       </a>
     );
@@ -70,7 +70,7 @@ function AttachmentView({
 
   if (!attachment.signedUrl) {
     return (
-      <div className="flex items-center gap-2 bg-grey-100 border border-grey-200 rounded-lg pl-1.5 pr-3 py-1.5 max-w-60 opacity-60">
+      <div className="flex items-center gap-2 bg-grey-50 border border-grey-200 rounded-lg pl-1.5 pr-3 py-1.5 max-w-60 opacity-60">
         {chipInner}
       </div>
     );
@@ -81,7 +81,7 @@ function AttachmentView({
       target="_blank"
       rel="noreferrer"
       download={attachment.fileName}
-      className="flex items-center gap-2 bg-grey-100 border border-grey-200 rounded-lg pl-1.5 pr-3 py-1.5 max-w-60 hover:border-gold-500 transition-colors"
+      className="flex items-center gap-2 bg-grey-50 border border-grey-200 rounded-lg pl-1.5 pr-3 py-1.5 max-w-60 hover:border-gold-500 transition-colors"
     >
       {chipInner}
     </a>
@@ -133,7 +133,7 @@ export default function MessageItem({
   }
 
   return (
-    <div className="group flex items-start gap-3 px-5 py-2 hover:bg-grey-100/60">
+    <div className="group flex items-start gap-3 px-5 py-2 hover:bg-grey-50">
       {message.sender?.profileImage ? (
         <img
           src={message.sender.profileImage}

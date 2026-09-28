@@ -46,7 +46,7 @@ export default function StatLeaderboardChart({
         {title}
       </h2>
       {canOpenAll && (
-        <p className="text-xs text-grey-500 mb-2">
+        <p className="text-xs text-grey-600 mb-2">
           Click a player bar to view details
         </p>
       )}

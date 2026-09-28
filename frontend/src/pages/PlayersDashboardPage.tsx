@@ -73,7 +73,7 @@ export default function PlayerDashboardPage() {
 
         {matchId && matchData && (
           <div className="mt-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-grey-500">Game Day Stats</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-grey-600">Game Day Stats</p>
             <p className="text-sm text-grey-600 mt-0.5">
               vs {matchData.match.opponent} · {format(new Date(matchData.match.matchDate), 'PPP')}
               {matchData.match.venue && ` · ${matchData.match.venue}`}

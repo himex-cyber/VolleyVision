@@ -207,11 +207,9 @@ model User {
   lastName     String   @map("last_name")
   role         UserRole @default(COACH)
 
-  // Phase 7 Sprint 0 — one-time onboarding hint, null for all pre-existing users.
-  // Not used for any team-scoped permission (those all derive from TeamMembership
-  // role). Exception: gates team *creation* — signupIntent === 'PLAYER' blocks
-  // POST /teams, since players join existing teams via invite/join-code rather
-  // than founding their own. See createTeam in controllers/teams.ts.
+  // One-time onboarding hint from sign-up ("coach or player"), null for older
+  // users. It only picks the welcome copy; it gates nothing (Phase 4.5: anyone
+  // can create a team, and every permission comes from the TeamMembership role).
   signupIntent SignupIntent? @map("signup_intent")
 
   // Forgot-password flow — sha256 hash of the raw token (never store the raw

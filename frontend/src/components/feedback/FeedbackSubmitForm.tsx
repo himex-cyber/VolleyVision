@@ -123,7 +123,7 @@ export default function FeedbackSubmitForm() {
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {files.map((f, i) => (
-              <div key={`${f.name}-${i}`} className="flex items-center gap-2 bg-grey-100 border border-grey-200 rounded-lg pl-2 pr-2 py-1.5 max-w-56">
+              <div key={`${f.name}-${i}`} className="flex items-center gap-2 bg-grey-50 border border-grey-200 rounded-lg pl-2 pr-2 py-1.5 max-w-56">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-grey-900 truncate">{f.name}</p>
                   <p className="text-[10px] text-grey-600">{formatBytes(f.size)}</p>

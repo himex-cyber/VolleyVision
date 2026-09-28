@@ -650,6 +650,31 @@ refused.
 **Verified:** backend `tsc` clean, 49 unit test files, build OK; frontend `tsc`, lint and build clean; integration
 2/2 (matrix 72 routes).
 
+### Production deploy: v9.8.0 (2026-09-29)
+
+Karlos approved the G2 review of 4.0.1, 4.0.2 and the portal scoping, and the deploy, on 29 Sept.
+
+1. PRs #31 (Phase 4.0) and #32 (Phase 4) merged into `develop` after `develop` (with #33, the grey-token clean-up)
+   was merged into the Phase 4 branch and its CI passed on the combined code. Release PR #30 merged to `main` (CI 6/6);
+   tag `v9.8.0` on `3dc31b9`.
+2. Before deploying: working tree clean, `main` = `origin/main` = the tag, no code difference from the branch the full
+   local check suite passed on (49 unit test files, integration 2/2 with 72 routes, `npm audit` clean in both), and
+   no new migration. Netlify CLI signed in as himextradingltd, site volleyvision-app.
+3. `deploy.ps1` (prod, now with `--site`): migration check OK, build, publish; its smoke check passed (health ok and db
+   ok, CSP header, unknown team 404).
+
+**Live checks:**
+- `POST /api/v1/teams/x/players/y/link` without a token answers 401: the 4.0.2 staff route exists (v9.7.0 had none).
+- `GET /api/v1/analytics/matches/x/zones` answers the visibility guard's JSON "Match not found." (an unknown route
+  gets the SPA's HTML), so the zone routes are live.
+- The production bundle contains the 4.0.6 Sentry URL folding.
+- Sentry: no issues since the deploy. The two open issues (VOLLEYVISION-5 and -6) date from 28 Sept, right after the
+  v9.7.0 deploy: a tab left open across it loading an old chunk.
+
+**For Karlos (Part C5):** regenerate each team's staff join code (Invitations tab), check the members list for any
+Manager who shouldn't be one, and on a phone: a team dashboard (court zones), a match's stats, the roster's
+Link/Unlink, and as a player account that only your own stats show.
+
 ### Phase 4.5 of the rebuild roadmap: per-team roles (branch `rebuild/p4-5-team-roles`, 2026-09-28/29)
 
 Why: Karlos decided (28 Sept) there is no global "coach" or "player" account type. Anyone can create a team and is
@@ -686,3 +711,26 @@ edit waits for Karlos's OK.
 was deleted with its module, and back up with `homeTeams.test.ts` and the new tests), build OK; frontend `tsc`, lint
 and build clean; integration 2/2 (matrix 72 routes plus the team-creation checks). `/login`'s main chunk shrank from
 224.3 kB to 220.7 kB.
+
+### Production deploy: v9.9.0 (2026-09-29)
+
+Karlos approved the release, the deploy and the G1 comment edit on 29 Sept.
+
+1. The `schema.prisma` `signupIntent` comment was updated (comment only; `prisma validate` OK; no migration). `develop`
+   (v9.8.0 deploy docs) was merged into the Phase 4.5 branch twice, resolving CHANGELOG and AUDIT-LOG conflicts. The
+   full local suite passed on it (51 unit test files, integration 2/2 with 72 routes, `npm audit` clean) and PR #34's CI
+   passed; merged. Release PR #36 (CI 6/6) merged to `main`; tag `v9.9.0` on `c562d6d`.
+2. Before deploying: working tree clean, `main` = `origin/main` = the tag, no code difference from the tested branch,
+   no new migration.
+3. The first `deploy.ps1` run failed before publishing: the Netlify CLI answered "Project not found" for the prod site
+   id. The CLI was still signed in as himextradingltd, `netlify api getSite` returned volleyvision-app for that id, and
+   `.netlify/state.json` was unchanged since July, so it was a transient API error. The retry published; the smoke check
+   passed (health and db ok, CSP header, unknown team 404).
+
+**Live checks:**
+- The production bundle references the new `DashboardPage` and `OnboardingPage` chunks and no longer the removed
+  `CoachDashboardPage` or `PlayerPortalPage`; the dashboard chunk contains "My teams", the empty state and the error
+  state; `/coach` still loads (it redirects to `/dashboard` in the app).
+- The v9.9.0 API changes (team creation limits, transfer cap, the retry, per-team upcoming matches) all sit behind
+  sign-in, so they weren't probed anonymously; the same build and publish path was proven live for v9.8.0 an hour earlier.
+- Sentry: no issues in the two hours around the deploy.
