@@ -569,7 +569,7 @@ export default function TrackingPage() {
         {/* ── Court zone + Rotation selectors ── */}
         <div className="grid md:grid-cols-2 gap-3">
           <div className="card p-3">
-            <label className="flex items-center gap-2 text-xs text-grey-600 mb-3 cursor-pointer select-none">
+            <label className="flex items-center gap-2 min-h-[44px] text-xs text-grey-600 mb-1 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={keepZone}

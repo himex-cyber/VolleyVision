@@ -110,7 +110,7 @@ export default function MatchReportCard({ report }: Props) {
         </div>
         <button
           onClick={handleCopy}
-          className="text-xs font-medium px-3 py-1.5 rounded-lg bg-court-800 hover:bg-court-700 border border-court-700 text-chalk-300 transition-colors shrink-0"
+          className="inline-flex items-center min-h-[44px] text-xs font-medium px-3 rounded-lg bg-grey-50 hover:bg-grey-200 border border-grey-200 text-grey-600 transition-colors shrink-0"
         >
           {copied ? '✓ Copied' : '↗ Copy Report'}
         </button>

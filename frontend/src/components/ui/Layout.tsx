@@ -186,14 +186,16 @@ function PublicShell() {
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-50 bg-white border-b border-grey-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5 min-h-[44px] min-w-[44px]">
             <BrandMark />
-            <span className="font-display font-bold text-lg tracking-tight text-navy-700">VolleyVision</span>
+            {/* Below sm the mark alone, as in the signed-in header: the wordmark
+                plus three links doesn't fit 360px and "Sign in" wrapped. */}
+            <span className="hidden sm:inline font-display font-bold text-lg tracking-tight text-navy-700">VolleyVision</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <NavLink to="/teams" className={({ isActive }) => navPillClass(isActive)}>Teams</NavLink>
-            <NavLink to="/login" className={({ isActive }) => navPillClass(isActive)}>Sign in</NavLink>
-            <NavLink to="/register" className="btn-primary text-sm px-4 py-2">Register</NavLink>
+          <div className="flex items-center gap-2 whitespace-nowrap">
+            <NavLink to="/teams" className={({ isActive }) => `${navPillClass(isActive)} min-h-[44px] inline-flex items-center`}>Teams</NavLink>
+            <NavLink to="/login" className={({ isActive }) => `${navPillClass(isActive)} min-h-[44px] inline-flex items-center`}>Sign in</NavLink>
+            <NavLink to="/register" className="btn-primary text-sm px-4 py-2 min-h-[44px] inline-flex items-center">Register</NavLink>
           </div>
         </div>
       </header>
@@ -234,7 +236,7 @@ export default function Layout() {
         <div className="h-[60px] px-4 sm:px-6 flex items-center justify-between gap-4">
           {/* Left: brand + nav */}
           <div className="flex items-center gap-5 min-w-0">
-            <Link to="/dashboard" className="flex items-center gap-2.5 shrink-0">
+            <Link to="/dashboard" className="flex items-center gap-2.5 shrink-0 min-h-[44px] min-w-[44px]">
               <BrandMark />
               <span className="font-display font-bold text-lg tracking-tight text-navy-700 hidden sm:block">
                 VolleyVision
