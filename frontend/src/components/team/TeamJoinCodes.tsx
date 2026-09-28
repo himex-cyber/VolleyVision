@@ -35,7 +35,7 @@ function JoinCodeRow({ label, hint, code, kind, teamId, rowClass }: {
         {code ?? '—'}
       </span>
       <button className="btn-secondary text-xs px-3 py-1.5" onClick={copy} disabled={!code}>
-        {copied === 'copied' ? 'Copied ✓' : copied === 'failed' ? "Couldn't copy" : 'Copy'}
+        {copied === 'copied' ? 'Copied ✓' : copied === 'failed' ? "Couldn't copy: select the code" : 'Copy'}
       </button>
       <button
         className="text-grey-600 hover:text-grey-900 text-xs px-2 py-1.5"

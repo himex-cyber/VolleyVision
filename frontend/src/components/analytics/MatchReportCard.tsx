@@ -111,7 +111,7 @@ export default function MatchReportCard({ report }: Props) {
           onClick={handleCopy}
           className="inline-flex items-center min-h-[44px] text-xs font-medium px-3 rounded-lg bg-grey-50 hover:bg-grey-200 border border-grey-200 text-grey-600 transition-colors shrink-0"
         >
-          {copied === 'copied' ? '✓ Copied' : copied === 'failed' ? "Couldn't copy" : '↗ Copy Report'}
+          {copied === 'copied' ? '✓ Copied' : copied === 'failed' ? "Couldn't copy. Try again" : '↗ Copy Report'}
         </button>
       </div>
 

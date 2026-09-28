@@ -32,7 +32,8 @@
     inset: 0 0 auto 0;
     height: var(--vv-safe-top);
     background: theme('colors.white');
-    z-index: 60;
+    /* Above scrolling content, below the header (50) and pop-ups. */
+    z-index: 45;
   }
 
   /* Brand type scale (docs/brand/BRAND-GUIDELINES.md §3):

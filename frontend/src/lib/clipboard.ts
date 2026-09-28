@@ -9,6 +9,7 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     /* fall back below */
   }
+  const previous = document.activeElement as HTMLElement | null;
   const area = document.createElement('textarea');
   area.value = text;
   area.setAttribute('readonly', '');
@@ -22,5 +23,6 @@ export async function copyText(text: string): Promise<boolean> {
     return false;
   } finally {
     area.remove();
+    previous?.focus(); // keep keyboard and screen-reader users on the button
   }
 }

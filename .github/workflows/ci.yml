@@ -139,6 +139,8 @@ jobs:
       # The committed gradle-wrapper.jar is a binary we run; check it's Gradle's own.
       - uses: gradle/actions/wrapper-validation@v4
       - run: npm ci
+      - name: The prod-config check still catches what it should
+        run: node scripts/check-android-prod.test.mjs
       - name: Production sync
         run: npm run android:prod
       - name: Prod-config check

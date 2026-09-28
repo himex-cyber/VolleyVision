@@ -34,7 +34,16 @@ function nativeCsp(mode: string): Plugin | false {
   };
 }
 
+// The app version has one home: versionName in android/app/build.gradle. Native
+// builds read it from there for the X-Client header, so the two can't drift.
+function nativeVersion(mode: string): Record<string, string> {
+  if (!mode.startsWith('native-')) return {};
+  const gradle = readFileSync('android/app/build.gradle', 'utf8');
+  return { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(gradle.match(/versionName "([^"]+)"/)![1]) };
+}
+
 export default defineConfig(({ mode }) => ({
+  define: nativeVersion(mode),
   plugins: [
     react(),
     nativeCsp(mode),

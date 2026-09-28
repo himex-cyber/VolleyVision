@@ -224,7 +224,9 @@ window.addEventListener('vite:preloadError', (event) => {
   window.location.reload();
 });
 
-if (isNative()) void initNative();
+// A failure here (e.g. its lazy chunk didn't load) would leave Back closing
+// the app from every screen, so it's reported rather than dropped.
+if (isNative()) initNative().catch((err) => Sentry.captureException(err));
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

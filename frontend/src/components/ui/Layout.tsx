@@ -88,6 +88,7 @@ function NavOverflow({ pendingCount }: { pendingCount: number }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu"
+        aria-haspopup="menu"
         aria-expanded={open}
         className="w-11 h-11 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
       >
@@ -126,6 +127,7 @@ function AvatarMenu({ user, onSignOut }: {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
+        aria-haspopup="menu"
         aria-expanded={open}
         className="flex items-center gap-2.5 pl-[5px] pr-2.5 py-[5px] min-h-[44px] rounded-xl bg-grey-50 border border-grey-200 hover:bg-grey-200/60 transition-colors"
       >

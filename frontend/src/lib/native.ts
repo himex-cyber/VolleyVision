@@ -15,6 +15,12 @@ export async function initNative(): Promise<void> {
   // emulator: Back on a team dashboard closed the app). React Router records
   // each entry's index in history.state.idx, so that's the reliable signal.
   await App.addListener('backButton', () => {
+    // An open pop-up menu closes first, as Android users expect from Back.
+    const openMenu = document.querySelector<HTMLElement>('[aria-haspopup][aria-expanded="true"]');
+    if (openMenu) {
+      openMenu.click();
+      return;
+    }
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
     if (idx > 0) window.history.back();
     else void App.exitApp();
