@@ -103,7 +103,10 @@ export function useCreateTeam() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateTeamInput) => teamsApi.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['teams'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams'] });
+      qc.invalidateQueries({ queryKey: ['coach', 'dashboard'] }); // the home page's team cards
+    },
   });
 }
 
@@ -111,7 +114,10 @@ export function useDeleteTeam() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => teamsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['teams'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams'] });
+      qc.invalidateQueries({ queryKey: ['coach', 'dashboard'] }); // the home page's team cards
+    },
   });
 }
 
@@ -458,6 +464,7 @@ export function useTransferOwnership() {
       qc.invalidateQueries({ queryKey: ['teams'] });
       qc.invalidateQueries({ queryKey: ['teams', vars.teamId] });
       qc.invalidateQueries({ queryKey: ['teams', 'my-teams'] });
+      qc.invalidateQueries({ queryKey: ['coach', 'dashboard'] }); // the home page's team cards
     },
   });
 }

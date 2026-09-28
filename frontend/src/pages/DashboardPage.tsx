@@ -37,7 +37,7 @@ export default function DashboardPage() {
   const { user } = useAuth();
   // One call has it all: owned teams, other teams with the caller's role there,
   // and each team's soonest upcoming match.
-  const { data: dash, isLoading } = useCoachDashboard();
+  const { data: dash, isLoading, isError } = useCoachDashboard();
   // Records only; MyStats fetches the portal itself when it renders.
   const { data: records } = useMyPlayerRecords();
 
@@ -68,8 +68,10 @@ export default function DashboardPage() {
 
       {isLoading ? (
         <p className="text-grey-600 text-sm">Loading your teams…</p>
+      ) : isError ? (
+        <p className="text-error text-sm">Couldn't load your teams. Check your connection and refresh the page.</p>
       ) : teams.length === 0 ? (
-        <div className="card p-12 text-center space-y-4">
+        <div className="card p-6 sm:p-12 text-center space-y-4">
           <p className="text-grey-900 font-medium">Create a team or join one with a code.</p>
           <div className="flex flex-wrap justify-center gap-2">
             <Link to="/teams?new=1" className="btn-primary">Create a team</Link>
