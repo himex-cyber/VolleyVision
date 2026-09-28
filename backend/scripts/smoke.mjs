@@ -70,6 +70,7 @@ if (SMOKE_EMAIL) {
   for (const path of [
     '/api/v1/teams',
     `/api/v1/analytics/teams/${SMOKE_TEAM_ID}`,
+    `/api/v1/analytics/teams/${SMOKE_TEAM_ID}/zones`,
     `/api/v1/analytics/matches/${SMOKE_MATCH_ID}/report`,
   ]) {
     await check(`owner GET ${path} is 200`, async () => {

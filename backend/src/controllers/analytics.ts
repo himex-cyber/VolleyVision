@@ -7,6 +7,7 @@ import { generateMatchReport } from '../services/report.service';
 import { assertTeamVisible } from '../lib/teamVisibility';
 import { hasTeamPermission, isGlobalAdmin, Permission, seesEveryPlayer } from '../services/permission.service';
 import { visiblePlayers } from '../lib/playerPrivacy';
+import { buildDetailedHeatmap } from '../lib/heatmap';
 
 // ─── Shared query shapes ──────────────────────────────────────────────────────
 
@@ -21,6 +22,9 @@ const playerSelect = {
 
 // userId is read only to apply the per-player rule; visiblePlayers strips it.
 const playerWithUser = { ...playerSelect, userId: true } as const;
+
+// No zone filter: buildDetailedHeatmap counts the untagged rows for coverage.
+const zoneSelect = { courtZone: true, eventType: true } as const;
 
 const eventSelect = {
   eventType: true,
@@ -175,5 +179,35 @@ export async function getPlayerAnalytics(req: Request, res: Response, next: Next
     // player.teamId is the team in scope: the home team may be one this caller
     // can't see (a linked team's staff), and its id must not leak.
     res.json({ player: { ...player, teamId }, teamId, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events) });
+  } catch (err) { next(err); }
+}
+
+// ─── Court-zone maps ──────────────────────────────────────────────────────────
+
+/** Team-level: every member of the match's team (mVis runs first). */
+export async function getMatchZones(req: Request, res: Response, next: NextFunction) {
+  try {
+    const events = await prisma.event.findMany({ where: { matchId: req.params.matchId, ...ownEventsOnly }, select: zoneSelect });
+    res.json(buildDetailedHeatmap(events));
+  } catch (err) { next(err); }
+}
+
+/** Team-level, across the team's matches: every member (tVis runs first). */
+export async function getTeamZones(req: Request, res: Response, next: NextFunction) {
+  try {
+    const events = await prisma.event.findMany({ where: { match: { teamId: req.params.teamId }, ...ownEventsOnly }, select: zoneSelect });
+    res.json(buildDetailedHeatmap(events));
+  } catch (err) { next(err); }
+}
+
+/** One player's map on the team in scope: staff, admin or the player (resolvePlayerScope). */
+export async function getPlayerZones(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { player, teamId, matchId } = await resolvePlayerScope(req);
+    const events = await prisma.event.findMany({
+      where: { playerId: player.id, match: { teamId }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
+      select: zoneSelect,
+    });
+    res.json(buildDetailedHeatmap(events));
   } catch (err) { next(err); }
 }
