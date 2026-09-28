@@ -524,3 +524,50 @@ Deviations and extras:
 **Deferred until deploys resume:**
 - The staging two-browser check (Part C4).
 - The prod deploy with its smoke check.
+
+### Phase 3 of the rebuild roadmap: responsive core screens (branch `rebuild/p3-responsive-core`, 2026-09-28)
+
+Why: the tracking page, scoreboard, match and team dashboards and the app chrome must work on a 360px-wide phone,
+ready for the mobile app in Phase 5.
+
+Karlos's decisions:
+- Released as v9.7.0, not deployed.
+- The six units (U1–U6) ran as parallel worktree subagents with disjoint file ownership and were merged into the
+  phase branch, instead of six PRs.
+
+Finding: the app has only a light theme. `darkMode: 'class'` is configured but nothing ever turns it on, so gate 7
+("light and dark") reduces to "don't break light, add no `dark:` classes".
+
+| Unit | Change |
+|---|---|
+| U1 Tracking | Toggles, jersey input, Recent chips, and the keep-zone row are 44px; the event grid is 2 columns below `sm` (from `sm` up it's driven by a `--slots` CSS variable) |
+| U2 LiveScoreboard | Set buttons 44px; Undo/End Set/Reset controls 44px; score and centre shrink below `sm`; team names truncate |
+| U3 Match dashboard | `navy-300` on white cards changed to `grey-600` (contrast); team names truncate; Copy Report is 44px and its legacy classes are replaced |
+| U4 Team dashboard | Same contrast fix; legacy classes replaced in the charts and insights; leaderboard labels shortened so all five show; insight text uses `.strong` on tints |
+| U5 Layout | Header controls and logo links are 44px; the signed-out header fits 360px. The dead "chrome-free" `/track/` branch is removed: tracking stays in the shell, because it relies on `<main>`'s padding |
+| U6 Match header, sub-navs | Back button, status trigger and menu options, Dismiss, and every tab are at least 44px; the long-title `h1` wraps |
+| Test helper | `testing/testEnv.ts`: an http test run directly (not through `npm test`) pins the runner's safe env, so it can't reach `backend/.env` credentials or leave a stray `:3001` listener |
+
+**Verified in a browser:** every Phase 3 screen was checked at 360x800 against the local Docker Postgres with staging
+seed data. Page width stayed at 360, and every visible control measured at least 44x44 in the page. At 1024px, desktop
+layouts are unchanged (the tracking grid is back to its 5/3/3/3/2/2 columns).
+
+**Reviews:**
+- `/code-review high`: 1 finding (the chrome-free guard stripped the tracking page's padding), fixed.
+- Independent Opus review: no high findings; 1 medium and 2 low, all fixed.
+- `/security-review`: no findings.
+
+**Verified:**
+- Backend: `tsc` clean, 40/40 unit test files, no import cycles, build OK.
+- Frontend: `tsc`, lint and build clean.
+- Integration tests pass 2/2.
+- `npm audit`: clean in both packages.
+- No legacy classes remain in the Phase 3 files.
+
+**Housekeeping:**
+- The six unit worktrees and their merged branches are removed.
+- Test-process hygiene: a stray test server on `:3001` was traced to directly-run http tests and fixed (`testEnv`).
+- In this session, the variable NAMES in `backend/.env` were printed once while diagnosing that (no values). From now
+  on the rule holds: no `.env` reads.
+
+**Deferred until deploys resume:** the phone check on staging (Part C5), and the prod deploy with its smoke check.
