@@ -258,12 +258,12 @@ export default function TeamDetailPage() {
       {/* Ownership card */}
       <div className="card p-5">
         <div className="flex items-center justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-grey-600 font-semibold mb-1">Owner</p>
             {team.owner && (
               <p className="text-grey-900 font-medium">
                 {team.owner.firstName} {team.owner.lastName}
-                <span className="text-grey-600 font-normal ml-2 text-sm">{team.owner.email}</span>
+                <span className="block sm:inline sm:ml-2 text-grey-600 font-normal text-sm break-all">{team.owner.email}</span>
               </p>
             )}
           </div>
@@ -403,7 +403,7 @@ export default function TeamDetailPage() {
                   <div
                     role={canOpenDashboard ? 'button' : undefined}
                     tabIndex={canOpenDashboard ? 0 : undefined}
-                    className={`px-5 py-3 flex items-center gap-4 transition-colors
+                    className={`px-5 py-3 flex items-center gap-3 sm:gap-4 transition-colors
                                 ${canOpenDashboard ? 'cursor-pointer hover:bg-grey-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500' : ''}
                                 ${isEditing ? 'bg-grey-50' : ''}`}
                     onClick={canOpenDashboard ? () => navigate(`/players/${player.id}/dashboard?teamId=${teamId}`) : undefined}
@@ -417,14 +417,15 @@ export default function TeamDetailPage() {
                     {/* Jersey-number avatar. There's no player-photo field in
                         the data model, so this placeholder carries the whole
                         identity of the row — it reads as an avatar, not an icon. */}
-                    <div className="w-14 h-14 shrink-0 rounded-full bg-navy-100 border-2 border-navy-500
-                                    grid place-items-center font-display font-bold text-navy-700 text-xl tabular-nums">
+                    {/* Smaller below sm so a staff row (link + edit controls) fits 360px. */}
+                    <div className="w-11 h-11 sm:w-14 sm:h-14 shrink-0 rounded-full bg-navy-100 border-2 border-navy-500
+                                    grid place-items-center font-display font-bold text-navy-700 text-lg sm:text-xl tabular-nums">
                       {player.jerseyNumber}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-grey-900 truncate">{playerName}</p>
                     </div>
-                    <span className={`badge ${POSITION_BADGE[player.position]} text-sm px-2.5 py-1`}>
+                    <span className={`badge ${POSITION_BADGE[player.position]} text-sm px-2.5 py-1 hidden sm:inline-flex`}>
                       {POSITION_FULL_LABELS[player.position]}
                     </span>
                     {/* Account link — staff assign/unassign; players can no longer
@@ -449,20 +450,21 @@ export default function TeamDetailPage() {
                         ) : (
                           <button
                             className="btn-ghost text-xs px-3 min-h-[44px]"
+                            aria-label={`Link ${playerName} to a team member`}
                             aria-expanded={linkingId === player.id}
                             onClick={() => {
                               setLinkError(null);
                               setLinkingId(linkingId === player.id ? null : player.id);
                             }}
                           >
-                            Link to member
+                            Link
                           </button>
                         )}
                       </div>
                     </PermissionGuard>
                     <PermissionGuard teamId={teamId!} permission="MANAGE_TEAM">
                       <button
-                        className="btn-icon w-14 h-14"
+                        className="btn-icon w-11 h-11 sm:w-14 sm:h-14"
                         title="Edit player"
                         aria-label={`Edit ${playerName}`}
                         aria-expanded={isEditing}

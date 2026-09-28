@@ -6,7 +6,6 @@ import * as Sentry from '@sentry/react';
 import './index.css';
 
 import { AuthProvider } from './context/AuthContext';
-import { ViewModeProvider } from './context/ViewModeContext';
 import { features } from './config/features';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
@@ -96,8 +95,6 @@ const RedeemInvitationPage = lazy(() => import('./pages/RedeemInvitationPage'));
 const InvitationsPage = lazy(() => import('./pages/InvitationsPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const PlayerPortalPage = lazy(() => import('./pages/PlayerPortalPage'));
-const CoachDashboardPage = lazy(() => import('./pages/CoachDashboardPage'));
 const TeamsPage = lazy(() => import('./pages/TeamsPage'));
 const TeamDetailPage = lazy(() => import('./pages/TeamDetailPage'));
 const MatchesPage = lazy(() => import('./pages/MatchesPage'));
@@ -107,8 +104,7 @@ const MatchEventsPage = lazy(() => import('./pages/MatchEventsPage'));
 const MatchWatchPage = lazy(() => import('./pages/MatchWatchPage'));
 const TeamDashboardPage = lazy(() => import('./pages/TeamDashboardPage'));
 const PlayersDashboardPage = lazy(() => import('./pages/PlayersDashboardPage'));
-const OnboardingCoachPage = lazy(() => import('./pages/OnboardingCoachPage'));
-const OnboardingPlayerPage = lazy(() => import('./pages/OnboardingPlayerPage'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
 const TeamChatPage = lazy(() => import('./pages/TeamChatPage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 
@@ -118,6 +114,15 @@ const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 function LegacyTrackRedirect() {
   const { matchId } = useParams<{ matchId: string }>();
   return <Navigate to={`/matches/${matchId}/track`} replace />;
+}
+
+// Stale localStorage key from the removed global coach/player mode (Phase
+// 4.5) — nothing writes it any more, but a browser that set it before this
+// deploy would otherwise keep it forever.
+try {
+  localStorage.removeItem('vv_view_mode');
+} catch {
+  /* storage blocked */
 }
 
 const queryClient = new QueryClient({
@@ -134,7 +139,6 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ViewModeProvider>
         {/* Outer boundary covers the standalone routes (auth, onboarding) that
             render outside Layout. Routes nested under Layout suspend against
             Layout's own inner boundary instead, so the nav chrome stays put
@@ -151,9 +155,10 @@ function App() {
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           {/* Invitation redemption — public so brand-new / logged-out invitees can join */}
           <Route path="/invitations/redeem" element={<RedeemInvitationPage />} />
-          {/* Post-registration onboarding nudges — one-time, intent-driven */}
-          <Route path="/onboarding/coach" element={<OnboardingCoachPage />} />
-          <Route path="/onboarding/player" element={<OnboardingPlayerPage />} />
+          {/* Post-registration onboarding nudges — one-time, intent-driven. Same
+              page for both routes; `lead` only decides which action goes first. */}
+          <Route path="/onboarding/coach" element={<OnboardingPage lead="coach" />} />
+          <Route path="/onboarding/player" element={<OnboardingPage lead="player" />} />
 
           {/* Main app */}
           <Route element={<Layout />}>
@@ -163,8 +168,10 @@ function App() {
             <Route element={<RequireAuth />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/player" element={<PlayerPortalPage />} />
-              <Route path="/coach" element={<CoachDashboardPage />} />
+              {/* No more separate coach/player portals — old bookmarks land on the
+                  unified dashboard. */}
+              <Route path="/player" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/coach" element={<Navigate to="/dashboard" replace />} />
               {/* "My Teams" merged into /teams — teams are members-only, so
                   there is no separate "browse all teams" list any more. */}
               <Route path="/my-teams" element={<Navigate to="/teams" replace />} />
@@ -192,7 +199,6 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
-        </ViewModeProvider>
       </AuthProvider>
     </BrowserRouter>
   );

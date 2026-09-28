@@ -1,7 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useViewMode } from '../../context/ViewModeContext';
 import { useMyInvitations } from '../../hooks';
 import {
   GridIcon, TeamIcon, MailIcon, UserIcon,
@@ -60,31 +59,6 @@ function navPillClass(isActive: boolean) {
     'flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13.5px] transition-colors',
     isActive ? 'bg-navy-100 text-navy-700 font-semibold' : 'text-grey-600 font-medium hover:text-navy-700 hover:bg-grey-50',
   ].join(' ');
-}
-
-function ViewModeToggle() {
-  const { viewMode, setViewMode, isDual } = useViewMode();
-  if (!isDual) return null;
-
-  const base = 'px-3 py-1 text-xs font-semibold rounded-md transition-colors';
-  return (
-    <div className="flex items-center gap-0.5 p-[3px] rounded-lg bg-grey-50 border border-grey-200">
-      <button
-        type="button"
-        onClick={() => setViewMode('coach')}
-        className={viewMode === 'coach' ? `${base} bg-navy-700 text-white` : `${base} text-grey-600 hover:text-navy-700`}
-      >
-        Coach
-      </button>
-      <button
-        type="button"
-        onClick={() => setViewMode('player')}
-        className={viewMode === 'player' ? `${base} bg-navy-700 text-white` : `${base} text-grey-600 hover:text-navy-700`}
-      >
-        Player
-      </button>
-    </div>
-  );
 }
 
 /** A dropdown that closes when its full-screen backdrop is clicked. */
@@ -250,10 +224,8 @@ export default function Layout() {
             </nav>
           </div>
 
-          {/* Right: view toggle + bell + avatar; overflow menu on small screens */}
+          {/* Right: bell + avatar; overflow menu on small screens */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <div className="hidden sm:block"><ViewModeToggle /></div>
-
             <Link
               to="/invitations"
               aria-label={pendingCount > 0 ? `Invitations (${pendingCount} pending)` : 'Invitations'}

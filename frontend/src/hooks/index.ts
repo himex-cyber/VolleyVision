@@ -5,8 +5,6 @@ import type { TeamJoinCodeKind } from '../lib/api';
 import type { CreateTeamInput } from '../lib/api';
 import type { Player, Match, TeamRole, TeamMember, ApprovalStatus } from '../types';
 import type { FeedbackStatus } from '../types/feedback';
-import { useViewMode } from '../context/ViewModeContext';
-import { PLAYER_VIEW_PERMISSIONS } from '../lib/teamRoles';
 
 // ─── Email verification ──────────────────────────────────────────────────────
 
@@ -91,7 +89,7 @@ export function useRejectRequest(teamId: string) {
 /**
  * Every team the current user owns or belongs to. The backend scopes this to
  * the caller's memberships — there are no public teams — so any picker built on
- * it (see PlayerTeamLinksCard, PlayerPortalPage) is membership-scoped for free.
+ * it (see PlayerTeamLinksCard, MyStats) is membership-scoped for free.
  */
 export function useTeams() {
   return useQuery({ queryKey: ['teams'], queryFn: teamsApi.list });
@@ -423,6 +421,9 @@ export function useUpdateMemberRole(teamId: string) {
       qc.invalidateQueries({ queryKey: ['members', teamId] });
       // Promoting to PLAYER also creates their roster row server-side.
       qc.invalidateQueries({ queryKey: ['teams', teamId] });
+      // A role change (e.g. the coach editing their own role) must be
+      // reflected at once — useTeamRole/PermissionGuard read this key.
+      qc.invalidateQueries({ queryKey: ['permissions', 'team', teamId] });
     },
   });
 }
@@ -619,28 +620,12 @@ export function useCoachDashboard() {
 // ─── Permissions (Phase 5 Sprint 6) ──────────────────────────────────────────
 
 export function useTeamRole(teamId: string) {
-  const { viewMode } = useViewMode();
-  const query = useQuery({
+  return useQuery({
     queryKey: ['permissions', 'team', teamId],
     queryFn: () => permissionsApi.myTeamRole(teamId),
     enabled: !!teamId,
     staleTime: 60_000, // role changes are infrequent
   });
-
-  // Presentation-only lens: while the Coach/Player toggle is set to "Player",
-  // clamp the permissions the UI offers to TeamRole.PLAYER's real set. Every
-  // gate (useHasPermission, PermissionGuard, TeamMembersCard) reads this hook,
-  // so they all go read-only from one place. This never grants a permission
-  // the user lacks — the backend remains the real authorization boundary.
-  const data = useMemo(() => {
-    if (!query.data || viewMode !== 'player') return query.data;
-    return {
-      ...query.data,
-      permissions: query.data.permissions.filter((p) => PLAYER_VIEW_PERMISSIONS.has(p)),
-    };
-  }, [query.data, viewMode]);
-
-  return { ...query, data };
 }
 
 /**

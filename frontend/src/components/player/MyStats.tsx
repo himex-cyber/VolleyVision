@@ -1,17 +1,21 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
-import { usePlayerDashboard } from '../hooks';
-import { useAuth } from '../context/AuthContext';
-import { StatsCards, type StatTrends } from '../components/analytics/StatsOverview';
-import PlayerRadarChart from '../components/charts/PlayerRadarChart';
-import TeamTrendChart from '../components/charts/TeamTrendChart';
-import { CHART_SERIES } from '../lib/chartColors';
-import { POSITION_LABELS } from '../types';
+import { usePlayerDashboard } from '../../hooks';
+import { StatsCards, type StatTrends } from '../analytics/StatsOverview';
+import PlayerRadarChart from '../charts/PlayerRadarChart';
+import TeamTrendChart from '../charts/TeamTrendChart';
+import { CHART_SERIES } from '../../lib/chartColors';
+import { POSITION_LABELS } from '../../types';
 import type {
   PlayerRecord, MatchSummaryItem, DevelopmentPoint, TeamStatsBreakdown,
   UpcomingMatchItem, CareerStats,
-} from '../types';
+} from '../../types';
+
+// Extracted from the former standalone PlayerPortalPage (Phase 4.5): now a
+// "My stats" section embedded in the unified /dashboard page rather than a
+// page of its own — the page-level welcome banner moved up a level, so it's
+// dropped here to avoid showing twice.
 
 /** Volleyball convention: 0.410 -> .410, 1.000 -> 1.000, -0.125 -> -.125 */
 function percentage(value: number | null | undefined) {
@@ -23,14 +27,6 @@ function percentage(value: number | null | undefined) {
 
 function won(match: MatchSummaryItem) {
   return match.homeSetsWon > match.awaySetsWon;
-}
-
-function WelcomeBanner({ firstName }: { firstName?: string }) {
-  return (
-    <div className="relative overflow-hidden rounded-[20px] bg-navy-700 text-white p-6 sm:p-7">
-      <h1 className="font-display font-bold text-[30px] leading-tight">Welcome back, {firstName}</h1>
-    </div>
-  );
 }
 
 // ─────────────────────────────── Row A ───────────────────────────────
@@ -292,10 +288,9 @@ function TeamStatsSection({ entry }: { entry: TeamStatsBreakdown }) {
   );
 }
 
-// ─────────────────────────────── Page ───────────────────────────────
+// ─────────────────────────────── Section ───────────────────────────────
 
-export default function PlayerPortalPage() {
-  const { user } = useAuth();
+export default function MyStats() {
   const { data, isLoading } = usePlayerDashboard();
 
   const { players, careerStats, recentMatches, developmentMetrics, upcomingMatches, statsByTeam } =
@@ -363,8 +358,8 @@ export default function PlayerPortalPage() {
     [matchesByRecency],
   );
 
-  if (isLoading) return <p className="text-grey-600">Loading player dashboard…</p>;
-  if (!data) return <p className="text-error">Couldn't load player dashboard.</p>;
+  if (isLoading) return <p className="text-grey-600">Loading your stats…</p>;
+  if (!data) return <p className="text-error">Couldn't load your stats.</p>;
 
   const primaryPlayer = players?.[0];
   const teamNames = [...new Set((players ?? []).map((p) => p.team.name))].join(' · ');
@@ -372,11 +367,9 @@ export default function PlayerPortalPage() {
 
   return (
     <div className="space-y-5">
-      <WelcomeBanner firstName={user?.firstName} />
-
       {/* Row A — profile + kill efficiency */}
       {primaryPlayer ? (
-        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr] [&>*]:min-w-0">
           <ProfileHero
             player={primaryPlayer}
             teamNames={teamNames}
@@ -400,7 +393,7 @@ export default function PlayerPortalPage() {
           <StatsCards stats={careerStats} trends={statTrends} />
 
           {/* Row C — kill efficiency over time + skill profile */}
-          <div className="grid gap-4 lg:grid-cols-[1.75fr_1fr]">
+          <div className="grid gap-4 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
             {trendData.length >= 2 ? (
               <TeamTrendChart title="Kill efficiency" data={trendData} dataKey="hittingPercentage" />
             ) : (
@@ -412,7 +405,7 @@ export default function PlayerPortalPage() {
           </div>
 
           {/* Row D — recent matches + next match */}
-          <div className="grid gap-4 lg:grid-cols-[1.75fr_1fr]">
+          <div className="grid gap-4 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
             {matchRows.length > 0 ? (
               <RecentMatchesPanel rows={matchRows} />
             ) : (
@@ -434,11 +427,11 @@ export default function PlayerPortalPage() {
         )
       )}
 
-      {/* Development trends — account/record management now lives on Profile (Task 8). */}
+      {/* Development trends */}
       {trendData.length >= 2 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-grey-600">Development Trends</h2>
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid sm:grid-cols-2 gap-4 [&>*]:min-w-0">
             <TeamTrendChart title="Kills per Match" data={trendData} dataKey="kills" />
             <TeamTrendChart title="Aces per Match" data={trendData} dataKey="aces" />
             <TeamTrendChart title="Digs per Match" data={trendData} dataKey="digs" />
