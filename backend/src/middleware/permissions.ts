@@ -2,7 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { asyncHandler } from './asyncHandler';
 import { prisma } from '../lib/prisma';
 import { assertTeamVisible } from '../lib/teamVisibility';
-import { Permission, hasTeamPermission, canActInCategory, AccessCategory, isGlobalAdmin } from '../services/permission.service';
+import {
+  Permission, canActInCategory, AccessCategory, isGlobalAdmin, getVisibleTeamRole, roleHasPermission,
+} from '../services/permission.service';
 
 const FORBIDDEN = { error: 'You do not have permission to perform this action.' };
 
@@ -36,8 +38,8 @@ export function requireTeamPermission(permission: Permission, paramName = 'id') 
     if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
     const teamId = req.params[paramName];
     if (!teamId) { res.status(400).json({ error: 'Team ID missing from request.' }); return; }
-    await assertTeamVisible(teamId, req.user.userId);
-    const allowed = await hasTeamPermission(req.user.userId, teamId, permission);
+    const role = await getVisibleTeamRole(req.user.userId, teamId);
+    const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
   });
@@ -87,8 +89,8 @@ export function requireChannelPermission(permission: Permission) {
       select: { teamId: true },
     });
     if (!channel) { res.status(404).json({ error: 'Channel not found.' }); return; }
-    await assertTeamVisible(channel.teamId, req.user.userId);
-    const allowed = await hasTeamPermission(req.user.userId, channel.teamId, permission);
+    const role = await getVisibleTeamRole(req.user.userId, channel.teamId);
+    const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
   });
@@ -107,8 +109,8 @@ export function requireMatchPermission(permission: Permission, paramName = 'id')
     const matchId = req.params[paramName];
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
-    await assertTeamVisible(match.teamId, req.user.userId);
-    const allowed = await hasTeamPermission(req.user.userId, match.teamId, permission);
+    const role = await getVisibleTeamRole(req.user.userId, match.teamId);
+    const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
   });
@@ -124,8 +126,8 @@ export function requireEventPermission(permission: Permission) {
     if (!matchId) { res.status(400).json({ error: 'matchId is required.' }); return; }
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
-    await assertTeamVisible(match.teamId, req.user.userId);
-    const allowed = await hasTeamPermission(req.user.userId, match.teamId, permission);
+    const role = await getVisibleTeamRole(req.user.userId, match.teamId);
+    const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
   });
@@ -159,8 +161,8 @@ export function requireEventDeletePermission(permission: Permission) {
     }
 
     if (!teamId) { res.status(404).json({ error: 'Resource not found.' }); return; }
-    await assertTeamVisible(teamId, req.user.userId);
-    const allowed = await hasTeamPermission(req.user.userId, teamId, permission);
+    const role = await getVisibleTeamRole(req.user.userId, teamId);
+    const allowed = !!role && roleHasPermission(role, permission);
     if (!allowed) { res.status(403).json(FORBIDDEN); return; }
     next();
   });

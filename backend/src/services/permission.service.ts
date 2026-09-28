@@ -1,5 +1,6 @@
 import { AccessTier, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { AppError } from '../middleware/errorHandler';
 import { Permission, getPermissionsForRole, roleHasPermission } from '../lib/rolePermissions';
 
 // The static role map lives in lib/rolePermissions so pure-logic tests can reach
@@ -24,6 +25,28 @@ export async function getUserTeamRole(
   const isOwner = team?.ownerId === userId;
   const role = isOwner ? 'HEAD_COACH' : (membership?.role ?? null);
   return { role, isOwner };
+}
+
+/**
+ * The caller's role on a team they can see, from ONE owner+membership lookup:
+ * visibility and the role check share it instead of each re-reading the same
+ * rows. Throws 404 when the team is invisible to the caller (missing, or they
+ * are not the owner, a member, or a global admin), so guards give outsiders
+ * the same answer as a missing id. A global admin who isn't a member sees the
+ * team but has no role (null), so role checks still refuse them.
+ */
+export async function getVisibleTeamRole(userId: string, teamId: string): Promise<string | null> {
+  const [team, membership] = await Promise.all([
+    prisma.team.findUnique({ where: { id: teamId }, select: { ownerId: true } }),
+    prisma.teamMembership.findUnique({
+      where: { userId_teamId: { userId, teamId } },
+      select: { role: true },
+    }),
+  ]);
+  if (team && team.ownerId === userId) return 'HEAD_COACH';
+  if (team && membership) return membership.role;
+  if (team && (await isGlobalAdmin(userId))) return null;
+  throw new AppError(404, 'Team not found.');
 }
 
 export async function hasTeamPermission(

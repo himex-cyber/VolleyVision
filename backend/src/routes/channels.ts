@@ -2,7 +2,6 @@
 // because the surface spans three resources: the team-scoped channel getter,
 // channel-scoped messages, and message-scoped edit/delete.
 
-import { AppError } from '../middleware/errorHandler';
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
@@ -32,18 +31,24 @@ const upload = multer({
 });
 
 // multer throws its own error types; normalize to the API's { error } shape.
+// Called only with multer's own errors (see uploadFiles), so a guard's 404 or a
+// database failure keeps its status and the shared handler's sanitised body.
 function handleMulterError(err: any, _req: Request, res: Response, next: NextFunction) {
   if (err?.code === 'LIMIT_FILE_SIZE') {
     res.status(400).json({ error: `A file is too large. Maximum size is ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} MB.` });
   } else if (err?.code === 'LIMIT_FILE_COUNT' || err?.code === 'LIMIT_UNEXPECTED_FILE') {
     res.status(400).json({ error: `A message can have at most ${MAX_ATTACHMENTS_PER_MESSAGE} attachments.` });
-  } else if (err instanceof Error && !(err instanceof AppError)) {
-    // Malformed multipart bodies (busboy) arrive as plain Errors. An AppError is
-    // the guard's own answer (404 for a non-member) and keeps its status.
+  } else if (err instanceof Error) {
+    // Malformed multipart bodies (busboy) arrive as plain Errors.
     res.status(400).json({ error: err.message });
   } else {
     next(err);
   }
+}
+
+const parseFiles = upload.array('files', MAX_ATTACHMENTS_PER_MESSAGE);
+function uploadFiles(req: Request, res: Response, next: NextFunction) {
+  parseFiles(req, res, (err?: unknown) => (err ? handleMulterError(err, req, res, next) : next()));
 }
 
 // The team's single TEAM channel (get-or-create; readable by every member).
@@ -72,8 +77,7 @@ router.post(
   requireAuth,
   chatPostRateLimit,
   requireChannelPermission(Permission.POST_MESSAGE),
-  upload.array('files', MAX_ATTACHMENTS_PER_MESSAGE),
-  handleMulterError,
+  uploadFiles,
   uploadChannelMessage,
 );
 
