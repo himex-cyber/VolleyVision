@@ -640,9 +640,12 @@ refused.
   tables also omit them).
 - Independent Opus review: no high or medium; 6 low, 4 fixed, 2 for the G2 review (link routes check role, not the
   roster access tier, like the member routes; the heat-map CHANGELOG bullet was added).
-- `/security-review`: nothing at or above the reporting threshold. One candidate (7/10) is recorded for the G2 review:
-  home-team staff can now unlink a claimed record and link it to another member, whose player portal then shows that
-  record's stats from other teams (the portal reads by `userId` across teams; the unclaimed-record path existed before).
+- `/security-review`: nothing at or above the reporting threshold. One candidate (7/10): home-team staff can now
+  unlink a claimed record and link it to another member, whose player portal then showed that record's stats from other
+  teams (the portal read by `userId` across teams; the unclaimed-record path existed before). **Karlos (G2): scope the
+  portal.** Every portal read now counts only matches of teams the viewer owns or belongs to (`portalScope`,
+  `playerPortalScope.test.ts`). Karlos also kept the link routes on role only (like the member routes) and parked the
+  linked-player rows for a later phase.
 
-**Verified:** backend `tsc` clean, 48 unit test files, build OK; frontend `tsc`, lint and build clean; integration
+**Verified:** backend `tsc` clean, 49 unit test files, build OK; frontend `tsc`, lint and build clean; integration
 2/2 (matrix 72 routes).

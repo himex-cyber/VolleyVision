@@ -33,6 +33,10 @@ every player's numbers to every member. v9.8.0 completes the rule there.
   teammate's stats. Now staff link a member to their record from the roster
   ("Link to member" / "Unlink"). Players who join with the player code still
   get their own record automatically.
+- **Your player page shows the teams you're on.** Career stats, recent
+  matches, bests and upcoming games on your player page now count only teams
+  you belong to. A record that another team also plays for keeps that team's
+  numbers with that team's coaches.
 - **Invite codes stay out of error reports.** Join codes and invitation
   links in a request's path are replaced with placeholders before an error
   reaches Sentry, on the server and in the browser.
