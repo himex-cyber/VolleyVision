@@ -261,6 +261,18 @@ export const invitationCreateRateLimit = createRateLimit({
 });
 
 /**
+ * Team creation - per user. Anyone can create a team now (Phase 4.5); owning
+ * is capped at 5 anyway, so 5 an hour covers a real burst and stops a script
+ * from churning create/delete.
+ */
+export const teamCreateRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyFn: (req) => (req.user?.userId ? [`team-create:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: "You've created several teams in the last hour. Try again later.",
+});
+
+/**
  * Staff linking or unlinking a member to a roster record - per user. A coach
  * sets up a squad once; 60 an hour covers that twice over and stops a script
  * from churning links.

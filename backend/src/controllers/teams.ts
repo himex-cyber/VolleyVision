@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+import { prisma, runSerializable } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { logAudit } from '../lib/audit';
 import { syncOwnerMembership } from '../services/teamMembership.service';
 import { generateTeamJoinCode } from '../services/teamJoinCode.service';
+import { assertRoomForAnotherTeam } from '../services/teamOwnership.service';
+import { isGlobalAdmin } from '../services/permission.service';
 
 const ownerSelect = {
   id: true,
@@ -67,17 +69,9 @@ export async function createTeam(req: Request, res: Response, next: NextFunction
   try {
     if (!req.user) throw new AppError(401, 'Authentication required.');
 
-    // Team *creation* is the one place signupIntent gates anything — players
-    // join an existing team via invite/join code rather than founding their own.
-    // Every team-scoped permission still derives from TeamMembership role.
-    const requester = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { signupIntent: true },
-    });
-    if (requester?.signupIntent === 'PLAYER') {
-      throw new AppError(403, "Players join a team with a code or invitation from their coach — they can't create a team.");
-    }
-
+    // Anyone can create a team and becomes its coach (Phase 4.5): what you can
+    // do is decided per team by your role there, never by signupIntent. Limits
+    // instead: teamCreateRateLimit, and at most MAX_OWNED_TEAMS owned teams.
     const { name, division, season } = req.body;
     if (!name || !season) throw new AppError(400, 'Team name and season are required.');
 
@@ -86,19 +80,24 @@ export async function createTeam(req: Request, res: Response, next: NextFunction
     // The nested create gives every team its single TEAM chat channel in the
     // same transaction (getOrCreateTeamChannel self-heals if it's ever missing).
     // Every team also gets its reusable player/staff join codes at birth.
-    const playerJoinCode = await generateTeamJoinCode('PLAYER');
-    const staffJoinCode = await generateTeamJoinCode('STAFF');
-    const team = await prisma.team.create({
-      data: {
-        name,
-        division,
-        season,
-        ownerId: req.user.userId,
-        playerJoinCode,
-        staffJoinCode,
-        channels: { create: { type: 'TEAM' } },
-      },
-      include: { owner: { select: ownerSelect } },
+    const userId = req.user.userId;
+    const [playerJoinCode, staffJoinCode, isAdmin] = await Promise.all([
+      generateTeamJoinCode('PLAYER'), generateTeamJoinCode('STAFF'), isGlobalAdmin(userId),
+    ]);
+    const team = await runSerializable(async (tx) => {
+      await assertRoomForAnotherTeam(tx, userId, isAdmin);
+      return tx.team.create({
+        data: {
+          name,
+          division,
+          season,
+          ownerId: userId,
+          playerJoinCode,
+          staffJoinCode,
+          channels: { create: { type: 'TEAM' } },
+        },
+        include: { owner: { select: ownerSelect } },
+      });
     });
     // Give the owner a HEAD_COACH membership so team-scoped reads and the
     // permission checks see them immediately.

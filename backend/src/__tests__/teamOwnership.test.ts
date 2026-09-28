@@ -21,6 +21,8 @@ async function assertRejects(fn: () => Promise<unknown>, statusCode: number) {
 
 function stubHappyPath() {
   db.team.findUnique = async () => ({ id: 'team1', ownerId: 'owner1' });
+  db.user.findUnique = async () => ({ role: 'COACH' }); // receiver isn't an admin
+  db.team.count = async () => 0; // ...and owns no teams yet (Phase 4.5 cap)
   db.teamMembership.findFirst = async () => ({ id: 'm-new', userId: 'newOwner1' });
 }
 
@@ -50,6 +52,8 @@ async function demotesOldOwnerBeforePromotingNewOwner() {
 async function transferringToYourselfIs400() {
   resetDb();
   db.team.findUnique = async () => ({ id: 'team1', ownerId: 'owner1' });
+  db.user.findUnique = async () => ({ role: 'COACH' }); // receiver isn't an admin
+  db.team.count = async () => 0; // ...and owns no teams yet (Phase 4.5 cap)
   db.teamMembership.findFirst = async () => ({ id: 'm-self', userId: 'owner1' });
   await assertRejects(() => transferOwnership('team1', 'owner1', 'owner1@self.com'), 400);
 }
@@ -57,6 +61,8 @@ async function transferringToYourselfIs400() {
 async function nonOwnerIs403() {
   resetDb();
   db.team.findUnique = async () => ({ id: 'team1', ownerId: 'owner1' });
+  db.user.findUnique = async () => ({ role: 'COACH' }); // receiver isn't an admin
+  db.team.count = async () => 0; // ...and owns no teams yet (Phase 4.5 cap)
   await assertRejects(() => transferOwnership('team1', 'notTheOwner', 'new@owner.com'), 403);
   assert.equal(callsFor('teamMembership', 'findFirst').length, 0, 'must not even look up the target when the caller is not the owner');
 }

@@ -186,6 +186,19 @@ async function main() {
     // P2.2: a manager can't delete the team (the owner can; see http.teamDelete).
     assert.equal((await call(base, 'DELETE', `/api/v1/teams/${f.team.id}`, f.manager.token)).status, 403);
 
+    // Phase 4.5: anyone can create a team (signupIntent no longer gates it),
+    // capped at 5 owned teams, and the cap holds under parallel creates.
+    const newTeam = (u: TestUser) => call(base, 'POST', '/api/v1/teams', u.token, { name: `${RUN} new`, season: '2026' });
+    const playerIntent = await makeUser('intent-player');
+    await prisma.user.update({ where: { id: playerIntent.id }, data: { signupIntent: 'PLAYER' } });
+    assert.equal((await newTeam(playerIntent)).status, 201, 'a player-intent account can create a team');
+    const racer = await makeUser('racer');
+    for (let i = 0; i < 4; i++) await makeTeam(racer, `Racer ${i}`);
+    const raced = await Promise.all([newTeam(racer), newTeam(racer)]);
+    assert.deepEqual(raced.map((r) => r.status).sort(), [201, 409], 'two parallel creates at 4 teams: one wins, one is refused');
+    assert.equal(await prisma.team.count({ where: { ownerId: racer.id } }), 5);
+    assert.equal((await newTeam(racer)).status, 409, 'the 6th owned team is refused');
+
     // No token: team-scoped reads are 404 (no public teams), everything else 401.
     for (const [path, expected] of [
       [`/api/v1/teams/${f.team.id}`, 404],
