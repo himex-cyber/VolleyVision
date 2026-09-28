@@ -16,7 +16,8 @@ import { getAccessTier } from '../services/permission.service';
 export async function listTeamJoinCodes(req: Request, res: Response, next: NextFunction) {
   try {
     const teamId = req.params.id;
-    const fullAccess = (await getAccessTier(req.user!.userId, teamId, 'invitation')) === AccessTier.FULL_ACCESS;
+    const tier = res.locals.accessTier ?? await getAccessTier(req.user!.userId, teamId, 'invitation');
+    const fullAccess = tier === AccessTier.FULL_ACCESS;
     res.json(await getTeamJoinCodes(teamId, fullAccess));
   } catch (err) {
     next(err);
@@ -35,7 +36,8 @@ export async function regenerateTeamJoinCode(req: Request, res: Response, next: 
     // Regeneration is immediate-only: there is no ApprovalAction for it, so
     // unlike invitation creation nothing can be queued — APPROVAL_REQUIRED
     // members are simply not allowed.
-    if ((await getAccessTier(userId, teamId, 'invitation')) !== AccessTier.FULL_ACCESS) {
+    const tier = res.locals.accessTier ?? await getAccessTier(userId, teamId, 'invitation');
+    if (tier !== AccessTier.FULL_ACCESS) {
       return res.status(403).json({ error: 'You do not have permission to regenerate join codes.' });
     }
 

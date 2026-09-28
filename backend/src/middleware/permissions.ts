@@ -2,8 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { asyncHandler } from './asyncHandler';
 import { prisma } from '../lib/prisma';
 import { assertTeamVisible } from '../lib/teamVisibility';
+import { AccessTier } from '@prisma/client';
 import {
-  Permission, canActInCategory, AccessCategory, isGlobalAdmin, getVisibleTeamRole, roleHasPermission,
+  Permission, canActInCategory, AccessCategory, isGlobalAdmin, getVisibleTeamRole, roleHasPermission, getAccessTier,
 } from '../services/permission.service';
 
 const FORBIDDEN = { error: 'You do not have permission to perform this action.' };
@@ -57,7 +58,11 @@ export function requireTeamAccess(category: AccessCategory, paramName = 'id') {
     const teamId = req.params[paramName];
     if (!teamId) { res.status(400).json({ error: 'Team ID missing from request.' }); return; }
     await assertTeamVisible(teamId, req.user.userId);
-    if (!(await canActInCategory(req.user.userId, teamId, category))) { res.status(403).json(FORBIDDEN); return; }
+    const tier = await getAccessTier(req.user.userId, teamId, category);
+    if (tier !== AccessTier.APPROVAL_REQUIRED && tier !== AccessTier.FULL_ACCESS) { res.status(403).json(FORBIDDEN); return; }
+    // Controllers that branch on the tier (queue vs immediate, what to show)
+    // read it here instead of looking it up again.
+    res.locals.accessTier = tier;
     next();
   });
 }

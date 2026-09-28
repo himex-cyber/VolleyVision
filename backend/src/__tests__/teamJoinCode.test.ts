@@ -22,7 +22,7 @@ async function listAs(tier: 'APPROVAL_REQUIRED' | 'FULL_ACCESS') {
     Object.fromEntries(Object.keys(args.select).filter((k) => args.select[k]).map((k) => [k, row[k]]));
   db.teamMembership.findUnique = async () => ({ rosterAccess: tier, invitationAccess: tier, matchAccess: tier });
   let body: any;
-  const res: any = { json: (b: any) => { body = b; return res; }, status: () => res };
+  const res: any = { json: (b: any) => { body = b; return res; }, status: () => res, locals: {} };
   await listTeamJoinCodes({ params: { id: 'team1' }, user: { userId: 'u1' } } as any, res, (err: unknown) => { throw err; });
   return body;
 }
