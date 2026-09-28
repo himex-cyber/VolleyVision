@@ -115,7 +115,7 @@ function NavOverflow({ pendingCount }: { pendingCount: number }) {
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu"
         aria-expanded={open}
-        className="w-10 h-10 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
+        className="w-11 h-11 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
       >
         <MenuIcon className="w-5 h-5" />
       </button>
@@ -153,7 +153,7 @@ function AvatarMenu({ user, onSignOut }: {
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
         aria-expanded={open}
-        className="flex items-center gap-2.5 pl-[5px] pr-2.5 py-[5px] rounded-xl bg-grey-50 border border-grey-200 hover:bg-grey-200/60 transition-colors"
+        className="flex items-center gap-2.5 pl-[5px] pr-2.5 py-[5px] min-h-[44px] rounded-xl bg-grey-50 border border-grey-200 hover:bg-grey-200/60 transition-colors"
       >
         <Initials user={user} size="sm" />
         <span className="hidden sm:block text-[13px] font-semibold text-grey-900 max-w-[120px] truncate">
@@ -210,7 +210,11 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const { data: invitations } = useMyInvitations();
 
-  const isTracking = location.pathname.startsWith('/track/');
+  // Live tracking lives at /matches/:matchId/track; /track/:matchId is kept
+  // only as a redirect (see main.tsx) but is matched too so it doesn't flash
+  // the full chrome for the instant before it navigates away.
+  const isTracking = /^\/matches\/[^/]+\/track\/?$/.test(location.pathname)
+    || location.pathname.startsWith('/track/');
 
   // The tracking screen is chrome-free and tablet-optimised — never wrapped.
   if (isTracking) return <SuspendedOutlet />;
@@ -256,7 +260,7 @@ export default function Layout() {
             <Link
               to="/invitations"
               aria-label={pendingCount > 0 ? `Invitations (${pendingCount} pending)` : 'Invitations'}
-              className="relative w-10 h-10 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
+              className="relative w-11 h-11 rounded-xl bg-white border border-grey-200 grid place-items-center text-grey-600 hover:text-navy-700 transition-colors"
             >
               <BellIcon className="w-[18px] h-[18px]" />
               {pendingCount > 0 && (
