@@ -158,7 +158,7 @@ function AvatarMenu({ user, onSignOut }: {
 function PublicShell() {
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-50 bg-white border-b border-grey-200">
+      <header className="sticky top-[var(--vv-safe-top)] z-50 bg-white border-b border-grey-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-[60px] flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 min-h-[44px] min-w-[44px]">
             <BrandMark />
@@ -201,7 +201,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-grey-50">
       {/* Top nav — single row, sticky */}
-      <header className="sticky top-0 z-30 bg-white border-b border-grey-200">
+      <header className="sticky top-[var(--vv-safe-top)] z-30 bg-white border-b border-grey-200">
         <div className="h-[60px] px-4 sm:px-6 flex items-center justify-between gap-4">
           {/* Left: brand + nav */}
           <div className="flex items-center gap-5 min-w-0">

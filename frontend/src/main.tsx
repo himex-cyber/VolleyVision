@@ -7,6 +7,7 @@ import './index.css';
 
 import { AuthProvider } from './context/AuthContext';
 import { features } from './config/features';
+import { isNative, initNative } from './lib/native';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
 import PageLoadingFallback from './components/ui/PageLoadingFallback';
@@ -222,6 +223,8 @@ window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault();
   window.location.reload();
 });
+
+if (isNative()) void initNative();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

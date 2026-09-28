@@ -8,8 +8,31 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* The Android app draws edge to edge: Capacitor's SystemBars ('css' mode)
+     sets --safe-area-inset-*, and viewport-fit=cover makes env() report the
+     same on other devices. Content stays clear of the status bar, the gesture
+     bar and (in landscape) the side cut-outs; a white strip sits behind the
+     status bar so scrolled content never shows under the clock. On a normal
+     browser every inset is 0 and nothing moves. */
+  :root {
+    --vv-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --vv-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --vv-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+    --vv-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  }
+
   body {
     @apply bg-grey-50 text-grey-900 antialiased;
+    padding: var(--vv-safe-top) var(--vv-safe-right) var(--vv-safe-bottom) var(--vv-safe-left);
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: var(--vv-safe-top);
+    background: theme('colors.white');
+    z-index: 60;
   }
 
   /* Brand type scale (docs/brand/BRAND-GUIDELINES.md §3):

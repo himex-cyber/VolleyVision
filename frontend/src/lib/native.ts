@@ -5,5 +5,14 @@
 export const isNative = (): boolean =>
   (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() === true;
 
-/** Native-only setup, called from main.tsx inside `if (isNative())`. Filled in by 5.5. */
-export async function initNative(): Promise<void> {}
+/** Native-only setup, called from main.tsx inside `if (isNative())`. */
+export async function initNative(): Promise<void> {
+  // Dynamic import: the web bundle never loads @capacitor/app.
+  const { App } = await import('@capacitor/app');
+  // Android's back gesture/button walks the app's history, and leaves the app
+  // from the first screen instead of doing nothing.
+  await App.addListener('backButton', ({ canGoBack }) => {
+    if (canGoBack) window.history.back();
+    else void App.exitApp();
+  });
+}
