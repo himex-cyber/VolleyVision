@@ -2,7 +2,7 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.9.0 — unreleased
+## v9.9.0 — 2026-09-29
 
 Phase 4.5 of the rebuild roadmap: per-team roles. No migration.
 
