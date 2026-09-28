@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Runs every src/lib/*.test.ts sequentially via ts-node and fails on the
-// first error. Used by `npm test` — plain Node so it works on any platform.
+// `npm test`: the import-cycle check, then every src/lib/*.test.ts and
+// src/__tests__/*.test.ts (see test-runner.js for the loop).
 const { spawnSync } = require('child_process');
-const { readdirSync } = require('fs');
 const path = require('path');
+const { runTestFiles, srcDir } = require('./test-runner');
 
 // A cycle hands one module a half-initialised copy of the other, so the
 // failure surfaces later and somewhere else. Cheap to check, so check first.
@@ -13,23 +13,6 @@ const cycleCheck = spawnSync(
   { stdio: 'inherit', cwd: path.join(__dirname, '..') },
 );
 if (cycleCheck.status !== 0) process.exit(cycleCheck.status ?? 1);
-
-const libDir = path.join(__dirname, '..', 'src', 'lib');
-const unitTestsDir = path.join(__dirname, '..', 'src', '__tests__');
-
-const testFiles = [
-  ...readdirSync(libDir)
-    .filter((f) => f.endsWith('.test.ts'))
-    .map((f) => path.join(libDir, f)),
-  ...readdirSync(unitTestsDir)
-    .filter((f) => f.endsWith('.test.ts'))
-    .map((f) => path.join(unitTestsDir, f)),
-].sort();
-
-if (testFiles.length === 0) {
-  console.error('No test files found in src/lib or src/__tests__.');
-  process.exit(1);
-}
 
 // The src/__tests__/http.*.test.ts files import the whole app, whose
 // instrument.ts loads backend/.env. dotenv never overwrites a variable that is
@@ -52,22 +35,4 @@ const childEnv = {
   SUPABASE_SERVICE_ROLE_KEY: '',
 };
 
-const tsNodeBin = require.resolve('ts-node/dist/bin.js', {
-  paths: [path.join(__dirname, '..')],
-});
-
-for (const fullPath of testFiles) {
-  const file = path.relative(path.join(__dirname, '..', 'src'), fullPath);
-  console.log(`\n── ${file} ──`);
-  const result = spawnSync(
-    process.execPath,
-    [tsNodeBin, '--transpile-only', fullPath],
-    { stdio: 'inherit', cwd: path.join(__dirname, '..'), env: childEnv },
-  );
-  if (result.status !== 0) {
-    console.error(`\nFAILED: ${file}`);
-    process.exit(result.status ?? 1);
-  }
-}
-
-console.log(`\nAll ${testFiles.length} test files passed.`);
+runTestFiles({ dirs: [path.join(srcDir, 'lib'), path.join(srcDir, '__tests__')], env: childEnv, label: 'test' });
