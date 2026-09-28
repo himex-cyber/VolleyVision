@@ -28,7 +28,7 @@ function AdminFeedbackRow({ fb }: { fb: Feedback }) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-grey-900 text-sm">{fb.subject}</p>
-          <p className="text-grey-500 text-xs mt-0.5">
+          <p className="text-grey-600 text-xs mt-0.5">
             {fb.user ? `${fb.user.firstName} ${fb.user.lastName} · ${fb.user.email}` : 'Unknown user'}
             {' · '}{new Date(fb.createdAt).toLocaleString()}
             {fb.severity && ` · ${fb.severity.charAt(0) + fb.severity.slice(1).toLowerCase()} severity`}
@@ -48,7 +48,7 @@ function AdminFeedbackRow({ fb }: { fb: Feedback }) {
         </div>
       </div>
 
-      <p className="text-grey-700 text-sm whitespace-pre-wrap">{fb.description}</p>
+      <p className="text-grey-900 text-sm whitespace-pre-wrap">{fb.description}</p>
 
       <AttachmentChips feedback={fb} />
 
