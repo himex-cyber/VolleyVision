@@ -132,7 +132,7 @@ export default function MatchPageHeader({
                         role="option"
                         aria-selected={s === status}
                         onClick={() => handleStatusChange(s)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-grey-900 hover:bg-grey-50 transition-colors text-left"
+                        className="w-full flex items-center gap-2 min-h-[44px] px-3 py-2 text-sm text-grey-900 hover:bg-grey-50 transition-colors text-left"
                       >
                         <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[s]}`} aria-hidden />
                         {s.replace('_', ' ')}
@@ -149,7 +149,7 @@ export default function MatchPageHeader({
         {pendingNotice && (
           <div className="mt-3 card p-3 border border-gold-500/40 bg-gold-500/10 text-sm text-grey-900 flex items-center justify-between gap-3">
             <span>{pendingNotice}</span>
-            <button className="text-grey-500 hover:text-grey-900 text-xs" onClick={() => setPendingNotice('')}>Dismiss</button>
+            <button className="inline-flex items-center min-h-[44px] px-2 text-grey-600 hover:text-grey-900 text-xs shrink-0" onClick={() => setPendingNotice('')}>Dismiss</button>
           </div>
         )}
       </div>

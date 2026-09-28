@@ -56,15 +56,17 @@ export default function StatLeaderboardChart({
           <BarChart data={data}>
             <XAxis
               dataKey="name"
-              // Smaller than the desktop-tuned 12px: 5 bars in a ~300px-wide
-              // card at 360px viewport leave ~55px per label, so a full name
-              // overlaps at the old size.
-              tick={{ fill: CHART_TICK, fontSize: 10 }}
+              // Every bar keeps its label (recharts would otherwise drop some on
+              // a narrow card), so long names are shortened instead: at 360px
+              // five bars leave ~49px per label, 7 characters at 11px. The
+              // tooltip still shows the full name.
+              tick={{ fill: CHART_TICK, fontSize: 11 }}
               interval={0}
+              tickFormatter={(name: string) => (name.length > 7 ? `${name.slice(0, 6)}…` : name)}
             />
             <YAxis
-              tick={{ fill: CHART_TICK, fontSize: 10 }}
-              width={28}
+              tick={{ fill: CHART_TICK, fontSize: 11 }}
+              width={32}
             />
             <Tooltip
               formatter={(value) => [value, title]}

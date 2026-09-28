@@ -23,9 +23,9 @@ export default function CoachInsights({
             key={index}
             className={`rounded-lg p-3 text-sm break-words ${
               insight.type === 'positive'
-                ? 'bg-success/10 text-success'
+                ? 'bg-success/10 text-success-strong' // .strong: text on a tint (see tailwind.config.js)
                 : insight.type === 'warning'
-                ? 'bg-error/10 text-error'
+                ? 'bg-error/10 text-error-strong'
                 : 'bg-grey-600/10 text-grey-600'
             }`}
           >
