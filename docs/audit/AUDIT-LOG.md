@@ -739,9 +739,7 @@ Karlos approved the release, the deploy and the G1 comment edit on 29 Sept.
 
 Why: the roadmap's native shell, so coaches can track from a phone app. Karlos has only an iPhone, so he chose
 "Android first": Android is finished and checked on the emulator; iOS is a later phase (Apple Developer account and a
-cloud Mac build). Released as v9.10.0. No migration. **Not deployed:** Netlify build credits ran out on 29 Sept, and
-Karlos's rule is to release to `main` and tag without deploying until he has more. The app can't sign in to
-production until this deploy lands (it needs the CORS change).
+cloud Mac build). Released as v9.10.0 and deployed the same day (below). No migration.
 
 | Item | Change | Test (fails before) |
 |---|---|---|
@@ -770,5 +768,30 @@ closed the app from every screen, and copying failed in the app.
 **Released:** PR #38 (CI 4/4) merged to `develop`; release PR to `main`; tag `v9.10.0`. Karlos set
 `CORS_EXTRA_ORIGINS=https://localhost` in Netlify's production context (confirmed).
 
-**Still to do:** deploy when credits return, then the signed release build against production on the emulator
-(including a chat image upload). The signed build waits for Karlos's upload keystore.
+**Signed build:** Karlos created the upload keystore (the password was generated on his PC by a script, written into
+the gitignored `keystore.properties` and never shown in chat). After `npm run android:prod`, `gradlew assembleRelease
+bundleRelease` passed the prod-config check; `apksigner` and `jarsigner` verified both files against his certificate.
+
+### Production deploy: v9.10.0 (2026-09-29)
+
+Netlify credits ran out earlier on 29 Sept, so v9.10.0 was released and tagged (`a0052c0`, PR #40) without deploying.
+Karlos then asked for one deploy attempt.
+
+1. Before deploying: working tree clean, `main` = `origin/main` = the tag, `develop` and `main` have the same content,
+   no new migration.
+2. `deploy.ps1`: migrations up to date; the deploy went live; the smoke check passed (health and db ok, CSP header,
+   unknown team 404).
+
+**Live checks:**
+- CORS: a preflight from `https://localhost` gets `Access-Control-Allow-Origin: https://localhost` and allows the
+  `authorization` and `x-client` headers; one from another origin gets no allow-origin.
+- The signed release APK on the emulator (VV_Light), running against production: native CSP present with the prod
+  `connect-src`; `/health` returns ok with the database up; `/api/v1/auth/me` with a bogus token and `X-Client`
+  returns the API's JSON 401, so the app's origin, headers and route all work.
+- Not done: a signed-in session and a chat image upload. They need a production password, which Claude doesn't
+  enter, and the emulator draws no screen, so Karlos can't type one there either. Sign-in itself was proven against
+  the local API with the same build path. The first real sign-in happens on a tester's Android phone or on iOS later.
+- The emulator image is `userdebug`, which opens WebView debugging for every app. Capacitor leaves it off for release
+  builds (`webContentsDebuggingEnabled` defaults to the app's debuggable flag, which is off), so real phones don't
+  expose it.
+- Sentry: no issues in the two hours after the deploy.
