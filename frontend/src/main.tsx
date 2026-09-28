@@ -25,12 +25,23 @@ type ScrubbableEvent = {
   breadcrumbs?: Array<{ data?: Record<string, unknown> }>;
 };
 
-const pathOnly = (url: string) => url.split('?')[0];
+// Copy of backend/src/lib/scrubUrl.ts (tested there; the frontend can't import
+// backend code and has no test runner). Path only, plus the two API path
+// segments that are credentials: a join code and an invitation token.
+const CREDENTIAL_SEGMENTS: Array<[RegExp, string]> = [
+  [/\/invitations\/lookup\/[^/]+/g, '/invitations/lookup/:code'],
+  [/\/invitations\/[^/]+\/(accept|decline)(?=\/|$)/g, '/invitations/:token/$1'],
+];
+const scrubUrl = (url: string) => {
+  let out = url.split('?')[0].split('#')[0];
+  for (const [pattern, replacement] of CREDENTIAL_SEGMENTS) out = out.replace(pattern, replacement);
+  return out;
+};
 
 function scrubUrls<T extends ScrubbableEvent>(event: T): T {
   if (event.request) {
     delete event.request.query_string;
-    if (event.request.url) event.request.url = pathOnly(event.request.url);
+    if (event.request.url) event.request.url = scrubUrl(event.request.url);
   }
   // fetch/xhr breadcrumbs carry `url`; navigation breadcrumbs carry `from` and
   // `to`. Scrubbing only `url` let a team join code from
@@ -41,7 +52,7 @@ function scrubUrls<T extends ScrubbableEvent>(event: T): T {
     if (!data) continue;
     for (const key of ['url', 'from', 'to']) {
       const value = data[key];
-      if (typeof value === 'string') data[key] = pathOnly(value);
+      if (typeof value === 'string') data[key] = scrubUrl(value);
     }
   }
   return event;
