@@ -2,11 +2,61 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.8.0 — 2026-09-29
+
+Phase 4.0 of the rebuild roadmap (carry-over security fixes from an
+independent review of v9.3.0–v9.7.0) and Phase 4 (court zones and heat maps).
+No migration.
+
+**A correction to v9.6.0.** v9.6.0 said individual stats go only to a team's
+staff and the player themself. That was true only on the player stats page.
+The team and match dashboards, the match report and the event log still sent
+every player's numbers to every member. v9.8.0 completes the rule there.
+
+- **Court zones and heat maps.** The match and team dashboards now show where
+  on the court things happen: tap Attack, Serve, Pass or Defence to see each
+  zone's count, attempts and efficiency on a 4 3 2 / 5 6 1 court. Coaches and
+  the player themself also get a player's own map on the player page. Every map
+  says how many actions it's based on, since picking a zone is optional while
+  tracking. The match report's "attacks originated from Zone N" line links to
+  the map.
+- **Each player's numbers are theirs and their coaches'.** Players and viewers
+  see the team's totals plus only their own stats. The team and match
+  dashboards show them a "Your stats" card instead of the leaderboards and the
+  full player table; the match report leaves out the top performer; and in the
+  event log, other players' actions show the team name instead of who did it.
+  Coaches, statisticians and the player themself see everything as before.
+  The server leaves the other players out, so they aren't just hidden on
+  screen. Players can be minors.
+- **Coaches link players to their records.** A player could claim any
+  unclaimed record on their team, including a teammate's, and then see that
+  teammate's stats. Now staff link a member to their record from the roster
+  ("Link to member" / "Unlink"). Players who join with the player code still
+  get their own record automatically.
+- **Your player page shows the teams you're on.** Career stats, recent
+  matches, bests and upcoming games on your player page now count only teams
+  you belong to. A record that another team also plays for keeps that team's
+  numbers with that team's coaches.
+- **Invite codes stay out of error reports.** Join codes and invitation
+  links in a request's path are replaced with placeholders before an error
+  reaches Sentry, on the server and in the browser.
+- **No reload loop in private browsing.** After a deploy, a stale tab reloads
+  once to pick up the new version. With browser storage blocked it can't tell
+  it already tried, so it now shows the error instead of reloading forever.
+- **Text colours that never showed.** About 50 labels used grey shades the
+  design system doesn't define, so they rendered in the wrong colour. They now
+  use the defined greys.
+- **Behind the scenes.** Production deploys always name the target site. The
+  integration tests refuse to run against anything but a local database, even
+  when started directly. CI now checks that Supabase's public roles hold no
+  table grants. The authorization test matrix covers 72 routes, including the
+  player and coach portals and the invitation routes.
+
 ## v9.7.0 — 2026-09-28
 
 Phase 3 of the rebuild roadmap: the core screens work on a phone. Checked
 on a 360-pixel-wide screen, the narrowest common Android size. No migration.
-Not deployed yet.
+Deployed to production on 2026-09-28, together with v9.4.0–v9.6.0.
 
 - **Live tracking on a phone.**
   - Event buttons sit two across below tablet width, so labels like
@@ -34,7 +84,7 @@ Not deployed yet.
 
 Phase 2 of the rebuild roadmap: security hardening. Closes every
 authorization, rate-limit and reliability defect the roadmap confirmed in
-code. No migration. Not deployed yet.
+code. No migration. Deployed with v9.7.0.
 
 - **Team ids never leak.** Anyone who isn't on a team now gets "not found"
   from every one of its pages and actions, the same as for a team that
@@ -71,8 +121,8 @@ code. No migration. Not deployed yet.
 ## v9.5.0 — 2026-09-28
 
 Phase 1 of the rebuild roadmap: the tooling that proves every later change
-before it reaches real teams. Nothing changes for users. **One migration,
-not yet applied** (see below). Not deployed yet.
+before it reaches real teams. Nothing changes for users. One migration,
+applied to production on 2026-09-28 just before the v9.7.0 deploy.
 
 - **Row-level security on every table, in a migration.** Production had RLS
   switched on by hand for most tables, but only two were ever in a migration,
@@ -80,8 +130,8 @@ not yet applied** (see below). Not deployed yet.
   have left 19 tables readable through Supabase's public API. The new
   migration switches RLS on for every table and removes Supabase's default
   public-role grants. The app never uses those, so nothing it does changes.
-  It must be applied (staging first, then production after a backup) before
-  the next deploy; `deploy.ps1` refuses to deploy while it's pending.
+  Applied to production on 2026-09-28. Staging will get it when staging is
+  created.
 - **Every authorization rule has a test.** A new integration suite runs the
   real app against a real database and calls every team route as an outsider,
   a viewer and a player. Where the app doesn't yet meet the target (outsiders

@@ -25,12 +25,23 @@ type ScrubbableEvent = {
   breadcrumbs?: Array<{ data?: Record<string, unknown> }>;
 };
 
-const pathOnly = (url: string) => url.split('?')[0];
+// Copy of backend/src/lib/scrubUrl.ts (tested there; the frontend can't import
+// backend code and has no test runner). Path only, plus the two API path
+// segments that are credentials: a join code and an invitation token.
+const CREDENTIAL_SEGMENTS: Array<[RegExp, string]> = [
+  [/\/invitations\/lookup\/[^/]+/g, '/invitations/lookup/:code'],
+  [/\/invitations\/[^/]+\/(accept|decline)(?=\/|$)/g, '/invitations/:token/$1'],
+];
+const scrubUrl = (url: string) => {
+  let out = url.split('?')[0].split('#')[0];
+  for (const [pattern, replacement] of CREDENTIAL_SEGMENTS) out = out.replace(pattern, replacement);
+  return out;
+};
 
 function scrubUrls<T extends ScrubbableEvent>(event: T): T {
   if (event.request) {
     delete event.request.query_string;
-    if (event.request.url) event.request.url = pathOnly(event.request.url);
+    if (event.request.url) event.request.url = scrubUrl(event.request.url);
   }
   // fetch/xhr breadcrumbs carry `url`; navigation breadcrumbs carry `from` and
   // `to`. Scrubbing only `url` let a team join code from
@@ -41,7 +52,7 @@ function scrubUrls<T extends ScrubbableEvent>(event: T): T {
     if (!data) continue;
     for (const key of ['url', 'from', 'to']) {
       const value = data[key];
-      if (typeof value === 'string') data[key] = pathOnly(value);
+      if (typeof value === 'string') data[key] = scrubUrl(value);
     }
   }
   return event;
@@ -191,14 +202,17 @@ function App() {
 // files, which the deploy removed, so the next lazy route fails with "Failed to
 // fetch dynamically imported module" (Sentry VOLLEYVISION-2). Reloading picks up
 // the new index.html. At most once per 10s, so a chunk that is genuinely
-// missing surfaces as an error instead of a reload loop; storage can be
-// unavailable (private mode), in which case just reload.
+// missing surfaces as an error instead of a reload loop. With storage blocked
+// the 10s guard can't be kept, so don't reload at all: a reload there would
+// loop forever on a chunk that's really gone.
 window.addEventListener('vite:preloadError', (event) => {
   const KEY = 'vv:chunk-reload-at';
-  let last = 0;
-  try { last = Number(sessionStorage.getItem(KEY)) || 0; } catch { /* storage blocked */ }
-  if (Date.now() - last < 10_000) return;
-  try { sessionStorage.setItem(KEY, String(Date.now())); } catch { /* storage blocked */ }
+  try {
+    if (Date.now() - (Number(sessionStorage.getItem(KEY)) || 0) < 10_000) return;
+    sessionStorage.setItem(KEY, String(Date.now()));
+  } catch {
+    return; // storage blocked: let the error surface
+  }
   event.preventDefault();
   window.location.reload();
 });

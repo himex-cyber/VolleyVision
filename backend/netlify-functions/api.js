@@ -17,6 +17,7 @@
 const serverless = require('serverless-http');
 const Sentry = require('@sentry/node');
 const app = require('../dist/index').default;
+const { scrubUrl } = require('../dist/lib/scrubUrl');
 
 const handler = serverless(app);
 
@@ -41,7 +42,8 @@ exports.handler = async (event, context) => {
   //     carry tokens (instrument.ts strips it again anyway);
   //   - a root span, so Express's own spans have a parent and tracing works.
   const method = event.httpMethod;
-  const path = event.path || '/';
+  // Join codes and invitation tokens ride in the path; fold them (lib/scrubUrl).
+  const path = scrubUrl(event.path || '/');
   const host = event.headers && event.headers.host;
   try {
     return await Sentry.withIsolationScope((scope) => {

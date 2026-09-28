@@ -129,21 +129,21 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {profile.bio && <p className="mt-4 text-grey-700 text-sm border-t border-grey-200 pt-4">{profile.bio}</p>}
+        {profile.bio && <p className="mt-4 text-grey-900 text-sm border-t border-grey-200 pt-4">{profile.bio}</p>}
 
         <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm border-t border-grey-200 pt-4">
-          <span className="text-grey-500">Preferred position</span>
+          <span className="text-grey-600">Preferred position</span>
           <span className="text-grey-900 font-medium">
             {profile.preferredPosition ? POSITION_FULL_LABELS[profile.preferredPosition] : <span className="text-grey-400 font-normal">Not set</span>}
           </span>
-          {profile.phoneNumber && (<><span className="text-grey-500">Phone</span><span className="text-grey-900">{profile.phoneNumber}</span></>)}
+          {profile.phoneNumber && (<><span className="text-grey-600">Phone</span><span className="text-grey-900">{profile.phoneNumber}</span></>)}
           {(profile.city || profile.country) && (
-            <><span className="text-grey-500">Location</span><span className="text-grey-900">{[profile.city, profile.country].filter(Boolean).join(', ')}</span></>
+            <><span className="text-grey-600">Location</span><span className="text-grey-900">{[profile.city, profile.country].filter(Boolean).join(', ')}</span></>
           )}
-          {profile.dateOfBirth && (<><span className="text-grey-500">Date of Birth</span><span className="text-grey-900">{new Date(profile.dateOfBirth).toLocaleDateString()}</span></>)}
-          {profile.heightCm != null && (<><span className="text-grey-500">Height</span><span className="text-grey-900">{profile.heightCm} cm</span></>)}
-          {profile.weightKg != null && (<><span className="text-grey-500">Weight</span><span className="text-grey-900">{profile.weightKg} kg</span></>)}
-          <span className="text-grey-500">Member since</span>
+          {profile.dateOfBirth && (<><span className="text-grey-600">Date of Birth</span><span className="text-grey-900">{new Date(profile.dateOfBirth).toLocaleDateString()}</span></>)}
+          {profile.heightCm != null && (<><span className="text-grey-600">Height</span><span className="text-grey-900">{profile.heightCm} cm</span></>)}
+          {profile.weightKg != null && (<><span className="text-grey-600">Weight</span><span className="text-grey-900">{profile.weightKg} kg</span></>)}
+          <span className="text-grey-600">Member since</span>
           <span className="text-grey-900">{new Date(profile.createdAt).toLocaleDateString()}</span>
         </div>
 
@@ -236,7 +236,7 @@ export default function ProfilePage() {
       {bests && (bests.kills || bests.aces || bests.blocks || bests.digs || bests.hittingPercentage) && (
         <div className="card p-6">
           <h2 className="font-display font-semibold text-grey-900 mb-1">Top game stats</h2>
-          <p className="text-grey-500 text-xs mb-4">Career-best single-match performances</p>
+          <p className="text-grey-600 text-xs mb-4">Career-best single-match performances</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <BestStatCard label="Kills" entry={bests.kills} />
             <BestStatCard label="Aces" entry={bests.aces} />

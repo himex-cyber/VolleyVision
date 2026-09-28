@@ -58,13 +58,13 @@ export function AttachmentChips({ feedback }: { feedback: Feedback }) {
           <button
             key={a.id}
             type="button"
-            className="flex items-center gap-1.5 bg-grey-50 border border-grey-200 rounded-lg px-2 py-1 text-xs text-grey-700 hover:text-navy-700 hover:border-gold-500 transition-colors max-w-56"
+            className="flex items-center gap-1.5 bg-grey-50 border border-grey-200 rounded-lg px-2 py-1 text-xs text-grey-900 hover:text-navy-700 hover:border-gold-500 transition-colors max-w-56"
             title={`Open ${a.originalName}`}
             onClick={() => openAttachment(feedback.id, a.id, setError)}
           >
             <span aria-hidden>{a.kind === 'IMAGE' ? '🖼' : '📄'}</span>
             <span className="truncate font-medium">{a.originalName}</span>
-            <span className="text-grey-500 shrink-0">{formatBytes(a.sizeBytes)}</span>
+            <span className="text-grey-600 shrink-0">{formatBytes(a.sizeBytes)}</span>
           </button>
         ))}
       </div>
@@ -79,7 +79,7 @@ function MyFeedbackCard({ fb }: { fb: Feedback }) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-grey-900 text-base">{fb.subject}</p>
-          <p className="text-grey-500 text-xs mt-0.5">
+          <p className="text-grey-600 text-xs mt-0.5">
             Submitted {new Date(fb.createdAt).toLocaleDateString()}
             {fb.severity && ` · ${fb.severity.charAt(0) + fb.severity.slice(1).toLowerCase()} severity`}
           </p>
@@ -90,7 +90,7 @@ function MyFeedbackCard({ fb }: { fb: Feedback }) {
         </div>
       </div>
 
-      <p className="text-grey-700 text-sm whitespace-pre-wrap">{fb.description}</p>
+      <p className="text-grey-900 text-sm whitespace-pre-wrap">{fb.description}</p>
 
       <AttachmentChips feedback={fb} />
 

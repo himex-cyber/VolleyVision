@@ -365,13 +365,37 @@ export function useMatchReport(matchId: string) {
   });
 }
 
+export function useMatchZones(matchId: string) {
+  return useQuery({
+    queryKey: ['analytics', 'zones', 'match', matchId],
+    queryFn: () => analyticsApi.matchZones(matchId),
+    enabled: !!matchId,
+  });
+}
+
+export function useTeamZones(teamId: string) {
+  return useQuery({
+    queryKey: ['analytics', 'zones', 'team', teamId],
+    queryFn: () => analyticsApi.teamZones(teamId),
+    enabled: !!teamId,
+  });
+}
+
+export function usePlayerZones(playerId: string, teamId?: string, matchId?: string) {
+  return useQuery({
+    queryKey: ['analytics', 'zones', 'player', playerId, teamId ?? null, matchId ?? null],
+    queryFn: () => analyticsApi.playerZones(playerId, teamId, matchId),
+    enabled: !!playerId,
+  });
+}
+
 // ─── Memberships (Phase 5 Sprint 3) ──────────────────────────────────────────
 
-export function useTeamMembers(teamId: string) {
+export function useTeamMembers(teamId: string, enabled = true) {
   return useQuery({
     queryKey: ['members', teamId],
     queryFn: () => membershipsApi.listByTeam(teamId),
-    enabled: !!teamId,
+    enabled: enabled && !!teamId,
   });
 }
 
@@ -433,6 +457,34 @@ export function useTransferOwnership() {
       qc.invalidateQueries({ queryKey: ['teams'] });
       qc.invalidateQueries({ queryKey: ['teams', vars.teamId] });
       qc.invalidateQueries({ queryKey: ['teams', 'my-teams'] });
+    },
+  });
+}
+
+// Phase 4 — staff-only player record linking, from the team roster
+// (TeamDetailPage). Mirrors useUpdatePlayer's invalidation: the roster shown
+// there comes from useTeam (['teams', teamId]), not usePlayers.
+export function useLinkPlayerRecord(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ playerId, userId }: { playerId: string; userId: string }) =>
+      teamsApi.linkPlayerRecord(teamId, playerId, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams', teamId] });
+      qc.invalidateQueries({ queryKey: ['players', teamId] });
+      qc.invalidateQueries({ queryKey: ['player', 'dashboard'] });
+    },
+  });
+}
+
+export function useUnlinkPlayerRecord(teamId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: string) => teamsApi.unlinkPlayerRecord(teamId, playerId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['teams', teamId] });
+      qc.invalidateQueries({ queryKey: ['players', teamId] });
+      qc.invalidateQueries({ queryKey: ['player', 'dashboard'] });
     },
   });
 }
@@ -556,22 +608,6 @@ export function usePlayerDashboard() {
 
 export function usePlayerBests() {
   return useQuery({ queryKey: ['player', 'bests'], queryFn: playerPortalApi.bests });
-}
-
-export function useLinkPlayer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (playerId: string) => playerPortalApi.linkPlayer(playerId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['player', 'dashboard'] }),
-  });
-}
-
-export function useUnlinkPlayer() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (playerId: string) => playerPortalApi.unlinkPlayer(playerId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['player', 'dashboard'] }),
-  });
 }
 
 // ─── Coach Portal (Phase 5 Sprint 5) ─────────────────────────────────────────

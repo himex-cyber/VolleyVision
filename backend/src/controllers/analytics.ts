@@ -5,7 +5,9 @@ import { calculatePlayerStats, calculateSetStats, calculateStats } from '../lib/
 import { ownEventsOnly } from '../lib/eventFilters';
 import { generateMatchReport } from '../services/report.service';
 import { assertTeamVisible } from '../lib/teamVisibility';
-import { hasTeamPermission, isGlobalAdmin, Permission } from '../services/permission.service';
+import { seesEveryPlayer } from '../services/permission.service';
+import { visiblePlayers } from '../lib/playerPrivacy';
+import { buildDetailedHeatmap } from '../lib/heatmap';
 
 // ─── Shared query shapes ──────────────────────────────────────────────────────
 
@@ -18,6 +20,12 @@ const playerSelect = {
   teamId: true,
 } as const;
 
+// userId is read only to apply the per-player rule; visiblePlayers strips it.
+const playerWithUser = { ...playerSelect, userId: true } as const;
+
+// No zone filter: buildDetailedHeatmap counts the untagged rows for coverage.
+const zoneSelect = { courtZone: true, eventType: true } as const;
+
 const eventSelect = {
   eventType: true,
   playerId: true,
@@ -28,14 +36,19 @@ const eventSelect = {
 
 export async function getMatchAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
-    const match = await prisma.match.findUnique({
-      where: { id: req.params.matchId },
-      include: {
-        team: { include: { players: { select: playerSelect, orderBy: { jerseyNumber: 'asc' } } } },
-        events: { where: ownEventsOnly, select: eventSelect },
-      },
-    });
+    const userId = req.user?.userId ?? null;
+    const [match, isStaff] = await Promise.all([
+      prisma.match.findUnique({
+        where: { id: req.params.matchId },
+        include: {
+          team: { include: { players: { select: playerWithUser, orderBy: { jerseyNumber: 'asc' } } } },
+          events: { where: ownEventsOnly, select: eventSelect },
+        },
+      }),
+      seesEveryPlayer(userId, res.locals.visibleTeamId), // set by visibleByMatchParam
+    ]);
     if (!match) throw new AppError(404, 'Match not found.');
+    const players = visiblePlayers(match.team.players, isStaff, userId);
     res.json({
       match: {
         id: match.id, matchDate: match.matchDate, opponent: match.opponent,
@@ -45,7 +58,7 @@ export async function getMatchAnalytics(req: Request, res: Response, next: NextF
         homeSetsWon: match.homeSetsWon, awaySetsWon: match.awaySetsWon,
       },
       teamStats:   calculateStats(match.events),
-      playerStats: calculatePlayerStats(match.team.players, match.events),
+      playerStats: calculatePlayerStats(players, match.events),
       setStats:    calculateSetStats(match.events),
     });
   } catch (err) { next(err); }
@@ -53,15 +66,21 @@ export async function getMatchAnalytics(req: Request, res: Response, next: NextF
 
 export async function getTeamAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
-    const team = await prisma.team.findUnique({
-      where: { id: req.params.teamId },
-      include: {
-        players: { select: playerSelect, orderBy: { jerseyNumber: 'asc' } },
-        matches: { select: { id: true, status: true, setScores: true } },
-      },
-    });
+    const userId = req.user?.userId ?? null;
+    const { teamId } = req.params;
+    const [team, events, isStaff] = await Promise.all([
+      prisma.team.findUnique({
+        where: { id: teamId },
+        include: {
+          players: { select: playerWithUser, orderBy: { jerseyNumber: 'asc' } },
+          matches: { select: { id: true, status: true, setScores: true } },
+        },
+      }),
+      prisma.event.findMany({ where: { match: { teamId }, ...ownEventsOnly }, select: eventSelect }),
+      seesEveryPlayer(userId, teamId),
+    ]);
     if (!team) throw new AppError(404, 'Team not found.');
-    const events = await prisma.event.findMany({ where: { match: { teamId: team.id }, ...ownEventsOnly }, select: eventSelect });
+    const players = visiblePlayers(team.players, isStaff, userId);
     res.json({
       team: { id: team.id, name: team.name, division: team.division, season: team.season },
       matchSummary: {
@@ -71,7 +90,7 @@ export async function getTeamAnalytics(req: Request, res: Response, next: NextFu
         scheduled:  team.matches.filter((m) => m.status === 'SCHEDULED').length,
       },
       teamStats:   calculateStats(events),
-      playerStats: calculatePlayerStats(team.players, events),
+      playerStats: calculatePlayerStats(players, events),
     });
   } catch (err) { next(err); }
 }
@@ -95,7 +114,7 @@ export async function getTeamTrends(req: Request, res: Response, next: NextFunct
 export async function getMatchReport(req: Request, res: Response, next: NextFunction) {
   try {
     const { matchId } = req.params;
-    const [match, events, players] = await Promise.all([
+    const [match, events, players, isStaff] = await Promise.all([
       prisma.match.findUnique({ where: { id: matchId }, include: { team: { select: { name: true } } } }),
       prisma.event.findMany({
         where: { matchId, ...ownEventsOnly },
@@ -106,52 +125,61 @@ export async function getMatchReport(req: Request, res: Response, next: NextFunc
         where: { team: { matches: { some: { id: matchId } } } },
         select: { id: true, firstName: true, lastName: true, jerseyNumber: true, position: true },
       }),
+      seesEveryPlayer(req.user?.userId ?? null, res.locals.visibleTeamId), // set by visibleByMatchParam
     ]);
     if (!match) throw new AppError(404, 'Match not found.');
-    res.json(generateMatchReport(
+    const report = generateMatchReport(
       { teamName: match.team.name, opponent: match.opponent,
         homeSetsWon: match.homeSetsWon, awaySetsWon: match.awaySetsWon,
         setScores: match.setScores },
       events,
       players,
-    ));
+    );
+    // The top performer names one player; the rest of the report is team-level.
+    if (!isStaff) report.topPerformer = null;
+    res.json(report);
   } catch (err) { next(err); }
 }
 
 /**
- * One player's individual stats, scoped to ONE team (?teamId, defaulting to
- * the home team): only that team's matches count, whatever other teams the
- * player is linked to. Individual stats go to that team's staff (TRACK_MATCH),
- * a global admin, or the player themself; teammates and viewers get the
- * team-level views only (Karlos, 28 Sept - players can be minors).
+ * Which player, on which team, and optionally which match, a per-player read is
+ * about, or the same AppErrors as before. Individual numbers are scoped to ONE
+ * team (?teamId, defaulting to the home team): only that team's matches count,
+ * whatever other teams the player is linked to. They go to that team's staff
+ * (TRACK_MATCH), a global admin, or the player themself; teammates and viewers
+ * get the team-level views only (Karlos, 28 Sept - players can be minors).
+ * Shared by the player's stats and zone map.
  */
+async function resolvePlayerScope(req: Request) {
+  const userId = req.user?.userId ?? null;
+  const found = await prisma.player.findUnique({ where: { id: req.params.playerId }, select: playerWithUser });
+  if (!found) throw new AppError(404, 'Player not found.');
+  const { userId: linkedUserId, ...player } = found;
+
+  const teamId = typeof req.query.teamId === 'string' && req.query.teamId ? req.query.teamId : player.teamId;
+  await assertTeamVisible(teamId, userId, 'Player not found.'); // 404 for outsiders and anonymous callers
+
+  // The player must play for the team in scope: home team or a PlayerTeamLink
+  // (the same rule recordEvent uses to attribute a stat).
+  const onTeam = player.teamId === teamId
+    || !!(await prisma.playerTeamLink.findUnique({ where: { playerId_teamId: { playerId: player.id, teamId } } }));
+  if (!onTeam) throw new AppError(404, 'Player not found.');
+
+  const allowed = linkedUserId === userId || await seesEveryPlayer(userId, teamId);
+  if (!allowed) throw new AppError(403, "Only this team's coaching staff and the player can see individual stats.");
+
+  const matchId = typeof req.query.matchId === 'string' && req.query.matchId ? req.query.matchId : undefined;
+  if (matchId) {
+    const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
+    if (match?.teamId !== teamId) throw new AppError(404, 'Match not found.');
+  }
+  return { player, teamId, matchId };
+}
+
+/** One player's individual stats for the team in scope (see resolvePlayerScope). */
 export async function getPlayerAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.user?.userId ?? null;
-    const found = await prisma.player.findUnique({ where: { id: req.params.playerId }, select: { ...playerSelect, userId: true } });
-    if (!found) throw new AppError(404, 'Player not found.');
-    const { userId: linkedUserId, ...player } = found;
-
-    const teamId = typeof req.query.teamId === 'string' && req.query.teamId ? req.query.teamId : player.teamId;
-    await assertTeamVisible(teamId, userId, 'Player not found.'); // 404 for outsiders and anonymous callers
-
-    // The player must play for the team in scope: home team or a PlayerTeamLink
-    // (the same rule recordEvent uses to attribute a stat).
-    const onTeam = player.teamId === teamId
-      || !!(await prisma.playerTeamLink.findUnique({ where: { playerId_teamId: { playerId: player.id, teamId } } }));
-    if (!onTeam) throw new AppError(404, 'Player not found.');
-
-    const allowed = linkedUserId === userId
-      || await hasTeamPermission(userId!, teamId, Permission.TRACK_MATCH)
-      || await isGlobalAdmin(userId!);
-    if (!allowed) throw new AppError(403, "Only this team's coaching staff and the player can see individual stats.");
-
-    const matchId = typeof req.query.matchId === 'string' && req.query.matchId ? req.query.matchId : undefined;
-    if (matchId) {
-      const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
-      if (match?.teamId !== teamId) throw new AppError(404, 'Match not found.');
-    }
-
+    const { player, teamId, matchId } = await resolvePlayerScope(req);
     const events = await prisma.event.findMany({
       where: { playerId: player.id, match: { teamId }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
       select: eventSelect,
@@ -159,5 +187,35 @@ export async function getPlayerAnalytics(req: Request, res: Response, next: Next
     // player.teamId is the team in scope: the home team may be one this caller
     // can't see (a linked team's staff), and its id must not leak.
     res.json({ player: { ...player, teamId }, teamId, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events) });
+  } catch (err) { next(err); }
+}
+
+// ─── Court-zone maps ──────────────────────────────────────────────────────────
+
+/** Team-level: every member of the match's team (mVis runs first). */
+export async function getMatchZones(req: Request, res: Response, next: NextFunction) {
+  try {
+    const events = await prisma.event.findMany({ where: { matchId: req.params.matchId, ...ownEventsOnly }, select: zoneSelect });
+    res.json(buildDetailedHeatmap(events));
+  } catch (err) { next(err); }
+}
+
+/** Team-level, across the team's matches: every member (tVis runs first). */
+export async function getTeamZones(req: Request, res: Response, next: NextFunction) {
+  try {
+    const events = await prisma.event.findMany({ where: { match: { teamId: req.params.teamId }, ...ownEventsOnly }, select: zoneSelect });
+    res.json(buildDetailedHeatmap(events));
+  } catch (err) { next(err); }
+}
+
+/** One player's map on the team in scope: staff, admin or the player (resolvePlayerScope). */
+export async function getPlayerZones(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { player, teamId, matchId } = await resolvePlayerScope(req);
+    const events = await prisma.event.findMany({
+      where: { playerId: player.id, match: { teamId }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
+      select: zoneSelect,
+    });
+    res.json(buildDetailedHeatmap(events));
   } catch (err) { next(err); }
 }

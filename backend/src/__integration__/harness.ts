@@ -1,6 +1,7 @@
 // Shared setup for src/__integration__ tests: the real app on a random port,
 // and throwaway fixtures written straight through Prisma. Only ever run via
 // scripts/run-integration-tests.js, which pins the env to a local database.
+import './requireLocalDb'; // first: refuses a non-local DB before dotenv/Prisma load
 import http from 'http';
 import { AddressInfo } from 'net';
 import { TeamRole } from '@prisma/client';

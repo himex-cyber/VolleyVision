@@ -6,6 +6,8 @@ import { checkSetCompletion, loadScoreState } from '../lib/scoring';
 import { scoringTeam } from '../lib/scoringRules';
 import { applyEventRemoval } from '../services/matchState.service';
 import { resolveUndoTarget, reverseAdjustmentScore, reverseCompletingAction } from '../lib/undo';
+import { redactEvents } from '../lib/playerPrivacy';
+import { seesEveryPlayer } from '../services/permission.service';
 
 export async function recordEvent(req: Request, res: Response, next: NextFunction) {
   try {
@@ -105,17 +107,21 @@ export async function recordEvent(req: Request, res: Response, next: NextFunctio
 export async function getEventsByMatch(req: Request, res: Response, next: NextFunction) {
   try {
     const { setNumber } = req.query;
-    const events = await prisma.event.findMany({
-      where: {
-        matchId: req.params.matchId,
-        ...(setNumber ? { setNumber: Number(setNumber) } : {}),
-      },
-      include: {
-        player: { select: { firstName: true, lastName: true, jerseyNumber: true } },
-      },
-      orderBy: { recordedAt: 'asc' },
-    });
-    res.json(events);
+    const userId = req.user?.userId ?? null;
+    const [events, isStaff] = await Promise.all([
+      prisma.event.findMany({
+        where: {
+          matchId: req.params.matchId,
+          ...(setNumber ? { setNumber: Number(setNumber) } : {}),
+        },
+        include: {
+          player: { select: { firstName: true, lastName: true, jerseyNumber: true, userId: true } },
+        },
+        orderBy: { recordedAt: 'asc' },
+      }),
+      seesEveryPlayer(userId, res.locals.visibleTeamId), // set by visibleByMatchParam
+    ]);
+    res.json(redactEvents(events, isStaff, userId));
   } catch (err) {
     next(err);
   }

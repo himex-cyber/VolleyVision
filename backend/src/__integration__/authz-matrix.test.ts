@@ -9,7 +9,7 @@
 //
 // AUTHZ_RECORD=1 prints every observed status instead of asserting.
 import assert from 'node:assert/strict';
-import { prisma, startApp, makeUser, makeTeam, addMember, cleanup, call, TestUser } from './harness';
+import { prisma, startApp, makeUser, makeTeam, addMember, cleanup, call, TestUser, RUN } from './harness';
 import { generateTeamJoinCode } from '../services/teamJoinCode.service';
 
 type Who = 'outsider' | 'viewer' | 'player';
@@ -25,6 +25,7 @@ type Row = {
 
 const READ: Statuses = { outsider: 404, viewer: 200, player: 200 };
 const STAFF: Statuses = { outsider: 404, viewer: 403, player: 403 };
+const SELF: Statuses = { outsider: 200, viewer: 200, player: 200 };
 
 async function setup() {
   const owner = await makeUser('owner');
@@ -56,7 +57,16 @@ async function setup() {
   const approval = await prisma.approvalRequest.create({
     data: { teamId: team.id, requestedById: stat.id, action: 'MATCH_UPDATE', payload: { opponent: 'X' }, targetId: match.id },
   });
-  return { team, owner, assistant, manager, staffCode, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, p2, pDel, match, matchDel, event, channel, message, approval };
+  // Addressed to none of the three callers: accept/decline must refuse them.
+  const invitee = await makeUser('invitee');
+  const invitation = await prisma.invitation.create({
+    data: { email: invitee.email, teamId: team.id, invitedById: owner.id, role: 'PLAYER', token: `${RUN}-token`, expiresAt: new Date(Date.now() + 86_400_000) },
+  });
+  const feedback = await prisma.feedback.create({
+    data: { userId: owner.id, type: 'BUG', subject: 'x', description: 'x', attachments: { create: { kind: 'FILE', storagePath: 'x/y.pdf', originalName: 'y.pdf', mimeType: 'application/pdf', sizeBytes: 1 } } },
+    include: { attachments: true },
+  });
+  return { invitation, feedback, team, owner, assistant, manager, staffCode, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, p2, pDel, match, matchDel, event, channel, message, approval };
 }
 
 const ROWS: Row[] = [
@@ -78,8 +88,36 @@ const ROWS: Row[] = [
   // Individual stats: staff and the player themself only (Karlos, 28 Sept). p1 is not the test player's record.
   { name: 'GET player analytics (someone else)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p1.id}`, expect: STAFF },
   { name: 'GET player analytics (own record)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p2.id}`, expect: { outsider: 404, viewer: 403, player: 200 } },
+  // Court-zone maps (Phase 4): team maps for every member; a player's map for staff and the player.
+  { name: 'GET match zones', method: 'GET', path: (f) => `/api/v1/analytics/matches/${f.match.id}/zones`, expect: READ },
+  { name: 'GET team zones', method: 'GET', path: (f) => `/api/v1/analytics/teams/${f.team.id}/zones`, expect: READ },
+  { name: 'GET player zones (someone else)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p1.id}/zones`, expect: STAFF },
+  { name: 'GET player zones (own record)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p2.id}/zones`, expect: { outsider: 404, viewer: 403, player: 200 } },
   { name: 'GET team channel', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/channel`, expect: READ },
   { name: 'GET channel messages', method: 'GET', path: (f) => `/api/v1/channels/${f.channel.id}/messages`, expect: READ },
+
+  // ── Not team-scoped (4.0.8): the caller's own data, or a secret in the URL ──
+  // Self-scoped: every signed-in caller gets their own (team-level) data.
+  { name: 'GET player portal dashboard', method: 'GET', path: () => '/api/v1/player/dashboard', expect: SELF },
+  { name: 'GET player portal stats', method: 'GET', path: () => '/api/v1/player/stats', expect: SELF },
+  { name: 'GET player portal bests', method: 'GET', path: () => '/api/v1/player/bests', expect: SELF },
+  { name: 'GET player portal teams', method: 'GET', path: () => '/api/v1/player/teams', expect: SELF },
+  { name: 'GET coach portal dashboard', method: 'GET', path: () => '/api/v1/coach/dashboard', expect: SELF },
+  { name: 'GET coach portal teams', method: 'GET', path: () => '/api/v1/coach/teams', expect: SELF },
+  { name: 'GET coach portal stats', method: 'GET', path: () => '/api/v1/coach/stats', expect: SELF },
+  { name: 'GET my teams', method: 'GET', path: () => '/api/v1/users/me/teams', expect: SELF },
+  { name: 'GET my invitations', method: 'GET', path: () => '/api/v1/users/me/invitations', expect: SELF },
+  // A join code is the secret: anyone holding it may look it up (that's how joining works).
+  { name: 'GET join-code lookup', method: 'GET', path: (f) => `/api/v1/invitations/lookup/${f.staffCode}`, expect: SELF },
+  // An unknown code answers 200 { kind: null }, not 404 (rate-limited by joinCodeRateLimit).
+  { name: 'GET join-code lookup (unknown)', method: 'GET', path: () => '/api/v1/invitations/lookup/NOSUCHCODE', expect: SELF },
+  { name: 'POST redeem (unknown token)', method: 'POST', path: () => '/api/v1/invitations/redeem', body: () => ({ code: 'NOSUCHCODE' }), expect: { outsider: 404, viewer: 404, player: 404 } },
+  { name: 'POST redeem team code (unknown)', method: 'POST', path: () => '/api/v1/invitations/redeem-team-code', body: () => ({ code: 'NOSUCHCODE' }), expect: { outsider: 404, viewer: 404, player: 404 } },
+  // Someone else's invitation: the email must match the caller's.
+  { name: "POST accept someone's invitation", method: 'POST', path: (f) => `/api/v1/invitations/${f.invitation.token}/accept`, expect: { outsider: 403, viewer: 403, player: 403 } },
+  { name: "POST decline someone's invitation", method: 'POST', path: (f) => `/api/v1/invitations/${f.invitation.token}/decline`, expect: { outsider: 403, viewer: 403, player: 403 } },
+  // The owner's feedback attachment. 403, not 404: the ids are unguessable cuids.
+  { name: "GET someone's feedback attachment", method: 'GET', path: (f) => `/api/v1/feedback/${f.feedback.id}/attachments/${f.feedback.attachments[0].id}/url`, expect: { outsider: 403, viewer: 403, player: 403 } },
 
   // ── Staff-only reads ──
   { name: 'GET team invitations', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/invitations`, expect: STAFF },
@@ -108,6 +146,11 @@ const ROWS: Row[] = [
   { name: 'POST chat upload (no files)', method: 'POST', path: (f) => `/api/v1/channels/${f.channel.id}/messages/upload`, body: () => ({}), expect: { outsider: 404, viewer: 403, player: 400 } },
   { name: 'PATCH message (not author)', method: 'PATCH', path: (f) => `/api/v1/messages/${f.message.id}`, body: () => ({ body: 'edited' }), expect: STAFF },
   { name: 'DELETE message (not author)', method: 'DELETE', path: (f) => `/api/v1/messages/${f.message.id}`, expect: STAFF },
+  // 4.0.2: players no longer claim records; staff link them on the roster.
+  { name: 'POST self-claim record', method: 'POST', path: () => '/api/v1/player/link', body: (f) => ({ playerId: f.p1.id }), expect: { outsider: 403, viewer: 403, player: 403 } },
+  { name: 'DELETE self-unlink record', method: 'DELETE', path: (f) => `/api/v1/player/link/${f.p2.id}`, expect: { outsider: 403, viewer: 403, player: 403 } },
+  { name: 'POST staff link record', method: 'POST', path: (f) => `/api/v1/teams/${f.team.id}/players/${f.p1.id}/link`, body: (f) => ({ userId: f.users.viewer.id }), expect: STAFF },
+  { name: 'DELETE staff unlink record', method: 'DELETE', path: (f) => `/api/v1/teams/${f.team.id}/players/${f.p2.id}/link`, expect: STAFF },
   { name: 'POST approve request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/approve`, expect: STAFF },
   { name: 'POST reject request', method: 'POST', path: (f) => `/api/v1/approval-requests/${f.approval.id}/reject`, expect: STAFF },
   // Destructive rows last, each against a target nothing else uses.
@@ -142,6 +185,42 @@ async function main() {
     assert.equal(redeem.status, 400, 'a staff code must not grant MANAGER');
     // P2.2: a manager can't delete the team (the owner can; see http.teamDelete).
     assert.equal((await call(base, 'DELETE', `/api/v1/teams/${f.team.id}`, f.manager.token)).status, 403);
+
+    // No token: team-scoped reads are 404 (no public teams), everything else 401.
+    for (const [path, expected] of [
+      [`/api/v1/teams/${f.team.id}`, 404],
+      [`/api/v1/analytics/matches/${f.match.id}`, 404],
+      [`/api/v1/events/by-match/${f.match.id}`, 404],
+      ['/api/v1/users/me/teams', 401],
+      ['/api/v1/player/dashboard', 401],
+    ] as const) {
+      assert.equal((await call(base, 'GET', path)).status, expected, `anonymous GET ${path}`);
+    }
+    assert.equal((await call(base, 'POST', '/api/v1/events', undefined, { matchId: f.match.id })).status, 401, 'anonymous POST event');
+
+    // 4.0.1 per-player rule: non-staff get team totals plus only their own row.
+    // p2 is the test player's record; p1 (who has the event) and pDel are other players.
+    const perPlayer = [
+      `/api/v1/analytics/matches/${f.match.id}`,
+      `/api/v1/analytics/teams/${f.team.id}`,
+      `/api/v1/analytics/matches/${f.match.id}/report`,
+      `/api/v1/events/by-match/${f.match.id}`,
+    ];
+    const staffView = await call(base, 'GET', perPlayer[0], f.owner.token);
+    assert.equal(staffView.body.playerStats.length, 3, 'staff see every player');
+    for (const who of ['viewer', 'player'] as const) {
+      for (const path of perPlayer) {
+        const res = await call(base, 'GET', path, f.users[who].token);
+        assert.equal(res.status, 200, `${path} as ${who}`);
+        const text = JSON.stringify(res.body);
+        assert.ok(!text.includes(f.p1.id) && !text.includes(f.pDel.id), `${path} as ${who} named another player`);
+        assert.ok(!text.includes('"userId"'), `${path} as ${who} carried a userId`);
+        if ('playerStats' in res.body) {
+          assert.equal(res.body.playerStats.length, who === 'player' ? 1 : 0, `${path} as ${who}: own row only`);
+        }
+        if ('topPerformer' in res.body) assert.equal(res.body.topPerformer, null, `${path} as ${who}: no top performer`);
+      }
+    }
 
     for (const row of ROWS) {
       for (const who of ['outsider', 'viewer', 'player'] as const) {

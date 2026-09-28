@@ -20,10 +20,12 @@ const OUTCOME_DOT: Record<'positive' | 'negative' | 'neutral', string> = {
   neutral: 'bg-grey-400',
 };
 
-function actorLabel(e: Event): string {
+function actorLabel(e: Event, teamName?: string): string {
   if (e.player) return `${e.player.firstName} ${e.player.lastName}`;
   if (e.isOpponentEvent) return e.opponentJerseyNumber != null ? `Opponent #${e.opponentJerseyNumber}` : 'Opponent';
-  return '—';
+  // Own-team event with the player redacted for a non-staff viewer (per-player
+  // privacy rule) — attribute it to the team instead of showing a blank dash.
+  return teamName ?? '—';
 }
 
 export default function MatchWatchPage() {
@@ -104,7 +106,7 @@ export default function MatchWatchPage() {
                     <li key={e.id} className="px-4 py-3 flex items-center gap-3">
                       <div
                         className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                          e.player ? 'bg-navy-100 text-navy-700' : 'bg-grey-200 text-grey-500'
+                          e.player ? 'bg-navy-100 text-navy-700' : 'bg-grey-200 text-grey-600'
                         }`}
                       >
                         <span className="tabular-nums font-bold text-sm">
@@ -112,13 +114,13 @@ export default function MatchWatchPage() {
                         </span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-grey-900 truncate">{actorLabel(e)}</p>
+                        <p className="font-medium text-grey-900 truncate">{actorLabel(e, match.team?.name)}</p>
                         <div className="flex items-center gap-2">
                           <span className={`w-2 h-2 rounded-full shrink-0 ${OUTCOME_DOT[outcome]}`} aria-hidden />
                           <span className="text-sm text-grey-600">{meta?.label ?? e.eventType}</span>
                         </div>
                       </div>
-                      <span className="text-xs text-grey-500 tabular-nums shrink-0">
+                      <span className="text-xs text-grey-600 tabular-nums shrink-0">
                         {format(new Date(e.recordedAt), 'HH:mm')}
                       </span>
                     </li>

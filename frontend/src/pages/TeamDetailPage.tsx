@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useTeam, useCreatePlayer, useDeletePlayer, useUpdatePlayer, useTransferOwnership, useHasPermission, useApprovalRequests, useApproveRequest, useRejectRequest } from '../hooks';
-import type { Position, ApprovalRequest } from '../types';
+import {
+  useTeam, useCreatePlayer, useDeletePlayer, useUpdatePlayer, useTransferOwnership,
+  useHasPermission, useApprovalRequests, useApproveRequest, useRejectRequest,
+  useTeamMembers, useLinkPlayerRecord, useUnlinkPlayerRecord,
+} from '../hooks';
+import type { Position, ApprovalRequest, TeamMember } from '../types';
 import { POSITION_FULL_LABELS, POSITION_BADGE, isPendingApproval } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage } from '../lib/api';
@@ -97,6 +101,41 @@ function ApprovalQueueCard({ teamId }: { teamId: string }) {
   );
 }
 
+// Select + confirm control for linking a player record to a team member — a
+// separate "Link" click after picking, unlike Unlink which is a one-step
+// window.confirm (linking isn't destructive, so it doesn't need one).
+function LinkMemberSelect({
+  members, pending, onLink,
+}: {
+  members: TeamMember[];
+  pending: boolean;
+  onLink: (userId: string) => void;
+}) {
+  const [selected, setSelected] = useState('');
+  return (
+    <>
+      <select
+        aria-label="Team member to link to this player record"
+        className="input text-sm min-h-[44px] flex-1 min-w-[160px]"
+        value={selected}
+        onChange={(e) => setSelected(e.target.value)}
+      >
+        <option value="">Choose a member…</option>
+        {members.map((m) => (
+          <option key={m.id} value={m.user.id}>{m.user.firstName} {m.user.lastName}</option>
+        ))}
+      </select>
+      <button
+        className="btn-primary text-sm px-3 min-h-[44px]"
+        disabled={!selected || pending}
+        onClick={() => selected && onLink(selected)}
+      >
+        {pending ? 'Linking…' : 'Link'}
+      </button>
+    </>
+  );
+}
+
 export default function TeamDetailPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const navigate = useNavigate();
@@ -114,6 +153,12 @@ export default function TeamDetailPage() {
   // staff and the player themself — mirror that gate here so the row simply
   // isn't clickable instead of navigating into an error page.
   const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
+  // Player-record linking (Phase 4) — staff-only, gated below via
+  // PermissionGuard (MANAGE_MEMBERS), separate from MANAGE_TEAM.
+  const canManageMembers = useHasPermission(teamId!, 'MANAGE_MEMBERS');
+  const { data: members } = useTeamMembers(teamId!, canManageMembers);
+  const linkPlayerRecord = useLinkPlayerRecord(teamId!);
+  const unlinkPlayerRecord = useUnlinkPlayerRecord(teamId!);
 
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferEmail, setTransferEmail] = useState('');
@@ -135,6 +180,15 @@ export default function TeamDetailPage() {
     jerseyNumber: '',
     position: 'SETTER' as Position,
   });
+
+  // Per-player account-link state (Phase 4) — separate from the edit panel
+  // above since it's gated on MANAGE_MEMBERS rather than MANAGE_TEAM.
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<{ id: string; message: string } | null>(null);
+  // Members who don't already have a player record on this team — the backend
+  // 409s otherwise, so they're excluded from the picker up front.
+  const linkedUserIds = new Set((team?.players ?? []).map((p) => p.userId).filter((id): id is string => id != null));
+  const availableMembers = (members ?? []).filter((m) => !linkedUserIds.has(m.user.id));
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -194,7 +248,7 @@ export default function TeamDetailPage() {
       {pendingNotice && (
         <div className="card p-4 border border-gold-500/30 bg-gold-500/10 text-sm text-grey-900 flex items-center justify-between gap-3">
           <span>{pendingNotice}</span>
-          <button className="text-grey-500 hover:text-grey-900 text-xs" onClick={() => setPendingNotice('')}>Dismiss</button>
+          <button className="text-grey-600 hover:text-grey-900 text-xs" onClick={() => setPendingNotice('')}>Dismiss</button>
         </div>
       )}
 
@@ -373,6 +427,39 @@ export default function TeamDetailPage() {
                     <span className={`badge ${POSITION_BADGE[player.position]} text-sm px-2.5 py-1`}>
                       {POSITION_FULL_LABELS[player.position]}
                     </span>
+                    {/* Account link — staff assign/unassign; players can no longer
+                        self-link or self-unlink (both endpoints 403 now). */}
+                    <PermissionGuard teamId={teamId!} permission="MANAGE_MEMBERS">
+                      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                        {player.userId ? (
+                          <button
+                            className="btn-ghost text-xs px-3 min-h-[44px]"
+                            onClick={() => {
+                              if (confirm(`Unlink ${playerName} from their account?`)) {
+                                setLinkError(null);
+                                unlinkPlayerRecord.mutate(player.id, {
+                                  onError: (err) =>
+                                    setLinkError({ id: player.id, message: getApiErrorMessage(err, "Couldn't unlink. Try again.") }),
+                                });
+                              }
+                            }}
+                          >
+                            Unlink
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-ghost text-xs px-3 min-h-[44px]"
+                            aria-expanded={linkingId === player.id}
+                            onClick={() => {
+                              setLinkError(null);
+                              setLinkingId(linkingId === player.id ? null : player.id);
+                            }}
+                          >
+                            Link to member
+                          </button>
+                        )}
+                      </div>
+                    </PermissionGuard>
                     <PermissionGuard teamId={teamId!} permission="MANAGE_TEAM">
                       <button
                         className="btn-icon w-14 h-14"
@@ -392,6 +479,32 @@ export default function TeamDetailPage() {
                       />
                     </PermissionGuard>
                   </div>
+
+                  {/* ── Link-to-member panel — outside the clickable row ── */}
+                  {linkingId === player.id && (
+                    <div className="px-5 py-3 bg-grey-50 border-t border-grey-200 flex flex-wrap items-center gap-2">
+                      {availableMembers.length === 0 ? (
+                        <p className="text-grey-600 text-sm">Every team member already has a linked player record.</p>
+                      ) : (
+                        <LinkMemberSelect
+                          members={availableMembers}
+                          pending={linkPlayerRecord.isPending}
+                          onLink={(userId) =>
+                            linkPlayerRecord.mutate({ playerId: player.id, userId }, {
+                              onSuccess: () => setLinkingId(null),
+                              onError: (err) =>
+                                setLinkError({ id: player.id, message: getApiErrorMessage(err, "Couldn't link that member. Try again.") }),
+                            })}
+                        />
+                      )}
+                      <button className="btn-ghost text-sm px-3 min-h-[44px]" onClick={() => setLinkingId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                  {linkError?.id === player.id && (
+                    <p className="px-5 pb-2 -mt-1 text-error text-xs">{linkError.message}</p>
+                  )}
 
                   {/* ── Edit panel — outside the clickable row, so nothing here navigates ── */}
                   {isEditing && (

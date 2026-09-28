@@ -9,6 +9,7 @@ import {
   removeMember,
   findTeamMembership,
 } from '../services/teamMembership.service';
+import { linkPlayerRecord, unlinkPlayerRecord } from '../services/playerPortal.service';
 import { canManageMembers } from '../services/permission.service';
 
 // HEAD_COACH is deliberately absent: it only changes via ownership transfer.
@@ -93,5 +94,21 @@ export async function myMemberships(req: Request, res: Response, next: NextFunct
     if (!req.user) throw new AppError(401, 'Authentication required.');
     const teams = await getUserTeams(req.user.userId);
     res.json(teams);
+  } catch (err) { next(err); }
+}
+
+/** POST /api/v1/teams/:id/players/:playerId/link { userId } — staff only (MANAGE_MEMBERS). */
+export async function linkPlayerRecordHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { userId } = req.body ?? {};
+    if (typeof userId !== 'string' || !userId) throw new AppError(400, 'userId is required.');
+    res.json(await linkPlayerRecord(req.params.id, req.params.playerId, userId));
+  } catch (err) { next(err); }
+}
+
+/** DELETE /api/v1/teams/:id/players/:playerId/link — staff only (MANAGE_MEMBERS). */
+export async function unlinkPlayerRecordHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await unlinkPlayerRecord(req.params.id, req.params.playerId));
   } catch (err) { next(err); }
 }

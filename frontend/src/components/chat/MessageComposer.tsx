@@ -95,7 +95,7 @@ export default function MessageComposer({ onSend, onSendWithFiles, disabled }: M
           {selected.map((s, i) => (
             <div
               key={`${s.file.name}-${i}`}
-              className="flex items-center gap-2 bg-grey-100 border border-grey-200 rounded-lg pl-1.5 pr-2 py-1.5 max-w-56"
+              className="flex items-center gap-2 bg-grey-50 border border-grey-200 rounded-lg pl-1.5 pr-2 py-1.5 max-w-56"
             >
               {s.previewUrl ? (
                 <img src={s.previewUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />

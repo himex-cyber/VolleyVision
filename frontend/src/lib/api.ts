@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getToken, clearToken } from './tokenStorage';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -114,6 +114,11 @@ export const teamsApi = {
   owner: (id: string) => api.get<TeamOwner | null>(`/teams/${id}/owner`).then((r) => r.data),
   transfer: (id: string, newOwnerEmail: string) =>
     api.post<Team>(`/teams/${id}/transfer`, { newOwnerEmail }).then((r) => r.data),
+  // Phase 4 — staff-only player record linking (players can no longer self-link/unlink).
+  linkPlayerRecord: (teamId: string, playerId: string, userId: string) =>
+    api.post<Player>(`/teams/${teamId}/players/${playerId}/link`, { userId }).then((r) => r.data),
+  unlinkPlayerRecord: (teamId: string, playerId: string) =>
+    api.delete<Player>(`/teams/${teamId}/players/${playerId}/link`).then((r) => r.data),
 };
 
 // ─── Players ──────────────────────────────────────────────────────────────────
@@ -211,6 +216,18 @@ export const analyticsApi = {
 
   matchReport: (matchId: string) =>
     api.get<MatchReport>(`/analytics/matches/${matchId}/report`).then((r) => r.data),
+
+  matchZones: (matchId: string) =>
+    api.get<ZoneMap>(`/analytics/matches/${matchId}/zones`).then((r) => r.data),
+
+  teamZones: (teamId: string) =>
+    api.get<ZoneMap>(`/analytics/teams/${teamId}/zones`).then((r) => r.data),
+
+  // Staff, admin or the player themself; same team/match scoping as player().
+  playerZones: (playerId: string, teamId?: string, matchId?: string) =>
+    api
+      .get<ZoneMap>(`/analytics/players/${playerId}/zones`, { params: { ...(teamId ? { teamId } : {}), ...(matchId ? { matchId } : {}) } })
+      .then((r) => r.data),
 };
 
 // ─── Team Chat (foundation) ───────────────────────────────────────────────────
@@ -342,10 +359,6 @@ export const playerPortalApi = {
   stats: () => api.get('/player/stats').then((r) => r.data),
   bests: () => api.get<PlayerBests | null>('/player/bests').then((r) => r.data),
   teams: () => api.get('/player/teams').then((r) => r.data),
-  linkPlayer: (playerId: string) =>
-    api.post('/player/link', { playerId }).then((r) => r.data),
-  unlinkPlayer: (playerId: string) =>
-    api.delete(`/player/link/${playerId}`).then((r) => r.data),
 };
 
 // ─── Coach Portal (Phase 5 Sprint 5) ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getTeams, getTeam, createTeam, updateTeam, deleteTeam } from '../controllers/teams';
 import { myTeams, transferTeam, teamOwner } from '../controllers/teamOwnership';
-import { listMembers, updateMember, deleteMember } from '../controllers/teamMembership';
+import { listMembers, updateMember, deleteMember, linkPlayerRecordHandler, unlinkPlayerRecordHandler } from '../controllers/teamMembership';
 import { createTeamInvitation, listTeamInvitations } from '../controllers/invitation';
 import { listTeamJoinCodes, regenerateTeamJoinCode } from '../controllers/teamJoinCode';
 import { listTeamApprovalRequests } from '../controllers/approval';
@@ -9,7 +9,7 @@ import { requireAuth, optionalAuth } from '../middleware/auth';
 import { requireTeamPermission, requireTeamAccess } from '../middleware/permissions';
 import { visibleByTeamParam } from '../middleware/visibility';
 import { requireTeamOwner } from '../middleware/teamOwner';
-import { invitationCreateRateLimit } from '../middleware/rateLimit';
+import { invitationCreateRateLimit, playerLinkRateLimit } from '../middleware/rateLimit';
 import { Permission, getUserTeamRole, getEffectivePermissions } from '../services/permission.service';
 
 const router = Router();
@@ -50,6 +50,9 @@ router.post('/:id/transfer', requireAuth, requireTeamPermission(Permission.TRANS
 router.get('/:id/members', optionalAuth, visibleByTeamParam('id'), listMembers);
 router.patch('/:id/members/:memberId', requireAuth, requireTeamPermission(Permission.MANAGE_MEMBERS), updateMember);
 router.delete('/:id/members/:memberId', requireAuth, requireTeamPermission(Permission.MANAGE_MEMBERS), deleteMember);
+// Which roster record belongs to which member: staff decide (4.0.2).
+router.post('/:id/players/:playerId/link', requireAuth, playerLinkRateLimit, requireTeamPermission(Permission.MANAGE_MEMBERS), linkPlayerRecordHandler);
+router.delete('/:id/players/:playerId/link', requireAuth, playerLinkRateLimit, requireTeamPermission(Permission.MANAGE_MEMBERS), unlinkPlayerRecordHandler);
 
 // Invitation management. Sending is tiered (Iteration 3) — gated on the member's
 // invitation access tier, not the static INVITE_USERS role permission.

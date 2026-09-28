@@ -82,7 +82,7 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
     return (
       <div className="card p-5 text-center space-y-2">
         <p className="text-grey-900 font-medium">You're in — you've joined {joinedTeam}.</p>
-        <button className="text-grey-500 hover:text-grey-900 text-xs" onClick={reset}>Join another team</button>
+        <button className="text-grey-600 hover:text-grey-900 text-xs" onClick={reset}>Join another team</button>
       </div>
     );
   }
@@ -122,7 +122,7 @@ export default function JoinByCodeCard({ initialCode = '' }: { initialCode?: str
                   ? `Join ${found.teamName} as Player`
                   : `Accept your invitation to ${found.teamName}`}
             </button>
-            <button className="text-grey-500 hover:text-grey-900 text-xs" onClick={() => { setFound(null); setError(''); }}>
+            <button className="text-grey-600 hover:text-grey-900 text-xs" onClick={() => { setFound(null); setError(''); }}>
               Back
             </button>
           </div>
