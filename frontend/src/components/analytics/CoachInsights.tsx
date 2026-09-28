@@ -13,7 +13,7 @@ export default function CoachInsights({
 
   return (
     <div className="card p-4">
-      <h2 className="text-lg font-semibold text-chalk-100 mb-4">
+      <h2 className="text-lg font-semibold text-grey-900 mb-4">
         Coach Insights
       </h2>
 
@@ -21,12 +21,12 @@ export default function CoachInsights({
         {insights.map((insight, index) => (
           <div
             key={index}
-            className={`rounded-lg p-3 text-sm ${
+            className={`rounded-lg p-3 text-sm break-words ${
               insight.type === 'positive'
                 ? 'bg-success/10 text-success'
                 : insight.type === 'warning'
                 ? 'bg-error/10 text-error'
-                : 'bg-chalk-500/10 text-chalk-300'
+                : 'bg-grey-600/10 text-grey-600'
             }`}
           >
             {insight.message}

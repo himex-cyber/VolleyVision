@@ -24,7 +24,7 @@ export default function TeamDashboardPage() {
     : [];
 
 
-  if (isLoading) return <p className="text-navy-300">Loading analytics...</p>;
+  if (isLoading) return <p className="text-grey-600">Loading analytics...</p>;
   if (isError || !data) return <p className="text-error">Couldn't load team analytics.</p>;
 
   return (
@@ -40,7 +40,7 @@ export default function TeamDashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Object.entries(data.matchSummary).map(([label, value]) => (
           <div key={label} className="card p-4">
-            <p className="text-xs text-navy-300">{label.replace(/([A-Z])/g, ' $1')}</p>
+            <p className="text-xs text-grey-600">{label.replace(/([A-Z])/g, ' $1')}</p>
             <p className="tabular-nums text-2xl font-bold mt-1">{value}</p>
           </div>
         ))}
@@ -48,7 +48,7 @@ export default function TeamDashboardPage() {
 
       <StatsCards stats={data.teamStats} />
         {trends.data && trends.data.length === 0 && (
-        <div className="card p-6 text-center text-navy-300 text-sm">
+        <div className="card p-6 text-center text-grey-600 text-sm">
           Complete matches to see performance trends over time.
         </div>
       )}
