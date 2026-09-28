@@ -6,6 +6,8 @@ import { checkSetCompletion, loadScoreState } from '../lib/scoring';
 import { scoringTeam } from '../lib/scoringRules';
 import { applyEventRemoval } from '../services/matchState.service';
 import { resolveUndoTarget, reverseAdjustmentScore, reverseCompletingAction } from '../lib/undo';
+import { redactEvents } from '../lib/playerPrivacy';
+import { seesEveryPlayer } from '../services/permission.service';
 
 export async function recordEvent(req: Request, res: Response, next: NextFunction) {
   try {
@@ -111,11 +113,15 @@ export async function getEventsByMatch(req: Request, res: Response, next: NextFu
         ...(setNumber ? { setNumber: Number(setNumber) } : {}),
       },
       include: {
-        player: { select: { firstName: true, lastName: true, jerseyNumber: true } },
+        player: { select: { firstName: true, lastName: true, jerseyNumber: true, userId: true } },
       },
       orderBy: { recordedAt: 'asc' },
     });
-    res.json(events);
+    // The visibility guard already resolved the match; this re-read is one
+    // indexed lookup for its team, which the per-player rule needs.
+    const match = await prisma.match.findUnique({ where: { id: req.params.matchId }, select: { teamId: true } });
+    const userId = req.user?.userId ?? null;
+    res.json(redactEvents(events, !!match && await seesEveryPlayer(userId, match.teamId), userId));
   } catch (err) {
     next(err);
   }

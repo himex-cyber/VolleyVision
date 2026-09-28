@@ -143,6 +143,30 @@ async function main() {
     // P2.2: a manager can't delete the team (the owner can; see http.teamDelete).
     assert.equal((await call(base, 'DELETE', `/api/v1/teams/${f.team.id}`, f.manager.token)).status, 403);
 
+    // 4.0.1 per-player rule: non-staff get team totals plus only their own row.
+    // p2 is the test player's record; p1 (who has the event) and pDel are other players.
+    const perPlayer = [
+      `/api/v1/analytics/matches/${f.match.id}`,
+      `/api/v1/analytics/teams/${f.team.id}`,
+      `/api/v1/analytics/matches/${f.match.id}/report`,
+      `/api/v1/events/by-match/${f.match.id}`,
+    ];
+    const staffView = await call(base, 'GET', perPlayer[0], f.owner.token);
+    assert.equal(staffView.body.playerStats.length, 3, 'staff see every player');
+    for (const who of ['viewer', 'player'] as const) {
+      for (const path of perPlayer) {
+        const res = await call(base, 'GET', path, f.users[who].token);
+        assert.equal(res.status, 200, `${path} as ${who}`);
+        const text = JSON.stringify(res.body);
+        assert.ok(!text.includes(f.p1.id) && !text.includes(f.pDel.id), `${path} as ${who} named another player`);
+        assert.ok(!text.includes('"userId"'), `${path} as ${who} carried a userId`);
+        if ('playerStats' in res.body) {
+          assert.equal(res.body.playerStats.length, who === 'player' ? 1 : 0, `${path} as ${who}: own row only`);
+        }
+        if ('topPerformer' in res.body) assert.equal(res.body.topPerformer, null, `${path} as ${who}: no top performer`);
+      }
+    }
+
     for (const row of ROWS) {
       for (const who of ['outsider', 'viewer', 'player'] as const) {
         const res = await call(base, row.method, row.path(f), f.users[who].token, row.body?.(f));
