@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+import { readFileSync } from 'node:fs';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
@@ -8,9 +9,44 @@ import { sentryVitePlugin } from '@sentry/vite-plugin';
 // files post-upload so maps reach Sentry but never ship on the public site.
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
 
-export default defineConfig({
+// The Android app (native-* modes) is served by Capacitor from the device, so
+// public/_headers never reaches it. The same policy goes in as a <meta> tag
+// instead, read from _headers so the two can't drift, except: connect-src is
+// 'self' + the mode's API origin + Sentry, and frame-ancestors (ignored in a
+// meta tag) is dropped. The web build gets no meta CSP; Netlify sends the header.
+function nativeCsp(mode: string): Plugin | false {
+  if (!mode.startsWith('native-')) return false;
+  const apiOrigin = new URL(loadEnv(mode, process.cwd(), 'VITE_').VITE_API_URL).origin;
+  const webPolicy = readFileSync('public/_headers', 'utf8').match(/Content-Security-Policy: (.+)/)![1];
+  const policy = webPolicy
+    .split(';')
+    .map((d) => d.trim())
+    .filter((d) => d && !d.startsWith('frame-ancestors'))
+    .map((d) => (d.startsWith('connect-src')
+      ? `connect-src 'self' ${apiOrigin} https://*.ingest.us.sentry.io https://*.ingest.sentry.io`
+      : d))
+    .join('; ');
+  return {
+    name: 'native-csp',
+    transformIndexHtml: (html) =>
+      html.replace('<head>', `<head>
+    <meta http-equiv="Content-Security-Policy" content="${policy}" />`),
+  };
+}
+
+// The app version has one home: versionName in android/app/build.gradle. Native
+// builds read it from there for the X-Client header, so the two can't drift.
+function nativeVersion(mode: string): Record<string, string> {
+  if (!mode.startsWith('native-')) return {};
+  const gradle = readFileSync('android/app/build.gradle', 'utf8');
+  return { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(gradle.match(/versionName "([^"]+)"/)![1]) };
+}
+
+export default defineConfig(({ mode }) => ({
+  define: nativeVersion(mode),
   plugins: [
     react(),
+    nativeCsp(mode),
     sentryAuthToken &&
       sentryVitePlugin({
         org: 'himex-cyber',
@@ -56,4 +92,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

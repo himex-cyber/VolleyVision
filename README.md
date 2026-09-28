@@ -169,6 +169,30 @@ From the repository root:
 
 The Netlify build, function and redirect config is `netlify.toml` at the repo root. `deploy.ps1` builds the site locally and publishes it (`netlify deploy --prod --build --site <id>`, always naming the target site), with a deploy message built from the current git state. It first runs `npx prisma migrate status` against the target's database and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). A production deploy also refuses a dirty working tree or a branch other than `main` unless you pass `-Force`. After deploying, it runs the smoke check: read-only against production, logged in as the seed users on staging. It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
 
+## Building the Android app
+
+The Android app is this same frontend in a Capacitor 8 shell (`frontend/android/`, app id `app.volleyvision`).
+You need Android Studio (SDK platform 36, platform-tools, emulator, command-line tools) and **JDK 21** (Capacitor 8's
+Gradle needs it; set `JAVA_HOME` to it when running `gradlew` from a terminal).
+
+| Command (in `frontend/`) | What it does |
+|---|---|
+| `npm run android:local` | Builds for the emulator against the local API (`http://10.0.2.2:3001`, cleartext allowed) and syncs `android/` |
+| `npm run android:prod` | Builds against production and syncs `android/`; required before every release build |
+| `node scripts/check-android-prod.mjs` | Fails if the synced project could reach plain HTTP or load remote code (gradle also runs it before every release build) |
+| `cd android && gradlew.bat installDebug` | Installs a debug build on a running emulator or USB device |
+| `cd android && gradlew.bat assembleRelease bundleRelease` | Signed release APK and AAB, once `android/keystore.properties` exists |
+
+- **Signing:** copy `android/keystore.properties.example` to `android/keystore.properties` (gitignored) and fill it
+  in. Keep the `.jks` outside the repo and back it up; losing it means the app can't be updated as the same app.
+- **Versions:** `versionName` in `android/app/build.gradle` is the one place the app version lives (the app reports
+  it as `X-Client: android/<version>`). Bump `versionCode` for every build shared with anyone.
+- **Production API:** Netlify needs `CORS_EXTRA_ORIGINS=https://localhost` (the app's origin), or every app request fails.
+- **Icons and splash:** sources and the regeneration recipe are in `frontend/assets/`.
+- **Emails** (verify, reset, invite) open the website, not the app.
+- **Low-memory PCs:** the Play Store emulator images are heavy. A Google APIs ATD image with 1.5 GB RAM boots on 8 GB
+  machines (it draws no screen; debug through `chrome://inspect` or the WebView DevTools socket).
+
 ## Security
 
 See "Architecture" above for the authorization model, and `CHANGELOG.md` / `docs/audit/AUDIT-LOG.md` for the September 2026 security audit (rate limiting, authorization fixes, dependency updates, privacy fixes).

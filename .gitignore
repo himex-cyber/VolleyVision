@@ -7,6 +7,9 @@ frontend/dist/
 *.env.local
 !.env.example
 !.env.staging.example
+# The Android build modes: public values only (API URL, public Sentry DSN)
+!frontend/.env.native-local
+!frontend/.env.native-prod
 .DS_Store
 .claude/
 .netlify/

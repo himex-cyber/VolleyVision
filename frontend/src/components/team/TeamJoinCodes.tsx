@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTeamJoinCodes, useRegenerateJoinCode } from '../../hooks';
 import type { TeamJoinCodeKind } from '../../lib/api';
+import { copyText } from '../../lib/clipboard';
 
 // ── Join codes (coach) — persistent, reusable player/staff codes ──────────────
 // Shared by the Invitations tab (both codes) and the inline "+ Add player" /
@@ -11,13 +12,12 @@ function JoinCodeRow({ label, hint, code, kind, teamId, rowClass }: {
   rowClass: string;
 }) {
   const regenerate = useRegenerateJoinCode(teamId);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   async function copy() {
     if (!code) return;
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setCopied((await copyText(code)) ? 'copied' : 'failed');
+    setTimeout(() => setCopied('idle'), 2000);
   }
 
   function handleRegenerate() {
@@ -35,7 +35,7 @@ function JoinCodeRow({ label, hint, code, kind, teamId, rowClass }: {
         {code ?? '—'}
       </span>
       <button className="btn-secondary text-xs px-3 py-1.5" onClick={copy} disabled={!code}>
-        {copied ? 'Copied ✓' : 'Copy'}
+        {copied === 'copied' ? 'Copied ✓' : copied === 'failed' ? "Couldn't copy: select the code" : 'Copy'}
       </button>
       <button
         className="text-grey-600 hover:text-grey-900 text-xs px-2 py-1.5"

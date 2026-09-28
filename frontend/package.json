@@ -9,9 +9,16 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:native:local": "tsc && vite build --mode native-local",
+    "build:native:prod": "tsc && vite build --mode native-prod",
+    "android:local": "node scripts/android.mjs local",
+    "android:prod": "node scripts/android.mjs prod"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
     "@sentry/react": "^10.73.0",
     "@tanstack/react-query": "^5.14.0",
     "axios": "^1.6.2",
@@ -23,6 +30,7 @@
     "recharts": "^3.9.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.2",
     "@eslint/js": "^9.39.5",
     "@sentry/vite-plugin": "^5.4.0",
     "@types/react": "^18.2.43",

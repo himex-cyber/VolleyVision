@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getToken, clearToken } from './tokenStorage';
+import { isNative } from './native';
 import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
@@ -27,6 +28,9 @@ const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/forgot-passwo
 
 // Attach stored JWT to every other request automatically
 api.interceptors.request.use((config) => {
+  // Which app build is calling: logged by the API (Sentry), and the hook for a
+  // future "please update the app" check once old builds are in people's hands.
+  if (isNative()) config.headers['X-Client'] = `android/${import.meta.env.VITE_APP_VERSION ?? 'unknown'}`;
   const token = getToken();
   const isPublicAuth = PUBLIC_AUTH_PATHS.some((p) => config.url?.startsWith(p));
   if (token && !isPublicAuth) config.headers.Authorization = `Bearer ${token}`;

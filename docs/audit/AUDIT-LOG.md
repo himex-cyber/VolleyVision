@@ -711,3 +711,64 @@ edit waits for Karlos's OK.
 was deleted with its module, and back up with `homeTeams.test.ts` and the new tests), build OK; frontend `tsc`, lint
 and build clean; integration 2/2 (matrix 72 routes plus the team-creation checks). `/login`'s main chunk shrank from
 224.3 kB to 220.7 kB.
+
+### Production deploy: v9.9.0 (2026-09-29)
+
+Karlos approved the release, the deploy and the G1 comment edit on 29 Sept.
+
+1. The `schema.prisma` `signupIntent` comment was updated (comment only; `prisma validate` OK; no migration). `develop`
+   (v9.8.0 deploy docs) was merged into the Phase 4.5 branch twice, resolving CHANGELOG and AUDIT-LOG conflicts. The
+   full local suite passed on it (51 unit test files, integration 2/2 with 72 routes, `npm audit` clean) and PR #34's CI
+   passed; merged. Release PR #36 (CI 6/6) merged to `main`; tag `v9.9.0` on `c562d6d`.
+2. Before deploying: working tree clean, `main` = `origin/main` = the tag, no code difference from the tested branch,
+   no new migration.
+3. The first `deploy.ps1` run failed before publishing: the Netlify CLI answered "Project not found" for the prod site
+   id. The CLI was still signed in as himextradingltd, `netlify api getSite` returned volleyvision-app for that id, and
+   `.netlify/state.json` was unchanged since July, so it was a transient API error. The retry published; the smoke check
+   passed (health and db ok, CSP header, unknown team 404).
+
+**Live checks:**
+- The production bundle references the new `DashboardPage` and `OnboardingPage` chunks and no longer the removed
+  `CoachDashboardPage` or `PlayerPortalPage`; the dashboard chunk contains "My teams", the empty state and the error
+  state; `/coach` still loads (it redirects to `/dashboard` in the app).
+- The v9.9.0 API changes (team creation limits, transfer cap, the retry, per-team upcoming matches) all sit behind
+  sign-in, so they weren't probed anonymously; the same build and publish path was proven live for v9.8.0 an hour earlier.
+- Sentry: no issues in the two hours around the deploy.
+
+### Phase 5 of the rebuild roadmap: the Android app (branch `rebuild/p5-android-shell`, 2026-09-29)
+
+Why: the roadmap's native shell, so coaches can track from a phone app. Karlos has only an iPhone, so he chose
+"Android first": Android is finished and checked on the emulator; iOS is a later phase (Apple Developer account and a
+cloud Mac build). Released as v9.10.0. No migration. **Not deployed:** Netlify build credits ran out on 29 Sept, and
+Karlos's rule is to release to `main` and tag without deploying until he has more. The app can't sign in to
+production until this deploy lands (it needs the CORS change).
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 5.1 | `lib/native.ts` (`isNative`, Back handling); `.env.native-local` / `.env.native-prod`; `X-Client: android/<version>` header, logged as the Sentry `client` tag | browser + emulator check |
+| 5.2 (G2) | CORS allowlist: `CLIENT_URL` plus the exact origins in `CORS_EXTRA_ORIGINS` (`lib/corsOrigins.ts`) | `corsOrigins.test.ts`, `http.cors.test.ts` |
+| 5.3 (G3) | Capacitor 8 (core/android/cli 8.5.2, app 8.1.1), installed by Karlos | `npm audit` (prod clean) |
+| 5.4 | `capacitor.config.ts` and the committed `android/` project; cleartext only in the local build | `check-android-prod.mjs` |
+| 5.5 | Native meta CSP from `_headers`; Back steps through history, closes menus, exits from the first screen; safe areas; links open the browser; `copyText` fallback | emulator check |
+| 5.6 | Icon and splash (navy) from `frontend/assets/` | emulator check |
+| 5.7 | CI `android` job: wrapper validation, the prod-config check and its test, prod sync, debug APK | `check-android-prod.test.mjs` (9 cases, proven to fail on a broken check) |
+| 5.9 | Release signing reads a gitignored `keystore.properties`; `preReleaseBuild` runs the prod-config check | release build refused after the local sync |
+
+**Emulator check** (API 34 image, driven through the WebView DevTools socket because the PC's graphics driver can't
+draw the emulator screen): sign-in through the form (CORS from https://localhost works), home, team dashboard and
+zones, tracking Kill / Ace / zone-4 pass then Undo, landscape, 401 back to sign-in, player view (own row only), sign
+out, airplane mode then recovery, links open the browser, the photo picker opens. Two bugs found and fixed: Back
+closed the app from every screen, and copying failed in the app.
+
+**Reviews:**
+- Independent Opus review: 0 high or medium, 8 low, all fixed.
+- `/code-review high`: 8 findings, all fixed (Back closes an open menu first; `initNative` failures reach Sentry; copy
+  keeps focus and says what to do on failure; one version source in `build.gradle`; the prod-config check has its own
+  test in CI; README "Building the Android app").
+- `/security-review`: no findings.
+
+**Released:** PR #38 (CI 4/4) merged to `develop`; release PR to `main`; tag `v9.10.0`. Karlos set
+`CORS_EXTRA_ORIGINS=https://localhost` in Netlify's production context (confirmed).
+
+**Still to do:** deploy when credits return, then the signed release build against production on the emulator
+(including a chat image upload). The signed build waits for Karlos's upload keystore.

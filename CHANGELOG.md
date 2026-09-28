@@ -2,9 +2,44 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.10.0 — 2026-09-29
+
+Phase 5 of the rebuild roadmap: the Android app. No migration.
+Released but not deployed yet (Netlify build credits ran out); the website and
+API stay on v9.9.0 until then, and the app needs this deploy to sign in.
+
+The app is built and tested
+but not in the Play Store yet (there's no Play Store account). An iPhone app
+needs a Mac or a cloud build service and an Apple Developer account, so it's a
+later phase.
+
+- **VolleyVision for Android.** The same app, as an installable Android app
+  (app.volleyvision). It signs in, tracks matches, shows the dashboards and
+  court zones, chats, and works in portrait and landscape.
+- **Feels like an Android app.** The back gesture steps back through the
+  screens you visited (and closes an open menu first), and leaves the app from
+  the first screen. Pages sit clear of the status bar and gesture bar. It has
+  its own icon and splash screen.
+- **Copying works everywhere.** Copy Report and copying a join code now fall
+  back to another way of copying when the browser or app refuses, and say so
+  if it still fails. (The Android app refused the usual way outright.)
+- **Links in emails open the website,** not the app: verify, reset and invite
+  links still work, in the browser.
+- **The API accepts the app.** It answers the exact extra origins in
+  CORS_EXTRA_ORIGINS (the app runs from https://localhost). Sign-in is a bearer
+  token, never a cookie. Production needs CORS_EXTRA_ORIGINS=https://localhost.
+- **Safe release builds.** A release build refuses to build if its settings
+  could still reach plain HTTP or load remote code (those are allowed only in the
+  emulator build). CI builds the app on every pull request.
+- **Offline tracking** (keep tracking with no signal, sync later) comes in
+  Phase 6.
+
+How to build it: see "Building the Android app" in the README.
+
 ## v9.9.0 — 2026-09-29
 
 Phase 4.5 of the rebuild roadmap: per-team roles. No migration.
+Deployed to production on 2026-09-29.
 
 **No more Coach/Player switch: what you can do depends on your role in each
 team; anyone can start a team.**
@@ -31,7 +66,7 @@ team; anyone can start a team.**
 
 Phase 4.0 of the rebuild roadmap (carry-over security fixes from an
 independent review of v9.3.0–v9.7.0) and Phase 4 (court zones and heat maps).
-No migration.
+No migration. Deployed to production on 2026-09-29.
 
 **A correction to v9.6.0.** v9.6.0 said individual stats go only to a team's
 staff and the player themself. That was true only on the player stats page.
