@@ -114,3 +114,34 @@ jobs:
         run: npm run build
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
+
+  # The Android shell (Phase 5): a production sync must pass the prod-config
+  # check (no cleartext, no mixed content, no remote server URL) and the debug
+  # APK must build. No signing and no secrets here; release builds are signed
+  # on Karlos's machine. JDK 21: Capacitor 8's Gradle needs it (the runner
+  # defaults to 17).
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - name: Production sync
+        run: npm run android:prod
+      - name: Prod-config check
+        run: node scripts/check-android-prod.mjs
+      - name: Build the debug APK
+        run: |
+          chmod +x android/gradlew
+          cd android && ./gradlew assembleDebug
