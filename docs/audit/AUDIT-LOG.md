@@ -650,6 +650,31 @@ refused.
 **Verified:** backend `tsc` clean, 49 unit test files, build OK; frontend `tsc`, lint and build clean; integration
 2/2 (matrix 72 routes).
 
+### Production deploy: v9.8.0 (2026-09-29)
+
+Karlos approved the G2 review of 4.0.1, 4.0.2 and the portal scoping, and the deploy, on 29 Sept.
+
+1. PRs #31 (Phase 4.0) and #32 (Phase 4) merged into `develop` after `develop` (with #33, the grey-token clean-up)
+   was merged into the Phase 4 branch and its CI passed on the combined code. Release PR #30 merged to `main` (CI 6/6);
+   tag `v9.8.0` on `3dc31b9`.
+2. Before deploying: working tree clean, `main` = `origin/main` = the tag, no code difference from the branch the full
+   local check suite passed on (49 unit test files, integration 2/2 with 72 routes, `npm audit` clean in both), and
+   no new migration. Netlify CLI signed in as himextradingltd, site volleyvision-app.
+3. `deploy.ps1` (prod, now with `--site`): migration check OK, build, publish; its smoke check passed (health ok and db
+   ok, CSP header, unknown team 404).
+
+**Live checks:**
+- `POST /api/v1/teams/x/players/y/link` without a token answers 401: the 4.0.2 staff route exists (v9.7.0 had none).
+- `GET /api/v1/analytics/matches/x/zones` answers the visibility guard's JSON "Match not found." (an unknown route
+  gets the SPA's HTML), so the zone routes are live.
+- The production bundle contains the 4.0.6 Sentry URL folding.
+- Sentry: no issues since the deploy. The two open issues (VOLLEYVISION-5 and -6) date from 28 Sept, right after the
+  v9.7.0 deploy: a tab left open across it loading an old chunk.
+
+**For Karlos (Part C5):** regenerate each team's staff join code (Invitations tab), check the members list for any
+Manager who shouldn't be one, and on a phone: a team dashboard (court zones), a match's stats, the roster's
+Link/Unlink, and as a player account that only your own stats show.
+
 ### Phase 4.5 of the rebuild roadmap: per-team roles (branch `rebuild/p4-5-team-roles`, 2026-09-28/29)
 
 Why: Karlos decided (28 Sept) there is no global "coach" or "player" account type. Anyone can create a team and is
