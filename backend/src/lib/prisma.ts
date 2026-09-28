@@ -12,11 +12,12 @@ export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    // Join codes let anyone holding one join the team — the staff code as a
-    // MANAGER. Every `include: { team: true }` or full Team read used to ship
+    // Join codes let anyone holding one join the team — the staff code as
+    // staff. Every `include: { team: true }` or full Team read used to ship
     // both codes to any member (players and viewers included). Omitting them
     // globally makes leaking them opt-in: only an explicit `select` returns
-    // them, which today is getTeamJoinCodes behind MANAGE_MEMBERS.
+    // them, which today is getTeamJoinCodes: the player code for members with
+    // invitation access, the staff code only at FULL_ACCESS.
     omit: { team: { playerJoinCode: true, staffJoinCode: true } },
   });
 

@@ -4,6 +4,8 @@ import { AppError } from '../middleware/errorHandler';
 import { calculatePlayerStats, calculateSetStats, calculateStats } from '../lib/analytics';
 import { ownEventsOnly } from '../lib/eventFilters';
 import { generateMatchReport } from '../services/report.service';
+import { assertTeamVisible } from '../lib/teamVisibility';
+import { hasTeamPermission, isGlobalAdmin, Permission } from '../services/permission.service';
 
 // ─── Shared query shapes ──────────────────────────────────────────────────────
 
@@ -116,15 +118,46 @@ export async function getMatchReport(req: Request, res: Response, next: NextFunc
   } catch (err) { next(err); }
 }
 
+/**
+ * One player's individual stats, scoped to ONE team (?teamId, defaulting to
+ * the home team): only that team's matches count, whatever other teams the
+ * player is linked to. Individual stats go to that team's staff (TRACK_MATCH),
+ * a global admin, or the player themself; teammates and viewers get the
+ * team-level views only (Karlos, 28 Sept - players can be minors).
+ */
 export async function getPlayerAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
-    const player = await prisma.player.findUnique({ where: { id: req.params.playerId }, select: playerSelect });
-    if (!player) throw new AppError(404, 'Player not found.');
-    const matchId = typeof req.query.matchId === 'string' ? req.query.matchId : undefined;
+    const userId = req.user?.userId ?? null;
+    const found = await prisma.player.findUnique({ where: { id: req.params.playerId }, select: { ...playerSelect, userId: true } });
+    if (!found) throw new AppError(404, 'Player not found.');
+    const { userId: linkedUserId, ...player } = found;
+
+    const teamId = typeof req.query.teamId === 'string' && req.query.teamId ? req.query.teamId : player.teamId;
+    await assertTeamVisible(teamId, userId, 'Player not found.'); // 404 for outsiders and anonymous callers
+
+    // The player must play for the team in scope: home team or a PlayerTeamLink
+    // (the same rule recordEvent uses to attribute a stat).
+    const onTeam = player.teamId === teamId
+      || !!(await prisma.playerTeamLink.findUnique({ where: { playerId_teamId: { playerId: player.id, teamId } } }));
+    if (!onTeam) throw new AppError(404, 'Player not found.');
+
+    const allowed = linkedUserId === userId
+      || await hasTeamPermission(userId!, teamId, Permission.TRACK_MATCH)
+      || await isGlobalAdmin(userId!);
+    if (!allowed) throw new AppError(403, "Only this team's coaching staff and the player can see individual stats.");
+
+    const matchId = typeof req.query.matchId === 'string' && req.query.matchId ? req.query.matchId : undefined;
+    if (matchId) {
+      const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
+      if (match?.teamId !== teamId) throw new AppError(404, 'Match not found.');
+    }
+
     const events = await prisma.event.findMany({
-      where: { playerId: player.id, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
+      where: { playerId: player.id, match: { teamId }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
       select: eventSelect,
     });
-    res.json({ player, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events) });
+    // player.teamId is the team in scope: the home team may be one this caller
+    // can't see (a linked team's staff), and its id must not leak.
+    res.json({ player: { ...player, teamId }, teamId, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events) });
   } catch (err) { next(err); }
 }

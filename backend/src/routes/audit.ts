@@ -10,7 +10,8 @@ router.get('/', requireAuth, async (req, res, next) => {
     const logs = await prisma.auditLog.findMany({
       where: { userId: req.user!.userId, ...(resource ? { resource } : {}) },
       orderBy: { createdAt: 'desc' },
-      take: Math.min(Number(limit), 200),
+      // parseInt, not Number: '12abc' is 12, anything unparseable is the default.
+      take: Math.min(Math.max(1, parseInt(limit, 10) || 50), 200),
     });
     res.json(logs);
   } catch (err) {

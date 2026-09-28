@@ -2,6 +2,44 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.6.0 — 2026-09-28
+
+Phase 2 of the rebuild roadmap: security hardening. Closes every
+authorization, rate-limit and reliability defect the roadmap confirmed in
+code. No migration. Not deployed yet.
+
+- **Team ids never leak.** Anyone who isn't on a team now gets "not found"
+  from every one of its pages and actions, the same as for a team that
+  doesn't exist. Before, most staff actions and team chat answered
+  "forbidden", which confirmed the team was there.
+- **The staff join code is for trusted staff only.** Assistant coaches and
+  statisticians no longer see it (only members with full invitation access
+  do), and it can no longer make anyone a Manager: managers join by email
+  invitation, which goes through the approval queue.
+- **Only the team's owner can delete it.** Managers could before, and a
+  delete takes the roster, matches and every stat with it.
+- **Individual player stats are for the team's coaches and the player.**
+  A player's stats page now shows one team's matches at a time, and only
+  that team's coaching staff (and the player themself) can open it.
+  Teammates and viewers keep the team-level dashboards. It used to add up
+  every team the player had ever played for.
+- **Approvals can't be applied twice.** Two coaches approving the same
+  request at once used to apply it twice (for example, two copies of a new
+  player). Now one wins and the other is told it was already resolved.
+- **Password resets can't be blocked by one person.** One address could use
+  up the whole site's reset allowance, locking everyone out for 15 minutes.
+- **Unlinking a player checks the right team.** A coach could unlink a
+  player from a team they had nothing to do with.
+- **Smaller fixes:**
+  - invitations are rate-limited (20 an hour per person)
+  - event recording is rate-limited (generously, 600 per 10 minutes)
+  - inviting " Coach@Club.nz " no longer duplicates a pending invite for
+    "coach@club.nz"
+  - a stalled mail server no longer hangs sign-up or invitations
+  - malformed sign-in data returns a clear error instead of a server error
+  - the activity log handles a bad page size
+  - sign-up now requires a complete email address
+
 ## v9.5.0 — 2026-09-28
 
 Phase 1 of the rebuild roadmap: the tooling that proves every later change

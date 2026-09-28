@@ -20,11 +20,13 @@ import { Permission } from '../services/permission.service';
 import { Request, Response, NextFunction } from 'express';
 import { canActInCategory } from '../services/permission.service';
 import { asyncHandler } from '../middleware/asyncHandler';
+import { assertTeamVisible } from '../lib/teamVisibility';
 
 const requireCreateMatch = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
   const { teamId } = req.body;
   if (!teamId) { next(); return; } // body validation is the controller's job
+  await assertTeamVisible(teamId, req.user.userId); // 404 for outsiders
   if (!(await canActInCategory(req.user.userId, teamId, 'match'))) {
     res.status(403).json({ error: 'You do not have permission to perform this action.' });
     return;

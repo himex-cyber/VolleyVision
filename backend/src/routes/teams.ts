@@ -8,6 +8,8 @@ import { listTeamApprovalRequests } from '../controllers/approval';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { requireTeamPermission, requireTeamAccess } from '../middleware/permissions';
 import { visibleByTeamParam } from '../middleware/visibility';
+import { requireTeamOwner } from '../middleware/teamOwner';
+import { invitationCreateRateLimit } from '../middleware/rateLimit';
 import { Permission, getUserTeamRole, getEffectivePermissions } from '../services/permission.service';
 
 const router = Router();
@@ -22,13 +24,15 @@ router.get('/', optionalAuth, getTeams);
 router.get('/:id', optionalAuth, visibleByTeamParam('id'), getTeam);
 router.post('/', requireAuth, createTeam);
 router.patch('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), updateTeam);
-router.delete('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), deleteTeam);
+// Delete takes the roster, matches and every event with it, so it's the
+// owner's call alone (a MANAGER holds MANAGE_TEAM too).
+router.delete('/:id', requireAuth, requireTeamPermission(Permission.MANAGE_TEAM), requireTeamOwner, deleteTeam);
 
 // My role on this team — used by the frontend PermissionGuard.
 // `permissions` folds per-member access tiers over the role map, so the UI
 // gates match backend enforcement (e.g. a Statistician granted invitation
 // access sees the Invite control).
-router.get('/:id/my-role', requireAuth, async (req, res, next) => {
+router.get('/:id/my-role', requireAuth, visibleByTeamParam('id'), async (req, res, next) => {
   try {
     const { role, isOwner } = await getUserTeamRole(req.user!.userId, req.params.id);
     const permissions = await getEffectivePermissions(req.user!.userId, req.params.id);
@@ -50,7 +54,7 @@ router.delete('/:id/members/:memberId', requireAuth, requireTeamPermission(Permi
 // Invitation management. Sending is tiered (Iteration 3) — gated on the member's
 // invitation access tier, not the static INVITE_USERS role permission.
 router.get('/:id/invitations',  requireAuth, requireTeamAccess('invitation', 'id'), listTeamInvitations);
-router.post('/:id/invitations', requireAuth, requireTeamAccess('invitation', 'id'), createTeamInvitation);
+router.post('/:id/invitations', requireAuth, requireTeamAccess('invitation', 'id'), invitationCreateRateLimit, createTeamInvitation);
 
 // Reusable team join codes — viewing and regenerating share the invitation
 // access category (regenerate additionally requires FULL_ACCESS in-controller).

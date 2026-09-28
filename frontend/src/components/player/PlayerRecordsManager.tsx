@@ -20,7 +20,7 @@ function LinkedPlayerCard({ player, onUnlink }: { player: PlayerRecord; onUnlink
         <p className="text-grey-600 text-xs">{player.team.name} · {player.position.replace(/_/g, ' ')}</p>
       </div>
       <div className="flex gap-2 shrink-0">
-        <Link to={`/players/${player.id}/dashboard`} className="btn-secondary text-xs px-3 py-1.5">Analytics</Link>
+        <Link to={`/players/${player.id}/dashboard?teamId=${player.teamId}`} className="btn-secondary text-xs px-3 py-1.5">Analytics</Link>
         <button className="text-grey-400 hover:text-error text-xs transition-colors" onClick={onUnlink}>Unlink</button>
       </div>
     </div>

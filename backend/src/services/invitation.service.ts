@@ -23,6 +23,10 @@ export async function createInvitation(
   email: string,
   role: TeamRole,
 ) {
+  // Normalised once, up front: the row is stored normalised, so the duplicate
+  // check has to compare the same form or " A@b.com " slips past "a@b.com".
+  email = normalizeEmail(email);
+
   // Check the team exists
   const team = await prisma.team.findUnique({ where: { id: teamId } });
   if (!team) throw Object.assign(new Error('Team not found'), { statusCode: 404 });
@@ -43,7 +47,7 @@ export async function createInvitation(
   const expiresAt = new Date(Date.now() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
   const invitation = await prisma.invitation.create({
-    data: { email: normalizeEmail(email), teamId, invitedById, role, token, joinCode, expiresAt },
+    data: { email, teamId, invitedById, role, token, joinCode, expiresAt },
     include: { team: { select: { id: true, name: true } }, invitedBy: { select: { id: true, firstName: true, lastName: true, email: true } } },
   });
 

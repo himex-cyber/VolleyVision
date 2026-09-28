@@ -129,10 +129,11 @@ export const forgotPasswordRateLimit = createRateLimit({
 });
 
 /**
- * The global cap on outbound reset mail, mounted alongside the per-IP/per-email
- * limiter above. Separate instance because it needs its own budget: a single
- * fixed key in the same bucket map would be drained by the same `max` as an
- * individual caller.
+ * The global cap on outbound reset mail, mounted AFTER the per-IP/per-email
+ * limiter above, so only requests that pass it spend global tokens (mounted
+ * first, one IP could drain it and lock everyone out of resets). Separate
+ * instance because it needs its own budget: a single fixed key in the same
+ * bucket map would be drained by the same `max` as an individual caller.
  */
 export const forgotPasswordGlobalRateLimit = createRateLimit({
   windowMs: 15 * 60 * 1000,
@@ -243,4 +244,32 @@ export const sentryTestRateLimit = createRateLimit({
   max: 10,
   keyFn: (req) => (req.user?.userId ? [`sentry-test:user:${req.user.userId}`] : null), // requireAuth handles the 401
   message: 'Sentry test limit reached. Try again in an hour.',
+});
+
+/**
+ * Creating an invitation mails an address the caller picks, so without a cap
+ * it's a way to send VolleyVision mail to anyone, at any volume. Per user, not
+ * per team: a shared team bucket let one member (say a statistician whose
+ * requests only queue for approval) spend it and block the head coach from
+ * inviting anyone for an hour. 20 an hour is far above a coach inviting a squad.
+ */
+export const invitationCreateRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyFn: (req) => (req.user?.userId ? [`invite:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: 'Too many invitations sent in the last hour. Try again later.',
+});
+
+/**
+ * Event writes (record, undo, delete) - per user. Live tracking writes one
+ * event per touch, so the budget is generous: 600 per 10 minutes is about one
+ * a second sustained, and sized so a device flushing a whole set's offline
+ * queue (roadmap Phase 6) still fits. It exists to stop a runaway client or a
+ * script, not a busy statistician.
+ */
+export const eventWriteRateLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 600,
+  keyFn: (req) => (req.user?.userId ? [`event-write:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: "You're recording events faster than we can keep up with. Wait a moment and try again.",
 });

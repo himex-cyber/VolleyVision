@@ -354,6 +354,8 @@ export interface Player {
   jerseyNumber: number;
   position: Position;
   teamId: string;
+  // Nullable — set once this roster entry is linked to a user account (Phase 5 Sprint 5).
+  userId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -511,6 +513,11 @@ export interface PlayerAnalytics {
     Player,
     'id' | 'firstName' | 'lastName' | 'jerseyNumber' | 'position' | 'teamId'
   >;
+
+  // The team these stats are scoped to — defaults server-side to the player's
+  // home team, but may be a team reached via a Phase 7 team link, so it can
+  // differ from player.teamId. Use this, not player.teamId, for the page's team context.
+  teamId: string;
 
   matchId: string | null;
 

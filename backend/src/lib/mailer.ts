@@ -23,6 +23,12 @@ function getTransporter(): Transporter | null {
       port: Number(process.env.SMTP_PORT ?? 465),
       secure: (process.env.SMTP_SECURE ?? 'true') !== 'false',
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      // Nodemailer waits up to 2 minutes for a stalled server by default, and the
+      // API runs in a Netlify Function with a much shorter limit: a hung SMTP
+      // host would time the whole request out instead of failing the send.
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000,
     });
   }
   return transporter;

@@ -62,7 +62,7 @@ export async function addPlayerTeamLink(req: Request, res: Response, next: NextF
     // one on a home team they have no relationship to, exposing that team's
     // roster into a team they do control. Require the same visibility +
     // manage permission on the player's home team too.
-    await assertTeamVisible(player.teamId, req.user?.userId ?? null);
+    await assertTeamVisible(player.teamId, req.user?.userId ?? null, 'Player not found.');
     const canManageHomeTeam = await hasTeamPermission(req.user!.userId, player.teamId, Permission.MANAGE_TEAM);
     if (!canManageHomeTeam) throw new AppError(403, 'You do not have permission to manage this player\'s team.');
 

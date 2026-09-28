@@ -141,7 +141,7 @@ export function usePlayers(teamId: string) {
 export function useCreatePlayer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Omit<Player, 'id' | 'createdAt' | 'updatedAt'>) =>
+    mutationFn: (data: Omit<Player, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) =>
       playersApi.create(data),
     // Invalidate both the roster and the approval queue — a non-head-coach add
     // shows up as pending rather than in the roster.
@@ -341,10 +341,10 @@ export function useTeamAnalytics(teamId: string) {
   });
 }
 
-export function usePlayerAnalytics(playerId: string) {
+export function usePlayerAnalytics(playerId: string, teamId?: string) {
   return useQuery({
-    queryKey: ['analytics', 'player', playerId],
-    queryFn: () => analyticsApi.player(playerId),
+    queryKey: ['analytics', 'player', playerId, teamId ?? null],
+    queryFn: () => analyticsApi.player(playerId, teamId),
     enabled: !!playerId,
   });
 }
@@ -605,6 +605,17 @@ export function useTeamRole(teamId: string) {
   }, [query.data, viewMode]);
 
   return { ...query, data };
+}
+
+/**
+ * Ids of the roster entries linked to the signed-in user - their own player
+ * records, whose individual stats they may open. Shares the player-portal
+ * dashboard query (and its cache); `enabled` lets staff, who can open every
+ * player anyway, skip the request.
+ */
+export function useMyPlayerIds(enabled = true) {
+  const { data } = useQuery({ queryKey: ['player', 'dashboard'], queryFn: playerPortalApi.dashboard, enabled });
+  return useMemo(() => new Set((data?.players ?? []).map((p) => p.id)), [data]);
 }
 
 /** Convenience: returns true if the user has the given permission on teamId */

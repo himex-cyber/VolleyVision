@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { usePlayerAnalytics, useMatchAnalytics, useTeam } from '../hooks';
+import axios from 'axios';
+import { usePlayerAnalytics, useMatchAnalytics, useTeam, useHasPermission } from '../hooks';
 import { StatsCards } from '../components/analytics/StatsOverview';
 import { POSITION_FULL_LABELS } from '../types';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
@@ -15,11 +16,17 @@ export default function PlayerDashboardPage() {
   // the coach inside that match's context (back button + player tab bar)
   // instead of the generic career-wide profile view.
   const matchId = searchParams.get('matchId') ?? undefined;
-  const { data, isLoading, isError } = usePlayerAnalytics(playerId!);
+  // The team these stats are scoped to — defaults server-side to the player's
+  // home team when absent (e.g. a bookmarked link from before this param existed).
+  const teamId = searchParams.get('teamId') ?? undefined;
+  const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
   // Roster context (no matchId) gets a full-team tab bar. Guarded by the hook's
   // own `enabled: !!id`, so this stays above the early returns below.
-  const { data: team } = useTeam(data?.player.teamId ?? '');
+  const { data: team } = useTeam(data?.teamId ?? '');
+  // The tab bars link to other players' dashboards, which only staff may open
+  // (a player viewing their own page would get a 403 on every other tab).
+  const canTrack = useHasPermission(data?.teamId ?? '', 'TRACK_MATCH');
 
   // Only when arriving in match context — restores the previous title on unmount.
   useEffect(() => {
@@ -30,6 +37,14 @@ export default function PlayerDashboardPage() {
   }, [matchId, matchData]);
 
   if (isLoading) return <p className="text-navy-300">Loading analytics…</p>;
+  if (axios.isAxiosError(error) && error.response?.status === 403) {
+    return (
+      <p className="text-error">
+        Individual stats are visible to this team's coaching staff and to the player.
+        Ask one of the team's coaches if you need them.
+      </p>
+    );
+  }
   if (isError || !data) return <p className="text-error">Couldn't load player analytics.</p>;
 
   return (
@@ -45,7 +60,7 @@ export default function PlayerDashboardPage() {
           </Link>
         ) : (
           <Link
-            to={`/teams/${data.player.teamId}`}
+            to={`/teams/${data.teamId}`}
             className="btn-secondary inline-flex items-center gap-1.5 text-sm py-1.5 px-3"
           >
             <ArrowLeftIcon className="w-4 h-4" />
@@ -75,12 +90,12 @@ export default function PlayerDashboardPage() {
       {/* Player tab bar — only in match context, listing every player with
           stats in that match (not the full roster), so the coach can compare
           players while staying inside the same match. */}
-      {matchId && matchData && matchData.playerStats.length > 0 && (
+      {canTrack && matchId && matchData && matchData.playerStats.length > 0 && (
         <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
           {matchData.playerStats.map((row) => (
             <NavLink
               key={row.player.id}
-              to={`/players/${row.player.id}/dashboard?matchId=${matchId}`}
+              to={`/players/${row.player.id}/dashboard?matchId=${matchId}&teamId=${data.teamId}`}
               className={({ isActive }) =>
                 `px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   isActive
@@ -97,14 +112,14 @@ export default function PlayerDashboardPage() {
       {/* Roster context — the whole team, so a coach arriving from the Roster
           can move between players without going back. Mutually exclusive with
           the match-scoped bar above. */}
-      {!matchId && team?.players && team.players.length > 0 && (
+      {canTrack && !matchId && team?.players && team.players.length > 0 && (
         <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
           {[...team.players]
             .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
             .map((p) => (
               <NavLink
                 key={p.id}
-                to={`/players/${p.id}/dashboard`}
+                to={`/players/${p.id}/dashboard?teamId=${data.teamId}`}
                 className={({ isActive }) =>
                   `px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive

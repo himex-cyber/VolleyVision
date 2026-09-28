@@ -3,20 +3,8 @@
 // real request meets them. Runs in `npm test`; scripts/run-tests.js pins
 // NETLIFY=1 (no listen) and blanks every real-service credential.
 import assert from 'node:assert/strict';
-import http from 'http';
-import { AddressInfo } from 'net';
 import { db, resetDb } from '../testing/installFakePrisma';
-import app from '../index';
-
-async function withServer(fn: (base: string) => Promise<void>) {
-  const server = http.createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  try {
-    await fn(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
-}
+import { withServer } from '../testing/http';
 
 async function unauthenticatedIs401(base: string) {
   const res = await fetch(`${base}/api/v1/teams/my-teams`);
@@ -42,18 +30,13 @@ async function forgotPasswordLimiterOrder(base: string) {
       body: JSON.stringify({ email }),
     }).then((r) => r.status);
 
-  // 60 = the global bucket's size. Only 5 get past the per-IP arm.
-  const startedAt = Date.now();
+  // 60 = the global bucket's size. Only 5 get past the per-IP arm, so only
+  // those 5 may spend global tokens.
   const flood = await Promise.all(Array.from({ length: 60 }, (_, i) => send('203.0.113.1', `flood${i}@example.test`)));
   assert.equal(flood.filter((s) => s === 200).length, 5);
 
-  // A different caller must still get through.
-  // TODO(P2): today the global limiter runs first, so the flood drained it and
-  // this is 429. Phase 2 (defect 3) reorders them; flip this to 200.
-  // The global bucket refills one token every 15s, so on a runner slow enough
-  // to take that long the drained state is gone; don't assert it there.
-  const victim = await send('198.51.100.7', 'victim@example.test');
-  if (Date.now() - startedAt < 14_000) assert.equal(victim, 429);
+  // A different caller must still get through: 55 tokens are left.
+  assert.equal(await send('198.51.100.7', 'victim@example.test'), 200, 'one IP drained the global reset limiter');
 }
 
 async function main() {

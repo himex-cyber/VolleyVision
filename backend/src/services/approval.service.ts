@@ -2,6 +2,7 @@ import { ApprovalAction, ApprovalStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { isApprovalAuthority, getUserTeamRole } from './permission.service';
+import { assertTeamVisible } from '../lib/teamVisibility';
 import { onApprovalRequestCreated, onApprovalResolved } from './approvalNotifications';
 import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from './playerActions.service';
 import {
@@ -65,9 +66,9 @@ async function applyApproval(request: { action: ApprovalAction; payload: unknown
 async function loadResolvable(requestId: string, resolverId: string) {
   const request = await prisma.approvalRequest.findUnique({ where: { id: requestId } });
   if (!request) throw new AppError(404, 'Approval request not found.');
-  if (request.status !== ApprovalStatus.PENDING) {
-    throw new AppError(409, `Request is already ${request.status.toLowerCase()}.`);
-  }
+  // Visibility and permission before the status, so an outsider learns neither
+  // that the request exists nor whether it was resolved.
+  await assertTeamVisible(request.teamId, resolverId, 'Approval request not found.');
   const allowed = await isApprovalAuthority(resolverId, request.teamId);
   if (!allowed) throw new AppError(403, 'Only an owner, head coach, or manager can resolve approval requests.');
 
@@ -80,32 +81,58 @@ async function loadResolvable(requestId: string, resolverId: string) {
     const { isOwner } = await getUserTeamRole(resolverId, request.teamId);
     if (!isOwner) throw new AppError(403, 'You cannot resolve your own approval request.');
   }
+  if (request.status !== ApprovalStatus.PENDING) {
+    throw new AppError(409, `Request is already ${request.status.toLowerCase()}.`);
+  }
   return request;
+}
+
+/**
+ * Atomically moves a PENDING request to `status`. Exactly one of two racing
+ * resolvers wins: Postgres serialises the two conditional updates on the row,
+ * and the loser matches zero rows. Everything a resolver does happens after
+ * its claim, so nothing is ever applied twice.
+ */
+async function claim(requestId: string, status: ApprovalStatus, resolverId: string) {
+  const { count } = await prisma.approvalRequest.updateMany({
+    where: { id: requestId, status: ApprovalStatus.PENDING },
+    data: { status, resolvedById: resolverId, resolvedAt: new Date() },
+  });
+  if (count === 0) throw new AppError(409, 'Someone else resolved this request first. Refresh to see its status.');
 }
 
 export async function approveRequest(requestId: string, resolverId: string) {
   const request = await loadResolvable(requestId, resolverId);
 
-  // Apply the change first; if it fails (e.g. target already deleted), the
-  // request stays PENDING and the error surfaces — nothing is half-applied.
-  await applyApproval(request);
+  // Claim before applying: applies aren't idempotent (PLAYER_CREATE makes a
+  // new player each time), so a double approve must never reach applyApproval.
+  await claim(requestId, ApprovalStatus.APPROVED, resolverId);
+  try {
+    await applyApproval(request);
+  } catch (err) {
+    // ponytail: compensating revert, not one transaction; thread a tx through
+    // applyApproval if an apply can partially succeed. If the apply fails (e.g.
+    // target already deleted), the request goes back to PENDING and the error
+    // surfaces.
+    await prisma.approvalRequest.update({
+      where: { id: requestId },
+      data: { status: ApprovalStatus.PENDING, resolvedById: null, resolvedAt: null },
+    });
+    throw err;
+  }
 
-  const resolved = await prisma.approvalRequest.update({
-    where: { id: requestId },
-    data: { status: ApprovalStatus.APPROVED, resolvedById: resolverId, resolvedAt: new Date() },
-    include: requestInclude,
-  });
-  await onApprovalResolved(resolved);
-  return resolved;
+  return resolved(requestId);
 }
 
 export async function rejectRequest(requestId: string, resolverId: string) {
   await loadResolvable(requestId, resolverId);
-  const resolved = await prisma.approvalRequest.update({
-    where: { id: requestId },
-    data: { status: ApprovalStatus.REJECTED, resolvedById: resolverId, resolvedAt: new Date() },
-    include: requestInclude,
-  });
-  await onApprovalResolved(resolved);
-  return resolved;
+  await claim(requestId, ApprovalStatus.REJECTED, resolverId);
+  return resolved(requestId);
+}
+
+/** updateMany can't `include`, so re-read the resolved row for the response and hook. */
+async function resolved(requestId: string) {
+  const request = await prisma.approvalRequest.findUniqueOrThrow({ where: { id: requestId }, include: requestInclude });
+  await onApprovalResolved(request);
+  return request;
 }

@@ -14,12 +14,21 @@ interface Props {
   title: string;
   players: PlayerStatLine[];
   metric: 'kills' | 'aces' | 'digs' | 'totalBlocks';
+  teamId: string;
+  // Whether the viewer may drill into a bar's player dashboard — the analytics
+  // endpoint 403s for anyone but this team's staff and the player themself.
+  canOpen: (playerId: string) => boolean;
+  /** Staff can open every bar, so the hint and pointer show for them only. */
+  canOpenAll: boolean;
 }
 
 export default function StatLeaderboardChart({
   title,
   players,
   metric,
+  teamId,
+  canOpen,
+  canOpenAll,
 }: Props) {
   const navigate = useNavigate();
   const data = [...players]
@@ -36,9 +45,11 @@ export default function StatLeaderboardChart({
       <h2 className="font-semibold text-chalk-100 mb-3">
         {title}
       </h2>
-      <p className="text-xs text-chalk-400 mb-2">
-        Click a player bar to view details
-      </p>
+      {canOpenAll && (
+        <p className="text-xs text-grey-500 mb-2">
+          Click a player bar to view details
+        </p>
+      )}
 
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
@@ -67,9 +78,9 @@ export default function StatLeaderboardChart({
               dataKey="value"
               fill={CHART_SERIES[0]}
               radius={[4, 4, 0, 0]}
-              cursor="pointer"
+              cursor={canOpenAll ? 'pointer' : 'default'}
               onClick={(data) => {
-                navigate(`/players/${data.id}/dashboard`);
+                if (data.id && canOpen(data.id)) navigate(`/players/${data.id}/dashboard?teamId=${teamId}`);
               }}
             />
           </BarChart>
