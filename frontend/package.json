@@ -11,7 +11,9 @@
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "build:native:local": "tsc && vite build --mode native-local",
-    "build:native:prod": "tsc && vite build --mode native-prod"
+    "build:native:prod": "tsc && vite build --mode native-prod",
+    "android:local": "node scripts/android.mjs local",
+    "android:prod": "node scripts/android.mjs prod"
   },
   "dependencies": {
     "@sentry/react": "^10.73.0",
