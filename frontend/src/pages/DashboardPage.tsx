@@ -1,8 +1,9 @@
 import { useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useMyTeams, useMyMemberships, useCoachDashboard, usePlayerDashboard } from '../hooks';
+import { useCoachDashboard, useMyPlayerRecords } from '../hooks';
 import { buildHomeTeams, type HomeTeamCard } from '../lib/homeTeams';
+import type { TeamRole } from '../types';
 import { ROLE_BADGE } from '../lib/teamRoles';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
 import MyStats from '../components/player/MyStats';
@@ -34,21 +35,24 @@ function TeamCard({ card }: { card: HomeTeamCard }) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { data: ownedTeams, isLoading: loadingOwned } = useMyTeams();
-  const { data: memberships, isLoading: loadingMember } = useMyMemberships();
-  // Already covers owned + member teams, so it's enough for every card's next match.
-  const { data: coachDash } = useCoachDashboard();
-  const { data: playerDash } = usePlayerDashboard();
+  // One call has it all: owned teams, other teams with the caller's role there,
+  // and each team's soonest upcoming match.
+  const { data: dash, isLoading } = useCoachDashboard();
+  // Records only; MyStats fetches the portal itself when it renders.
+  const { data: records } = useMyPlayerRecords();
 
   const joinRef = useRef<HTMLDivElement>(null);
 
   const teams = useMemo(
-    () => buildHomeTeams(ownedTeams ?? [], memberships ?? [], coachDash?.upcomingMatches ?? []),
-    [ownedTeams, memberships, coachDash],
+    () => buildHomeTeams(
+      dash?.ownedTeams ?? [],
+      (dash?.memberTeams ?? []).map((t) => ({ role: t.memberRole as TeamRole, team: t })),
+      dash?.upcomingMatches ?? [],
+    ),
+    [dash],
   );
 
-  const isLoading = loadingOwned || loadingMember;
-  const hasStats = (playerDash?.players.length ?? 0) > 0;
+  const hasStats = (records?.length ?? 0) > 0;
 
   function focusJoinCard() {
     const el = joinRef.current;
@@ -68,7 +72,7 @@ export default function DashboardPage() {
         <div className="card p-12 text-center space-y-4">
           <p className="text-grey-900 font-medium">Create a team or join one with a code.</p>
           <div className="flex flex-wrap justify-center gap-2">
-            <Link to="/teams" className="btn-primary">Create a team</Link>
+            <Link to="/teams?new=1" className="btn-primary">Create a team</Link>
             <button type="button" className="btn-secondary" onClick={focusJoinCard}>
               Join with a code
             </button>

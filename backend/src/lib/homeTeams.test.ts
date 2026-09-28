@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { buildHomeTeams } from './homeTeams';
 
 const t = (id: string, name = id) => ({ id, name });
@@ -35,5 +37,17 @@ assert.equal(cards.find((c) => c.teamId === 'B')!.nextMatch?.opponent, 'Hornets'
 assert.equal(cards.find((c) => c.teamId === 'C')!.nextMatch, null);
 
 assert.deepEqual(buildHomeTeams([], [], []), []);
+
+// The frontend keeps a copy (it has no test runner): its logic, from BADGE to
+// the end, must stay identical to this tested file.
+const logic = (file: string) => {
+  const src = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+  return src.slice(src.indexOf('const BADGE'));
+};
+assert.equal(
+  logic(path.join(__dirname, '../../../frontend/src/lib/homeTeams.ts')),
+  logic(path.join(__dirname, 'homeTeams.ts')),
+  'frontend/src/lib/homeTeams.ts has drifted from the tested backend copy',
+);
 
 console.log('homeTeams.test.ts passed');

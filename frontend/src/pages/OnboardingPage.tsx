@@ -18,7 +18,7 @@ function CreateTeamBlock() {
         <li>Add players to your roster</li>
         <li>Schedule or record a match</li>
       </ol>
-      <Link to="/teams" className="btn-primary w-full text-center block">
+      <Link to="/teams?new=1" className="btn-primary w-full text-center block">
         Create my first team
       </Link>
     </div>

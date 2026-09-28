@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   useMyTeams, useMyMemberships, useMyInvitations,
   useCreateTeam, useUpdateTeam, useDeleteTeam,
@@ -84,7 +84,9 @@ export default function TeamsPage() {
 
   const pendingCount = invitations?.length ?? 0;
 
-  const [showForm, setShowForm] = useState(false);
+  // ?new=1 (home and onboarding "Create a team") opens the form straight away.
+  const [searchParams] = useSearchParams();
+  const [showForm, setShowForm] = useState(searchParams.get('new') === '1');
   const [form, setForm] = useState<TeamForm>(emptyForm);
   const [createError, setCreateError] = useState('');
 

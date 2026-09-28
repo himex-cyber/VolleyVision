@@ -56,9 +56,7 @@ export default function MatchPageHeader({
   const canManageMatches = useHasPermission(teamId, 'CREATE_MATCH');
   const updateMatch = useUpdateMatch();
   const mode: 'track' | 'watch' | undefined =
-    canTrack && status === 'IN_PROGRESS' ? 'track' :
-    !canTrack && status === 'IN_PROGRESS' ? 'watch' :
-    undefined;
+    status === 'IN_PROGRESS' ? (canTrack ? 'track' : 'watch') : undefined;
   const [pendingNotice, setPendingNotice] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
 

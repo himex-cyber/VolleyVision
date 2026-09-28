@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getToken, clearToken } from './tokenStorage';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -358,7 +358,7 @@ export const playerPortalApi = {
   dashboard: () => api.get<PlayerDashboard>('/player/dashboard').then((r) => r.data),
   stats: () => api.get('/player/stats').then((r) => r.data),
   bests: () => api.get<PlayerBests | null>('/player/bests').then((r) => r.data),
-  teams: () => api.get('/player/teams').then((r) => r.data),
+  teams: () => api.get<PlayerRecord[]>('/player/teams').then((r) => r.data),
 };
 
 // ─── Coach Portal (Phase 5 Sprint 5) ─────────────────────────────────────────
