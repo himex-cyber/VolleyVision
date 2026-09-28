@@ -2,6 +2,32 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.9.0 — unreleased
+
+Phase 4.5 of the rebuild roadmap: per-team roles. No migration.
+
+**No more Coach/Player switch: what you can do depends on your role in each
+team; anyone can start a team.**
+
+- **One home page.** It shows a card for each of your teams with your role
+  there (Coach, Staff, Player or Viewer) and the team's next match, plus your
+  own stats if you have a player record. Old /coach and /player links still
+  work and land on the home page.
+- **Your role, team by team.** Each team's pages show your role there. A coach
+  who also plays on the same team sees the full coach view plus their own
+  "My Stats". A coach on one team who plays on another gets coach tools on the
+  first and the player view on the second.
+- **Anyone can create a team** and becomes its coach. Each account can own up
+  to 5 teams (transfer or delete one to create another), and team creation is
+  limited to 5 an hour.
+- **Sign-up and welcome.** The "coach or player" question only tailors your
+  welcome. The welcome page offers both creating a team and joining one with
+  a code.
+- **Your player page shows the teams you're on** (from v9.8.0's final fix).
+- **Smaller things.** Busy moments no longer fail with "someone else changed
+  this" when two people create their first team at once. The roster fits a
+  phone screen.
+
 ## v9.8.0 — unreleased
 
 Phase 4.0 of the rebuild roadmap (carry-over security fixes from an
