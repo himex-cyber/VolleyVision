@@ -2,6 +2,7 @@
 // from migrations. Supabase exposes the public schema to the anon key through
 // PostgREST, so a table without RLS is world-readable there. New tables must
 // enable RLS in their own migration; this is what catches one that doesn't.
+import './requireLocalDb'; // first: refuses a non-local DB before dotenv/Prisma load
 import assert from 'node:assert/strict';
 import { prisma } from '../lib/prisma';
 
