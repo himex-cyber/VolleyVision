@@ -5,6 +5,7 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 ## v9.9.0 — 2026-09-29
 
 Phase 4.5 of the rebuild roadmap: per-team roles. No migration.
+Deployed to production on 2026-09-29.
 
 **No more Coach/Player switch: what you can do depends on your role in each
 team; anyone can start a team.**
@@ -31,7 +32,7 @@ team; anyone can start a team.**
 
 Phase 4.0 of the rebuild roadmap (carry-over security fixes from an
 independent review of v9.3.0–v9.7.0) and Phase 4 (court zones and heat maps).
-No migration.
+No migration. Deployed to production on 2026-09-29.
 
 **A correction to v9.6.0.** v9.6.0 said individual stats go only to a team's
 staff and the player themself. That was true only on the player stats page.

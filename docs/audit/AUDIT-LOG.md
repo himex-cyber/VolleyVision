@@ -711,3 +711,26 @@ edit waits for Karlos's OK.
 was deleted with its module, and back up with `homeTeams.test.ts` and the new tests), build OK; frontend `tsc`, lint
 and build clean; integration 2/2 (matrix 72 routes plus the team-creation checks). `/login`'s main chunk shrank from
 224.3 kB to 220.7 kB.
+
+### Production deploy: v9.9.0 (2026-09-29)
+
+Karlos approved the release, the deploy and the G1 comment edit on 29 Sept.
+
+1. The `schema.prisma` `signupIntent` comment was updated (comment only; `prisma validate` OK; no migration). `develop`
+   (v9.8.0 deploy docs) was merged into the Phase 4.5 branch twice, resolving CHANGELOG and AUDIT-LOG conflicts. The
+   full local suite passed on it (51 unit test files, integration 2/2 with 72 routes, `npm audit` clean) and PR #34's CI
+   passed; merged. Release PR #36 (CI 6/6) merged to `main`; tag `v9.9.0` on `c562d6d`.
+2. Before deploying: working tree clean, `main` = `origin/main` = the tag, no code difference from the tested branch,
+   no new migration.
+3. The first `deploy.ps1` run failed before publishing: the Netlify CLI answered "Project not found" for the prod site
+   id. The CLI was still signed in as himextradingltd, `netlify api getSite` returned volleyvision-app for that id, and
+   `.netlify/state.json` was unchanged since July, so it was a transient API error. The retry published; the smoke check
+   passed (health and db ok, CSP header, unknown team 404).
+
+**Live checks:**
+- The production bundle references the new `DashboardPage` and `OnboardingPage` chunks and no longer the removed
+  `CoachDashboardPage` or `PlayerPortalPage`; the dashboard chunk contains "My teams", the empty state and the error
+  state; `/coach` still loads (it redirects to `/dashboard` in the app).
+- The v9.9.0 API changes (team creation limits, transfer cap, the retry, per-team upcoming matches) all sit behind
+  sign-in, so they weren't probed anonymously; the same build and publish path was proven live for v9.8.0 an hour earlier.
+- Sentry: no issues in the two hours around the deploy.
