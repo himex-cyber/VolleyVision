@@ -8,6 +8,7 @@
 // backend/.env by itself, so an unset variable would silently fall through to
 // the production database, and these tests create and delete rows.
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { runTestFiles, srcDir } = require('./test-runner');
 
 const isLocal = (url) => {
@@ -37,5 +38,13 @@ const childEnv = {
   SUPABASE_URL: '',
   SUPABASE_SERVICE_ROLE_KEY: '',
 };
+
+// The Supabase roles and default grants (idempotent). CI applies them before
+// migrating, which is what makes rls.test.ts's grants check real; on a local
+// database migrated before the roles existed that check passes without testing
+// much, but the roles still need to exist for it to run.
+const prismaCli = require.resolve('prisma/build/index.js', { paths: [path.join(__dirname, '..')] });
+const roles = spawnSync(process.execPath, [prismaCli, 'db', 'execute', '--url', directUrl, '--file', path.join(__dirname, 'supabase-roles.sql')], { stdio: 'inherit', env: childEnv });
+if (roles.status !== 0) process.exit(roles.status ?? 1);
 
 runTestFiles({ dirs: [path.join(srcDir, '__integration__')], env: childEnv, label: 'integration test' });

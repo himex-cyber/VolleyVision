@@ -28,10 +28,12 @@ const CATEGORY_LABELS: Record<EventMeta['category'], string> = {
   set: 'Set',
 };
 
-function actorLabel(e: Event): string {
+function actorLabel(e: Event, teamName?: string): string {
   if (e.player) return `#${e.player.jerseyNumber} ${e.player.firstName} ${e.player.lastName}`;
   if (e.isOpponentEvent) return e.opponentJerseyNumber != null ? `Opponent #${e.opponentJerseyNumber}` : 'Opponent';
-  return '—';
+  // Own-team event with the player redacted for a non-staff viewer (per-player
+  // privacy rule) — attribute it to the team instead of showing a blank dash.
+  return teamName ?? '—';
 }
 
 export default function MatchEventsPage() {
@@ -55,12 +57,12 @@ export default function MatchEventsPage() {
     return (events ?? []).filter((e) => {
       const meta = META.get(e.eventType);
       if (category !== 'all' && meta?.category !== category) return false;
-      if (q && !(meta?.label ?? e.eventType).toLowerCase().includes(q) && !actorLabel(e).toLowerCase().includes(q)) {
+      if (q && !(meta?.label ?? e.eventType).toLowerCase().includes(q) && !actorLabel(e, match?.team?.name).toLowerCase().includes(q)) {
         return false;
       }
       return true;
     });
-  }, [events, search, category]);
+  }, [events, search, category, match?.team?.name]);
 
   if (matchLoading) return <p className="text-grey-600">Loading…</p>;
   if (!match) return <p className="text-error">Match not found.</p>;
@@ -223,7 +225,7 @@ export default function MatchEventsPage() {
                                     </span>
                                   </div>
                                   <span className="font-medium text-grey-900 min-w-0">
-                                    {e.player ? `${e.player.firstName} ${e.player.lastName}` : actorLabel(e)}
+                                    {e.player ? `${e.player.firstName} ${e.player.lastName}` : actorLabel(e, match.team?.name)}
                                   </span>
                                 </div>
                               </td>

@@ -261,6 +261,18 @@ export const invitationCreateRateLimit = createRateLimit({
 });
 
 /**
+ * Staff linking or unlinking a member to a roster record - per user. A coach
+ * sets up a squad once; 60 an hour covers that twice over and stops a script
+ * from churning links.
+ */
+export const playerLinkRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyFn: (req) => (req.user?.userId ? [`player-link:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: 'Too many player-record changes in the last hour. Try again later.',
+});
+
+/**
  * Event writes (record, undo, delete) - per user. Live tracking writes one
  * event per touch, so the budget is generous: 600 per 10 minutes is about one
  * a second sustained, and sized so a device flushing a whole set's offline

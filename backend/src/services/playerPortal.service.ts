@@ -1,9 +1,7 @@
 import { prisma, runSerializable } from '../lib/prisma';
 import { EventType } from '@prisma/client';
 import { ownEventsOnly } from '../lib/eventFilters';
-import { assertTeamVisible } from '../lib/teamVisibility';
-import { getUserTeamRole } from './permission.service';
-import { assertEmailVerified } from './emailVerification.service';
+import { AppError } from '../middleware/errorHandler';
 
 // Reuses the same stat derivation logic as the existing analytics engine
 function deriveStats(events: { eventType: EventType }[]) {
@@ -67,73 +65,41 @@ export async function getLinkedPlayers(userId: string) {
 }
 
 /**
- * Claim a roster entry as your own player record.
+ * Staff link a team member to a roster record (4.0.2, v9.8.0). Players used to
+ * claim records themselves, and any PLAYER-role member could claim ANY
+ * unclaimed record on their team, a teammate's included, which then showed
+ * them that teammate's full stats in the player portal. There's no data-model
+ * link from a join code or invitation to a specific record, so only staff can
+ * say which record is whose. Code-joined players still get their own record
+ * automatically (ensurePlayerForMember).
  *
- * Both guards below were missing entirely: this checked that the player existed
- * and then wrote `userId`. Any authenticated user could POST any playerId and
- * take the record, because `Player.userId` is not unique — the update silently
- * overwrote whoever was linked before. Everything downstream reads
- * `where: { userId }`, so claiming a stranger's record handed over their career
- * stats, per-match development data and team, and cut the real user's link.
- *
- * Visibility first, and it throws the same 404 as a missing player on purpose:
- * a caller who may not see the team must not be able to tell "no such player"
- * from "player you may not touch". `unlinkPlayer` below has always had the
- * ownership half of this; the two belong together.
- *
- * 409 rather than 404 for an already-claimed record: by then the caller can
- * already see the team, so the conflict is not a disclosure — and it is the
- * answer they need, since silently stealing the link is the bug being fixed.
+ * The caller has passed visibility + MANAGE_MEMBERS on teamId. The record must
+ * be this team's own (its home team), unclaimed, and the target a member of
+ * the team with no other record here.
  */
-export async function linkPlayerToUser(playerId: string, userId: string) {
-  await assertEmailVerified(userId);
+export async function linkPlayerRecord(teamId: string, playerId: string, userId: string) {
   const player = await prisma.player.findUnique({ where: { id: playerId } });
-  if (!player) throw Object.assign(new Error('Player not found'), { statusCode: 404 });
-  await assertTeamVisible(player.teamId, userId);
+  if (!player || player.teamId !== teamId) throw new AppError(404, 'Player not found.');
+  const membership = await prisma.teamMembership.findUnique({ where: { userId_teamId: { userId, teamId } }, select: { id: true } });
+  if (!membership) throw new AppError(400, 'Only a member of this team can be linked to one of its player records.');
 
-  // L4: any team member could claim any unclaimed player record — a coach or
-  // statistician could attach a roster entry (and its stats) to their own
-  // account. Only a PLAYER-role member of the team may claim one.
-  // (There is no data-model link from an Invitation/join-code to a specific
-  // Player row — Invitation only carries email + team + role for account
-  // creation — so matching by that isn't possible; role + team membership is
-  // the closest available signal.)
-  const { role } = await getUserTeamRole(userId, player.teamId);
-  if (role !== 'PLAYER') {
-    throw Object.assign(new Error('Only a player-role team member may claim a roster record'), { statusCode: 403 });
-  }
-
-  if (player.userId && player.userId !== userId) {
-    throw Object.assign(
-      new Error('This player record is already linked to another account'),
-      { statusCode: 409 },
-    );
-  }
-
-  // One claimed player per user per team. Player.userId has no DB-level unique
-  // constraint, so the check and the claim run as one serializable
-  // transaction: a double-click can't claim two records, and two people can't
-  // both claim the same unclaimed one.
+  // Player.userId has no DB-level unique constraint, so the checks and the
+  // write run as one serializable transaction: two staff linking at once can't
+  // both claim the record or give one member two records.
   return runSerializable(async (tx) => {
     const current = await tx.player.findUniqueOrThrow({ where: { id: playerId }, select: { userId: true } });
-    if (current.userId && current.userId !== userId) {
-      throw Object.assign(new Error('This player record is already linked to another account'), { statusCode: 409 });
-    }
-    const existing = await tx.player.findFirst({
-      where: { userId, teamId: player.teamId, NOT: { id: playerId } },
-      select: { id: true },
-    });
-    if (existing) {
-      throw Object.assign(new Error('You already have a linked player record on this team'), { statusCode: 409 });
-    }
+    if (current.userId) throw new AppError(409, 'This player record is already linked to someone. Unlink it first.');
+    const existing = await tx.player.findFirst({ where: { userId, teamId, NOT: { id: playerId } }, select: { id: true } });
+    if (existing) throw new AppError(409, 'That member already has a player record on this team.');
     return tx.player.update({ where: { id: playerId }, data: { userId } });
   });
 }
 
-export async function unlinkPlayer(playerId: string, userId: string) {
+/** Staff unlink a roster record from whoever it's linked to. The record and its events stay. */
+export async function unlinkPlayerRecord(teamId: string, playerId: string) {
   const player = await prisma.player.findUnique({ where: { id: playerId } });
-  if (!player) throw Object.assign(new Error('Player not found'), { statusCode: 404 });
-  if (player.userId !== userId) throw Object.assign(new Error('This player record is not linked to your account'), { statusCode: 403 });
+  if (!player || player.teamId !== teamId) throw new AppError(404, 'Player not found.');
+  if (!player.userId) throw new AppError(409, "This player record isn't linked to anyone.");
   return prisma.player.update({ where: { id: playerId }, data: { userId: null } });
 }
 

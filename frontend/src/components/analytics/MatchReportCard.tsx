@@ -9,8 +9,8 @@ interface Props {
 
 function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border-t border-court-800 pt-4">
-      <h4 className="text-xs font-semibold text-chalk-500 mb-2">{title}</h4>
+    <div className="border-t border-grey-200 pt-4">
+      <h4 className="text-xs font-semibold text-grey-600 mb-2">{title}</h4>
       {children}
     </div>
   );
@@ -145,24 +145,26 @@ export default function MatchReportCard({ report }: Props) {
           )}
         </div>
 
-        {/* Top Performer */}
+        {/* Top Performer — omitted server-side (topPerformer: null) for anyone
+            but this team's staff, so a player viewing a teammate's match report
+            simply doesn't get this section. */}
         {topPerformer && (
           <ReportSection title="Top Performer">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-spike-500/20 border border-spike-500/30 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-gold-500/20 border border-gold-500/30 flex items-center justify-center shrink-0">
                 <span className="font-mono font-bold text-navy-700 text-sm">#{topPerformer.player.jerseyNumber}</span>
               </div>
               <div>
-                <div className="font-semibold text-chalk-100">
+                <div className="font-semibold text-grey-900">
                   {topPerformer.player.firstName} {topPerformer.player.lastName}
-                  <span className="text-chalk-500 text-xs ml-2">{POSITION_LABELS[topPerformer.player.position]}</span>
+                  <span className="text-grey-600 text-xs ml-2">{POSITION_LABELS[topPerformer.player.position]}</span>
                 </div>
-                <div className="text-xs text-chalk-400 mt-0.5 flex gap-3 flex-wrap">
-                  {topPerformer.kills > 0 && <span><span className="font-mono font-bold text-chalk-200">{topPerformer.kills}</span> Kills</span>}
-                  {topPerformer.aces > 0 && <span><span className="font-mono font-bold text-chalk-200">{topPerformer.aces}</span> Aces</span>}
-                  {topPerformer.blocks > 0 && <span><span className="font-mono font-bold text-chalk-200">{topPerformer.blocks}</span> Blocks</span>}
-                  {topPerformer.digs > 0 && <span><span className="font-mono font-bold text-chalk-200">{topPerformer.digs}</span> Digs</span>}
-                  {topPerformer.assists > 0 && <span><span className="font-mono font-bold text-chalk-200">{topPerformer.assists}</span> Assists</span>}
+                <div className="text-xs text-grey-600 mt-0.5 flex gap-3 flex-wrap">
+                  {topPerformer.kills > 0 && <span><span className="font-mono font-bold text-grey-900">{topPerformer.kills}</span> Kills</span>}
+                  {topPerformer.aces > 0 && <span><span className="font-mono font-bold text-grey-900">{topPerformer.aces}</span> Aces</span>}
+                  {topPerformer.blocks > 0 && <span><span className="font-mono font-bold text-grey-900">{topPerformer.blocks}</span> Blocks</span>}
+                  {topPerformer.digs > 0 && <span><span className="font-mono font-bold text-grey-900">{topPerformer.digs}</span> Digs</span>}
+                  {topPerformer.assists > 0 && <span><span className="font-mono font-bold text-grey-900">{topPerformer.assists}</span> Assists</span>}
                 </div>
               </div>
             </div>

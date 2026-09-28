@@ -131,6 +131,7 @@ Every change is meant to be proven on staging (a second Supabase project and a s
 - **Staging seed** (`npm run db:seed:staging`): pre-verified users for every role plus an outsider, two teams and two matches. It refuses any database that isn't the staging project.
 - **Smoke check** (`node backend/scripts/smoke.mjs <url>`): health, the CSP header and a 404 for an unknown team. With the `SMOKE_*` variables set, it also logs in as the staging seed users. `deploy.ps1` runs it after every deploy.
 - **Staging config** lives in `backend/.env.staging` (gitignored; see `backend/.env.staging.example`).
+- **Creating the staging site:** `netlify sites:create --disable-linking`, so the new site never becomes this folder's linked site.
 - **Row-level security:** every new table must enable RLS in its own migration. `rls.test.ts` fails CI if one doesn't.
 
 ## Architecture
@@ -166,7 +167,7 @@ From the repository root:
 .\deploy.ps1 -Target staging   # the staging site, using backend/.env.staging
 ```
 
-The Netlify build, function and redirect config is `netlify.toml` at the repo root. `deploy.ps1` builds the site locally and publishes it (`netlify deploy --prod --build`, plus `--site` for staging), with a deploy message built from the current git state. It first runs `npx prisma migrate status` against the target's database and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). A production deploy also refuses a dirty working tree or a branch other than `main` unless you pass `-Force`. After deploying, it runs the smoke check: read-only against production, logged in as the seed users on staging. It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
+The Netlify build, function and redirect config is `netlify.toml` at the repo root. `deploy.ps1` builds the site locally and publishes it (`netlify deploy --prod --build --site <id>`, always naming the target site), with a deploy message built from the current git state. It first runs `npx prisma migrate status` against the target's database and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). A production deploy also refuses a dirty working tree or a branch other than `main` unless you pass `-Force`. After deploying, it runs the smoke check: read-only against production, logged in as the seed users on staging. It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
 
 ## Security
 

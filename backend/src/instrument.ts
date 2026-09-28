@@ -3,6 +3,7 @@
 // index.ts makes this its first import for exactly that reason.
 import dotenv from 'dotenv';
 import * as Sentry from '@sentry/node';
+import { scrubUrl } from './lib/scrubUrl';
 
 // index.ts also calls dotenv.config(), but only after its own imports
 // evaluate; this file runs first, so it self-loads env the same way
@@ -33,12 +34,15 @@ dotenv.config();
 //
 // So the query string is dropped outright, here and on spans. The path alone
 // is what makes an error diagnosable; the values after "?" only ever cost us.
+// Two path segments are credentials too (a join code, an invitation token);
+// lib/scrubUrl.ts folds those.
 //
 // The type below is structural, not Sentry.ErrorEvent | Sentry.TransactionEvent: @sentry/node
 // re-exports ErrorEvent but not TransactionEvent, and reaching past it into
 // @sentry/core would mean depending directly on a transitive package. These
 // are the only fields touched, so describing just them costs nothing.
 type ScrubbableEvent = {
+  transaction?: string;
   request?: {
     url?: string;
     data?: unknown;
@@ -56,7 +60,7 @@ function scrubRequest<T extends ScrubbableEvent>(event: T): T {
     delete request.data;
     delete request.cookies;
     delete request.query_string;
-    if (request.url) request.url = request.url.split('?')[0];
+    if (request.url) request.url = scrubUrl(request.url);
 
     const headers = request.headers;
     if (headers) {
@@ -67,13 +71,16 @@ function scrubRequest<T extends ScrubbableEvent>(event: T): T {
     }
   }
 
+  // Without a matched route the transaction is named after the raw path.
+  if (event.transaction) event.transaction = scrubUrl(event.transaction);
+
   // Spans carry their own copy: processSegmentSpan writes the same unfiltered
   // URL to url.full and the query to url.query, so clearing event.request
   // alone would leave the address sitting in the trace.
   for (const span of event.spans ?? []) {
     const data = span.data;
     if (!data) continue;
-    if (typeof data['url.full'] === 'string') data['url.full'] = data['url.full'].split('?')[0];
+    if (typeof data['url.full'] === 'string') data['url.full'] = scrubUrl(data['url.full']);
     delete data['url.query'];
   }
 
@@ -84,7 +91,7 @@ function scrubRequest<T extends ScrubbableEvent>(event: T): T {
     const data = crumb.data;
     if (!data) continue;
     for (const key of ['url', 'from', 'to']) {
-      if (typeof data[key] === 'string') data[key] = (data[key] as string).split('?')[0].split('#')[0];
+      if (typeof data[key] === 'string') data[key] = scrubUrl(data[key] as string);
     }
     delete data['http.query'];
     delete data['http.fragment'];

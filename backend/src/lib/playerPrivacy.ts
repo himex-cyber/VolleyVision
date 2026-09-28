@@ -1,0 +1,42 @@
+// Per-player data rule (Karlos, 28 Sept): a player's individual numbers go only
+// to that team's staff (TRACK_MATCH), a global admin, and the player themself.
+// Everyone else gets team totals plus their own row. Privacy by omission: the
+// rows are left out server-side, not hidden in the UI. Jersey numbers aren't
+// anonymous (every member can read the roster), so "hiding" a player means
+// removing them entirely. Players can be minors.
+//
+// Callers pass `isStaff` already resolved (TRACK_MATCH on the team, or admin),
+// so this stays pure and testable without Prisma.
+
+type WithUser = { userId: string | null };
+
+const isCaller = (userId: string | null | undefined, callerId: string | null) =>
+  callerId != null && userId === callerId;
+
+/** Players whose individual stats this caller may see, with userId stripped. */
+export function visiblePlayers<T extends WithUser>(players: T[], isStaff: boolean, callerId: string | null): Omit<T, 'userId'>[] {
+  return players
+    .filter((p) => isStaff || isCaller(p.userId, callerId))
+    .map(({ userId: _userId, ...rest }) => rest);
+}
+
+type EventWithPlayer = {
+  playerId: string | null;
+  notes: string | null;
+  isOpponentEvent: boolean;
+  player: (WithUser & Record<string, unknown>) | null;
+};
+
+/**
+ * The match event log for this caller. Staff see it whole. For anyone else an
+ * own-team event by someone other than the caller keeps its type, set, zone,
+ * rotation and time but loses who did it and the coach's note; the caller's own
+ * events and opponent events are unchanged. player.userId is always stripped.
+ */
+export function redactEvents<T extends EventWithPlayer>(events: T[], isStaff: boolean, callerId: string | null) {
+  return events.map((e) => {
+    const player = e.player ? (({ userId: _userId, ...rest }) => rest)(e.player) : null;
+    if (isStaff || e.isOpponentEvent || isCaller(e.player?.userId, callerId)) return { ...e, player };
+    return { ...e, playerId: null, player: null, notes: null };
+  });
+}

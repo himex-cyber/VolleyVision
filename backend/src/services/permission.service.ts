@@ -81,6 +81,16 @@ export async function canModerateChannel(userId: string, teamId: string): Promis
 }
 
 /**
+ * Whether the caller sees every player's individual numbers on a team: its
+ * staff (TRACK_MATCH) or a global admin. Everyone else gets their own row only
+ * (lib/playerPrivacy.ts). Callers have already passed the visibility guard.
+ */
+export async function seesEveryPlayer(userId: string | null, teamId: string): Promise<boolean> {
+  if (!userId) return false;
+  return (await hasTeamPermission(userId, teamId, Permission.TRACK_MATCH)) || isGlobalAdmin(userId);
+}
+
+/**
  * Global ADMIN, read from the database. Never trust the role claim in the JWT:
  * tokens live 7 days, so a demoted admin would keep admin rights until expiry.
  */
