@@ -13,6 +13,13 @@ staff and the player themself. That was true only on the player stats page.
 The team and match dashboards, the match report and the event log still sent
 every player's numbers to every member. v9.8.0 completes the rule there.
 
+- **Court zones and heat maps.** The match and team dashboards now show where
+  on the court things happen: tap Attack, Serve, Pass or Defence to see each
+  zone's count, attempts and efficiency on a 4 3 2 / 5 6 1 court. Coaches and
+  the player themself also get a player's own map on the player page. Every map
+  says how many actions it's based on, since picking a zone is optional while
+  tracking. The match report's "attacks originated from Zone N" line links to
+  the map.
 - **Each player's numbers are theirs and their coaches'.** Players and viewers
   see the team's totals plus only their own stats. The team and match
   dashboards show them a "Your stats" card instead of the leaderboards and the

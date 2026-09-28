@@ -128,9 +128,11 @@ interface Props {
   data: ZoneMap;
   title?: string;
   defaultCategory?: Category;
+  /** Whether the viewer tracks matches here: only they can act on the empty-state advice. */
+  canTrack?: boolean;
 }
 
-export default function CourtHeatMap({ data, title, defaultCategory = 'attack' }: Props) {
+export default function CourtHeatMap({ data, title, defaultCategory = 'attack', canTrack = false }: Props) {
   const [category, setCategory] = useState<Category>(defaultCategory);
   const cat = CATEGORIES.find((c) => c.key === category)!;
   const { tagged, total } = data.coverage;
@@ -165,7 +167,9 @@ export default function CourtHeatMap({ data, title, defaultCategory = 'attack' }
 
       {tagged === 0 ? (
         <p className="text-sm text-grey-600 text-center py-6">
-          No zones tagged yet. Pick a zone when you record an action and this map fills in.
+          {canTrack
+            ? 'No zones tagged yet. Pick a zone when you record an action and this map fills in.'
+            : 'No zones tagged yet. This map fills in once your coaches pick zones while tracking.'}
         </p>
       ) : (
         <div className="space-y-2 max-w-sm mx-auto">
@@ -178,9 +182,11 @@ export default function CourtHeatMap({ data, title, defaultCategory = 'attack' }
             ))}
           </div>
           <p className={clsx('text-xs text-center', lowCoverage ? 'text-warning-strong font-medium' : 'text-grey-600')}>
-            {lowCoverage
-              ? `Based on the ${tagged} actions that have a zone.`
-              : `Based on ${tagged} of ${total} actions (${Math.round((tagged / total) * 100)}%) that have a zone.`}
+            {/* Always the full ratio: a map built from 5 of 80 attacks must say so. */}
+            Based on {tagged} of {total} actions ({Math.round((tagged / total) * 100)}%) that have a zone.
+            {lowCoverage && (canTrack
+              ? ' Most actions have no zone yet, so pick one while tracking to fill this in.'
+              : ' Most actions have no zone yet, so treat this as a partial picture.')}
           </p>
         </div>
       )}

@@ -16,6 +16,10 @@ export default function MatchDashboardPage() {
   const canTrack = useHasPermission(data?.match.teamId ?? '', 'TRACK_MATCH');
   // Staff open any player's stats; a player opens only their own.
   const myPlayerIds = useMyPlayerIds(!canTrack);
+  // The server decides who gets every row (lib/playerPrivacy): a global admin
+  // who isn't a member has no TRACK_MATCH here but still gets them all. Any row
+  // that isn't the caller's own means this is the full staff view.
+  const fullView = canTrack || (data?.playerStats ?? []).some((r) => !myPlayerIds.has(r.player.id));
 
   if (isLoading) return <p className="text-grey-600">Loading analytics...</p>;
   if (isError || !data) return <p className="text-error">Couldn't load match analytics.</p>;
@@ -100,7 +104,7 @@ export default function MatchDashboardPage() {
         ) : zonesError || !zonesData ? (
           <p className="text-sm text-error">Couldn't load court zones. Try refreshing the page.</p>
         ) : (
-          <CourtHeatMap data={zonesData} title="Court zones" />
+          <CourtHeatMap data={zonesData} title="Court zones" canTrack={canTrack} />
         )}
       </section>
 
@@ -129,7 +133,7 @@ export default function MatchDashboardPage() {
 
       {/* Non-staff get 0 or 1 playerStats rows (their own) from the server —
           the full roster table is staff-only; a player sees just their own line. */}
-      {canTrack ? (
+      {fullView ? (
         <section>
           <h2 className="text-lg font-semibold text-grey-900 mb-3">Player Statistics</h2>
           <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={(id) => canTrack || myPlayerIds.has(id)} />

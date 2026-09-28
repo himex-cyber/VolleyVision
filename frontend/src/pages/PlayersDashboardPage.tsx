@@ -145,7 +145,7 @@ export default function PlayerDashboardPage() {
         ) : zones.isError || !zones.data ? (
           <p className="text-sm text-error">Couldn't load court zones. Try refreshing the page.</p>
         ) : (
-          <CourtHeatMap data={zones.data} title="Court zones" />
+          <CourtHeatMap data={zones.data} title="Court zones" canTrack={canTrack} />
         )}
       </section>
 

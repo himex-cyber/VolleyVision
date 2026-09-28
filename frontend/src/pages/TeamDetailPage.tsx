@@ -115,6 +115,7 @@ function LinkMemberSelect({
   return (
     <>
       <select
+        aria-label="Team member to link to this player record"
         className="input text-sm min-h-[44px] flex-1 min-w-[160px]"
         value={selected}
         onChange={(e) => setSelected(e.target.value)}

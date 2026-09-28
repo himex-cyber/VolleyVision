@@ -19,6 +19,10 @@ export default function TeamDashboardPage() {
   const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
   const myPlayerIds = useMyPlayerIds(!canTrack);
   const canOpenPlayer = (playerId: string) => canTrack || myPlayerIds.has(playerId);
+  // The server decides who gets every row (lib/playerPrivacy): a global admin
+  // who isn't a member has no TRACK_MATCH here but still gets them all. Any row
+  // that isn't the caller's own means this is the full staff view.
+  const fullView = canTrack || (data?.playerStats ?? []).some((r) => !myPlayerIds.has(r.player.id));
 
   const insights =
   trends.data
@@ -56,7 +60,7 @@ export default function TeamDashboardPage() {
         ) : zones.isError || !zones.data ? (
           <p className="text-sm text-error">Couldn't load court zones. Try refreshing the page.</p>
         ) : (
-          <CourtHeatMap data={zones.data} title="Court zones" />
+          <CourtHeatMap data={zones.data} title="Court zones" canTrack={canTrack} />
         )}
       </section>
 
@@ -102,7 +106,7 @@ export default function TeamDashboardPage() {
       {/* Individual player breakdowns are staff-only — the server now sends
           non-staff viewers 0 or 1 playerStats rows (their own), so leaderboards
           and cross-player insights have nothing meaningful to show them. */}
-      {canTrack && (
+      {fullView && (
         <div className="grid md:grid-cols-2 gap-4">
           <StatLeaderboardChart
             title="Top Killers"
@@ -144,7 +148,7 @@ export default function TeamDashboardPage() {
 
       <CoachInsights insights={insights} />
 
-      {canTrack ? (
+      {fullView ? (
         <>
           <PlayerInsights players={data.playerStats} />
           <section>
