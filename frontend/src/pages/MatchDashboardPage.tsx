@@ -1,13 +1,15 @@
 import { useParams } from 'react-router-dom';
-import { useMatchAnalytics, useMatchReport, useHasPermission, useMyPlayerIds } from '../hooks';
+import { useMatchAnalytics, useMatchReport, useMatchZones, useHasPermission, useMyPlayerIds } from '../hooks';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import MatchReportCard from '../components/analytics/MatchReportCard';
+import CourtHeatMap from '../components/analytics/CourtHeatMap';
 
 export default function MatchDashboardPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const { data, isLoading, isError } = useMatchAnalytics(matchId!);
   const { data: reportData } = useMatchReport(matchId!);
+  const { data: zonesData, isLoading: zonesLoading, isError: zonesError } = useMatchZones(matchId!);
   // teamId is only known once the match loads; the hook stays unconditional and
   // re-runs when it resolves. Track is offered only to those who can track a
   // live match (players never can — Iteration 3 Task 6).
@@ -91,6 +93,16 @@ export default function MatchDashboardPage() {
       {reportData && <MatchReportCard report={reportData} />}
 
       <StatsCards stats={data.teamStats} />
+
+      <section id="zones">
+        {zonesLoading ? (
+          <p className="text-sm text-grey-600">Loading court zones…</p>
+        ) : zonesError || !zonesData ? (
+          <p className="text-sm text-error">Couldn't load court zones. Try refreshing the page.</p>
+        ) : (
+          <CourtHeatMap data={zonesData} title="Court zones" />
+        )}
+      </section>
 
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Set Breakdown</h2>
