@@ -2,6 +2,25 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.10.0 — unreleased (in progress)
+
+Phase 5 of the rebuild roadmap: the Android app. Not released yet; the Android
+project itself is added once Android Studio and the Capacitor packages are set
+up. Done so far:
+
+- **The API accepts the Android app.** Besides the website, the API now answers
+  the exact extra origins set in CORS_EXTRA_ORIGINS (the app runs from
+  https://localhost). Sign-in is a bearer token, never a cookie, so this opens no
+  session to anything else.
+- **The app knows it's the app.** It sends its version with every request
+  (X-Client: android/9.10.0), which shows in error reports, so a future release
+  can ask people on very old builds to update.
+- **Emulator and production builds.** `npm run build:native:local` targets the
+  local stack from the Android emulator, `build:native:prod` targets production.
+  Each gets its own security policy; the website's is unchanged.
+- **A release safety check.** `scripts/check-android-prod.mjs` fails a release
+  build that could still talk to plain HTTP or load remote code.
+
 ## v9.9.0 — 2026-09-29
 
 Phase 4.5 of the rebuild roadmap: per-team roles. No migration.
