@@ -588,6 +588,11 @@ model Event {
 
   recordedAt  DateTime  @default(now()) @db.Timestamptz(3) @map("recorded_at")
 
+  // Offline queue (6.1, v9.11.0): the device's idempotency key for this tap.
+  // A resend of the same key returns the existing row instead of scoring twice.
+  // Null for the web and v9.10.0 apps, which send no key; nulls never collide.
+  clientKey   String?   @map("client_key")
+
   // Indexes support the most common Phase 2 query patterns:
   //   - "all events for player X in match Y"
   //   - "all kills in set 3"
@@ -600,6 +605,10 @@ model Event {
   @@index([matchId, rotationNumber])
   @@index([trainingSessionId])
   @@index([recordedAt])
+  @@unique([matchId, clientKey])
+  // recordOneEvent's latest-event lookup and the replay (6.3): without it a
+  // match syncing late can walk the global recordedAt index.
+  @@index([matchId, recordedAt])
 
   @@map("events")
 }

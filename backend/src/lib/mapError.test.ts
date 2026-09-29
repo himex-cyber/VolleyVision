@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { mapErrorToResponse } from './mapError';
+import { AppError } from '../middleware/errorHandler';
 
 describe('mapErrorToResponse', () => {
   it('maps a statusCode-carrying error, message shown for 4xx', () => {
@@ -14,6 +15,18 @@ describe('mapErrorToResponse', () => {
       status: 403,
       body: { error: 'Email not verified', code: 'EMAIL_NOT_VERIFIED' },
     });
+  });
+
+  it('marks a serialization conflict as retryable (6.5), and nothing else', () => {
+    const conflict = new AppError(409, 'Someone else changed this at the same moment. Please try again.', 'SERIALIZATION_CONFLICT');
+    assert.deepEqual(mapErrorToResponse(conflict), {
+      status: 409,
+      body: { error: 'Someone else changed this at the same moment. Please try again.', code: 'SERIALIZATION_CONFLICT', retryable: true },
+    });
+    const other = new AppError(409, 'This player record is already linked to someone. Unlink it first.');
+    assert.equal('retryable' in mapErrorToResponse(other).body, false);
+    const coded = new AppError(403, 'Verify your email.', 'EMAIL_NOT_VERIFIED');
+    assert.equal('retryable' in mapErrorToResponse(coded).body, false);
   });
 
   it('maps Prisma P2002 to a generic 409', () => {

@@ -127,8 +127,9 @@ export function requireMatchPermission(permission: Permission, paramName = 'id')
 export function requireEventPermission(permission: Permission) {
   return asyncHandler(async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) { res.status(401).json({ error: 'Authentication required.' }); return; }
-    const matchId = req.body.matchId ?? req.params.matchId;
-    if (!matchId) { res.status(400).json({ error: 'matchId is required.' }); return; }
+    const matchId = req.body?.matchId ?? req.params.matchId;
+    // A non-string (an object, a number) used to reach Prisma as a 500.
+    if (!matchId || typeof matchId !== 'string') { res.status(400).json({ error: 'matchId is required.' }); return; }
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (!match) { res.status(404).json({ error: 'Match not found.' }); return; }
     const role = await getVisibleTeamRole(req.user.userId, match.teamId, 'Match not found.');

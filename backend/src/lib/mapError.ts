@@ -3,7 +3,9 @@
 // pulls in lib/prisma (see lib/rolePermissions.ts for why that split exists).
 export interface ErrorResponse {
   status: number;
-  body: { error: string; code?: string };
+  // retryable (6.5): only a serialization conflict. The offline queue resends
+  // those; any other 409 is a real refusal it must show, not retry forever.
+  body: { error: string; code?: string; retryable?: boolean };
 }
 
 export function mapErrorToResponse(err: Error): ErrorResponse {
@@ -16,7 +18,11 @@ export function mapErrorToResponse(err: Error): ErrorResponse {
   if (typeof anyErr.statusCode === 'number') {
     return {
       status: anyErr.statusCode,
-      body: { error: err.message, ...(anyErr.code ? { code: anyErr.code } : {}) },
+      body: {
+        error: err.message,
+        ...(anyErr.code ? { code: anyErr.code } : {}),
+        ...(anyErr.code === 'SERIALIZATION_CONFLICT' ? { retryable: true } : {}),
+      },
     };
   }
 

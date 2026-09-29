@@ -3,102 +3,82 @@ import { MatchStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { checkSetCompletion, loadScoreState } from '../lib/scoring';
-import { scoringTeam } from '../lib/scoringRules';
-import { applyEventRemoval } from '../services/matchState.service';
 import { resolveUndoTarget, reverseAdjustmentScore, reverseCompletingAction } from '../lib/undo';
 import { redactEvents } from '../lib/playerPrivacy';
 import { seesEveryPlayer } from '../services/permission.service';
+import { recordOneEvent, removeEventLocked } from '../services/eventRecording.service';
+import { parseEventInput } from '../lib/eventInput';
+import { idempotencyKey, normalizeIdempotencyKey } from '../lib/idempotencyKey';
 
 export async function recordEvent(req: Request, res: Response, next: NextFunction) {
   try {
-    const {
-      matchId, playerId, eventType, setNumber,
-      rallyNumber, courtZone, rotationNumber, notes,
-      isOpponentEvent, opponentJerseyNumber,
-    } = req.body;
+    const { event, duplicate } = await recordOneEvent(parseEventInput(req.body), idempotencyKey(req));
+    // A duplicate is 200, not 201 like chat's: nothing new was created.
+    res.status(duplicate ? 200 : 201).json(event);
+  } catch (err) {
+    next(err);
+  }
+}
 
-    const isOpponent = Boolean(isOpponentEvent);
+// A whole offline set can be several hundred taps; one POST each would hit the
+// per-user event limit, so a device flushes its queue in batches (6.4). Each
+// item is its own transaction on the match's row lock (6-8 round trips, plus a
+// replay if out of order): 50 took 2.3 s against a local database, which
+// Supabase's latency could push toward Netlify's 10 s function timeout, so 20.
+export const MAX_EVENT_BATCH = 20;
 
-    // ── Validation — gated on isOpponentEvent ─────────────────────────────────
-    // Normal (own-player) events: identical requirement to before this change.
-    // Opponent events: playerId must be absent/null; opponentJerseyNumber is optional.
-    if (!matchId || !eventType || !setNumber) {
-      throw new AppError(400, 'matchId, eventType, and setNumber are required.');
-    }
-    if (!isOpponent && !playerId) {
-      throw new AppError(400, 'playerId is required for non-opponent events.');
-    }
-    if (isOpponent && playerId) {
-      throw new AppError(400, 'playerId must not be set for opponent events.');
-    }
+type BatchResult =
+  | { clientKey: string; status: 'created' | 'duplicate'; event: unknown }
+  | { clientKey: string; status: 'rejected'; error: string }
+  | { clientKey: string; status: 'retry' };
 
-    // M3: playerId came from the request body with no check that the player
-    // actually belongs to the match's team — any team member with TRACK_MATCH
-    // could attribute a stat to an arbitrary player on an unrelated roster.
-    // A player belongs via their home team (Player.teamId) or a PlayerTeamLink.
-    if (!isOpponent && playerId) {
-      const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
-      if (!match) throw new AppError(404, 'Match not found.');
-      const eligible = await prisma.player.findFirst({
-        where: {
-          id: playerId,
-          OR: [{ teamId: match.teamId }, { teamLinks: { some: { teamId: match.teamId } } }],
-        },
-        select: { id: true },
-      });
-      if (!eligible) throw new AppError(400, 'Player does not belong to this match\'s team.');
+/**
+ * POST /api/v1/events/batch — { matchId, events: [...] }, each item a
+ * POST /events body plus a required clientKey and optional recordedAt. The
+ * guard checked TRACK_MATCH on the top-level matchId, so every item must be
+ * for that match; a mismatch refuses the whole request before any write.
+ *
+ * Items run in order. A refused item (a 4xx) is reported and the rest carry
+ * on; a retryable conflict (none today: recording waits on a row lock rather
+ * than aborting, but the contract and the client keep it) stops there and
+ * marks it and every later item `retry`, because order matters; anything
+ * else fails the whole request with a 500, which the device resends
+ * (idempotency makes that safe).
+ */
+export async function recordEventBatch(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { matchId, events } = req.body ?? {};
+    if (typeof matchId !== 'string' || !Array.isArray(events) || events.length < 1 || events.length > MAX_EVENT_BATCH) {
+      throw new AppError(400, `Send between 1 and ${MAX_EVENT_BATCH} events for one match.`);
     }
-
-    if (courtZone != null) {
-      const zone = Number(courtZone);
-      if (!Number.isInteger(zone) || zone < 1 || zone > 6) {
-        throw new AppError(400, 'Court zone must be between 1 and 6.');
+    const keys = events.map((item) => {
+      if (typeof item !== 'object' || item === null || item.matchId !== matchId) {
+        throw new AppError(400, 'Every event in a batch must be for the same match.');
       }
-    }
-
-    if (rotationNumber != null) {
-      const rot = Number(rotationNumber);
-      if (!Number.isInteger(rot) || rot < 1 || rot > 6) {
-        throw new AppError(400, 'Rotation number must be between 1 and 6.');
-      }
-    }
-
-    const event = await prisma.event.create({
-      data: {
-        matchId,
-        playerId:            isOpponent ? null : playerId,
-        eventType,
-        setNumber:           Number(setNumber),
-        rallyNumber:         rallyNumber    != null ? Number(rallyNumber)    : null,
-        courtZone:           courtZone      != null ? Number(courtZone)      : null,
-        rotationNumber:      rotationNumber != null ? Number(rotationNumber) : null,
-        notes:               notes || null,
-        isOpponentEvent:     isOpponent,
-        opponentJerseyNumber:isOpponent && opponentJerseyNumber != null
-                               ? Number(opponentJerseyNumber)
-                               : null,
-      },
-      include: { player: { select: { firstName: true, lastName: true, jerseyNumber: true } } },
+      const key = normalizeIdempotencyKey(item.clientKey);
+      if (!key) throw new AppError(400, 'Every event in a batch needs a clientKey.');
+      return key;
     });
 
-    const team = scoringTeam(eventType, isOpponent);
-    if (team === 'home' || team === 'away') {
-      await prisma.match.update({
-        where: { id: matchId },
-        data: team === 'home' ? { homeScore: { increment: 1 } } : { awayScore: { increment: 1 } },
-      });
-
-      // Mark the event that closed the set, for the same reason updateScore
-      // marks the adjustment: completion zeroes the running score, so an undo
-      // under manualScoreOverride (which can't replay) would otherwise reverse
-      // against the wrong baseline. See lib/undo.ts.
-      const completedSet = await checkSetCompletion(matchId);
-      if (completedSet) {
-        await prisma.event.update({ where: { id: event.id }, data: { completedSet: true } });
+    const results: BatchResult[] = [];
+    for (let i = 0; i < events.length; i++) {
+      const clientKey = keys[i];
+      try {
+        const { event, duplicate } = await recordOneEvent(parseEventInput(events[i]), clientKey);
+        results.push({ clientKey, status: duplicate ? 'duplicate' : 'created', event });
+      } catch (err) {
+        if (err instanceof AppError && err.code === 'SERIALIZATION_CONFLICT') {
+          for (const k of keys.slice(i)) results.push({ clientKey: k, status: 'retry' });
+          break;
+        }
+        if (err instanceof AppError && err.statusCode >= 400 && err.statusCode < 500) {
+          results.push({ clientKey, status: 'rejected', error: err.message });
+          continue;
+        }
+        throw err;
       }
     }
-
-    res.status(201).json(event);
+    res.json({ results });
   } catch (err) {
     next(err);
   }
@@ -197,9 +177,7 @@ export async function deleteLastEvent(req: Request, res: Response, next: NextFun
     }
 
     const event = latestEvent!;
-    await prisma.event.delete({ where: { id: event.id } });
-    // matchId is guaranteed here (queried by matchId); guard for the nullable type.
-    if (event.matchId) await applyEventRemoval(event.matchId, event);
+    await removeEventLocked(event);
     res.json({ deleted: event.id, kind: 'event' });
   } catch (err) {
     next(err);
@@ -211,9 +189,9 @@ export async function deleteEvent(req: Request, res: Response, next: NextFunctio
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) throw new AppError(404, 'Event not found.');
-    await prisma.event.delete({ where: { id: event.id } });
-    // Only match events affect match state; training events (matchId null) don't.
-    if (event.matchId) await applyEventRemoval(event.matchId, event);
+    // A repeat delete racing this one gets P2025, mapped to 404: the queue
+    // treats that as done.
+    await removeEventLocked(event);
     res.status(204).send();
   } catch (err) {
     next(err);

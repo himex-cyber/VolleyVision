@@ -2,6 +2,8 @@
 // bridge sets window.Capacitor before our code loads, so this needs no import.
 // Never import @capacitor/* statically from code on the web entry path: the
 // web build must not pull it in. Dynamic-import it inside `if (isNative())`.
+import { confirmLeave } from './leaveGuard';
+
 export const isNative = (): boolean =>
   (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() === true;
 
@@ -21,6 +23,8 @@ export async function initNative(): Promise<void> {
       openMenu.click();
       return;
     }
+    // The tracker asks first while taps are waiting to send (6.9).
+    if (!confirmLeave()) return;
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
     if (idx > 0) window.history.back();
     else void App.exitApp();

@@ -1,9 +1,6 @@
-// Pure score-replay engine shared by matchState.service and its tests.
-//
-// Rebuilds a match's score state from the full chronological timeline of
-// scoring events AND manual score adjustments. Keeping adjustments in the
-// timeline is what makes manual corrections survive undo/delete operations —
-// recalculation no longer replays events alone.
+// Copy of backend/src/lib/scoreReplay.ts, tested there (scoreReplay.test.ts
+// fails if this drifts from the marker line down). The tracker continues the
+// server's score with the taps still queued on the device (6.8).
 
 import { scoringTeam } from './scoringRules';
 

@@ -4,6 +4,46 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 
 ## v9.11.0 — unreleased
 
+Phases 6.0 and 6 of the rebuild roadmap: carry-over fixes, then tracking that
+keeps working with no signal. One migration (`20260929010857_event_client_key`).
+
+**Tracking offline**
+- **Tracking keeps working with no signal.** Every tap is saved on the device
+  first and sent in order when the connection is back, each exactly once, even
+  if the app is closed or the phone restarts in between. The score on the
+  tracker includes taps still waiting, and sets close as they would on the
+  server.
+- **You can see what's saved.** A badge on the tracker reads "All saved",
+  "Saving… (N)", "Offline — N waiting" or "N not saved". Taps still waiting
+  are marked in Recent Events. A tap the server refuses stays on the tracker
+  with its reason, and you can Retry or Discard it (or Discard all).
+- **Undo works offline** for this device's own taps. Undoing an older event
+  from another device or before this session needs a connection.
+- **What needs a connection:** manual score changes, Reset Set and Reset
+  Match. They're hidden while offline, and they wait until your taps have
+  finished saving.
+- **Leaving with taps waiting asks first** (Back to Matches, the match tabs,
+  View all, Android's Back, closing the tab, signing out). Nothing is lost if
+  you leave: the taps keep sending in the background.
+- **Opening the app with no signal** keeps you signed in and opens a match you
+  tracked recently, roster included. Only a signed-out or expired session
+  signs you out. The cached name, role and rosters are removed on sign-out.
+- **"Someone else is also tracking this match"** shows when another device
+  records on the same match.
+- **The tracker follows the set being played** instead of starting at Set 1.
+- **Older app versions (v9.10.0) keep working** but don't save offline; the
+  new app does.
+
+**Scoring**
+- Reset Set now switches the match to manual scoring, like Reset Match, so a
+  later undo or a late offline tap adjusts the running score instead of
+  replaying the set back to its old score.
+- A tap that arrives after the match has finished keeps the stat but adds no
+  point.
+- The scoreboard fits at 360px: long team names truncate, and the HOME/AWAY
+  chip is hidden on small screens.
+
+**Player records**
 - **Only players can be linked to a player record.** Whoever holds a link sees
   that record's own stats, so a coach can now link a record only to a team
   member with the Player role. The roster's Link picker lists only them.
@@ -13,6 +53,21 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
   `UNLINK_PLAYER`), with the team and the account linked or unlinked.
 - **Two ownership transfers at once:** the second now gets "Ownership already
   changed. Refresh and try again." instead of a generic conflict.
+
+**API** (additive; installed apps keep working)
+- `POST /events/batch`: `{ matchId, events }`, 1–20 events, each with a
+  `clientKey` and optional `recordedAt`; per-event result `created`,
+  `duplicate`, `rejected` or `retry`. Rate limit 600 per 10 minutes per user.
+- `POST /events` accepts an `Idempotency-Key` header and `recordedAt`; a repeat
+  of the same key answers 200 with the original event. Events carry
+  `clientKey` (staff only).
+- A 409 from a serialization conflict carries `code: SERIALIZATION_CONFLICT`
+  and `retryable: true`.
+- Stricter input: an unknown event type, a set number outside 1–5, notes over
+  500 characters, a bad rally number or NUL characters answer 400 instead of
+  a 500. An opponent jersey number that isn't one is dropped, not refused.
+- Recording and removing events on a match now wait their turn (a lock on the
+  match), so taps from two devices can't overwrite each other's points.
 
 ## v9.10.0 — 2026-09-29
 

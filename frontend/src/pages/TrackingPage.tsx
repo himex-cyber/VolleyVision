@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import axios from 'axios';
 import type { CSSProperties } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { useMatch, useEvents, useRecordEvent, useUndoEvent, useUpdateScore, useResetSetScore, useResetMatch, useHasPermission } from '../hooks';
+import { useMatch, useEvents, useRecordEvent, useUndoEvent, useUpdateScore, useResetSetScore, useResetMatch, useTeamRole, useEventQueue } from '../hooks';
 import { useSyncTrackWatchRoute } from '../hooks/useSyncTrackWatchRoute';
 import type { EventType, Player, Position } from '../types';
 import { EVENT_META, POSITION_LABELS, POSITION_FULL_LABELS } from '../types';
@@ -12,6 +13,14 @@ import CourtZoneSelector from '../components/tracking/CourtZoneSelector';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import LiveScoreboard from '../components/scoreboard/LiveScoreboard';
 import type { ScoreSide } from '../components/scoreboard/LiveScoreboard';
+import SyncBadge from '../components/tracking/SyncBadge';
+import { QueueFullError } from '../lib/eventQueue';
+import { provisionalScore, queueSummary } from '../lib/eventQueueCore';
+import type { QueueItem } from '../lib/eventQueueCore';
+import { confirmLeave, leaveWarning, setLeaveGuard } from '../lib/leaveGuard';
+
+// Another device's taps inside this window mean two people are tracking (6.11).
+const OTHER_DEVICE_WINDOW_MS = 2 * 60 * 1000;
 
 // Event buttons grouped by category for the tablet layout
 const CATEGORIES = [
@@ -41,8 +50,10 @@ const CATEGORIES = [
   },
 ];
 
-function getMeta(type: EventType) {
-  return EVENT_META.find((m) => m.type === type)!;
+function getMeta(type: EventType): EventMeta {
+  // A queued tap comes from device storage, possibly written by another app
+  // build: an unknown type shows as itself rather than crashing the tracker.
+  return EVENT_META.find((m) => m.type === type) ?? { type, label: type, outcome: 'neutral', category: 'attack' } as EventMeta;
 }
 
 // Passing grades 2 and 1 are separate values the analytics depend on, but to a
@@ -62,11 +73,9 @@ const SPLIT_PASS_HALVES = [
 
 function SplitPassButton({
   justRecorded,
-  disabled,
   onRecord,
 }: {
   justRecorded: string | null;
-  disabled: boolean;
   onRecord: (type: EventType) => void;
 }) {
   return (
@@ -75,7 +84,6 @@ function SplitPassButton({
         <button
           key={type}
           onClick={() => onRecord(type)}
-          disabled={disabled}
           aria-label={`Pass grade ${grade}`}
           className={clsx(
             'btn-event-split-half',
@@ -116,23 +124,33 @@ type FlashState = { text: string; ok: boolean } | null;
 
 export default function TrackingPage() {
   const { matchId } = useParams<{ matchId: string }>();
-  const { data: match, isLoading } = useMatch(matchId!);
+  // offline: the last copy of the match stays on the device, so a cold start
+  // with no signal still shows the roster (6.6a).
+  const { data: cachedOrLive, isLoading, error: matchError } = useMatch(matchId!, { offline: true });
+  // The server said no (403/404): never keep showing the device's old copy.
+  const refused = axios.isAxiosError(matchError) && [403, 404].includes(matchError.response?.status ?? 0);
+  const match = refused ? undefined : cachedOrLive;
   const { data: events } = useEvents(matchId!);
   const recordEvent = useRecordEvent(matchId!);
-  const undoEvent = useUndoEvent(matchId!);
+  const { undo, isPending: undoPending } = useUndoEvent(matchId!);
+  const queue = useEventQueue(matchId!);
 
   const updateScore = useUpdateScore(matchId!);
   const resetSetScore = useResetSetScore(matchId!);
   const resetMatch = useResetMatch(matchId!);
   // Track is offered only to those who can track a live match (players never
   // can — Iteration 3 Task 6); the shared header uses this to render the Track tab.
-  const canTrack = useHasPermission(match?.teamId ?? '', 'TRACK_MATCH');
-  // Flipping the Coach/Player toggle mid-session moves you to the matching
-  // route — a player-mode user never sits on the live input screen.
-  useSyncTrackWatchRoute(matchId, match?.status, canTrack);
+  const { data: role } = useTeamRole(match?.teamId ?? '');
+  const canTrack = role?.permissions.includes('TRACK_MATCH') ?? false;
+  // A role change mid-session moves you to the matching route. Not while the
+  // role is unknown: offline, it may never load.
+  useSyncTrackWatchRoute(matchId, match?.status, canTrack, role !== undefined);
 
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-  const [currentSet, setCurrentSet] = useState(1);
+  // The set the tracker points at: the one being played (from the server, or
+  // the provisional state while taps are queued, 6.10), unless the coach has
+  // jumped to another with the set buttons.
+  const [selectedSet, setSelectedSet] = useState<number | null>(null);
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
   const [selectedRotation, setSelectedRotation] = useState<number | null>(null);
   const [keepZone, setKeepZone] = useState(true);
@@ -158,7 +176,53 @@ export default function TrackingPage() {
     setTimeout(() => setFlash(null), 1400);
   }, []);
 
-  async function handleRecord(eventType: EventType) {
+  // The score, set and sets won shown on the board: the server's, plus taps
+  // still queued on this device (6.8). Provisional until they're confirmed.
+  const board = useMemo(
+    () => provisionalScore(
+      {
+        homeScore: match?.homeScore ?? 0,
+        awayScore: match?.awayScore ?? 0,
+        homeSetsWon: match?.homeSetsWon ?? 0,
+        awaySetsWon: match?.awaySetsWon ?? 0,
+        setScores: match?.setScores ?? [],
+      },
+      (events ?? []).map((e) => ({ id: e.id, clientKey: e.clientKey, eventType: e.eventType, isOpponentEvent: !!e.isOpponentEvent })),
+      queue.items,
+    ),
+    [match?.homeScore, match?.awayScore, match?.homeSetsWon, match?.awaySetsWon, match?.setScores, events, queue.items],
+  );
+  const playingSet = Math.min(5, board.homeSetsWon + board.awaySetsWon + 1);
+  const currentSet = selectedSet ?? playingSet;
+  // When a set closes, follow the match into the next one.
+  useEffect(() => { setSelectedSet(null); }, [playingSet]);
+
+  const { waiting, rejected } = queueSummary(queue.items);
+
+  // Leaving with taps still queued or not saved: they're kept (and queued
+  // ones keep sending from the root flusher), but say so first (6.9).
+  useEffect(() => {
+    if (waiting === 0 && rejected === 0) return;
+    const warning = rejected > 0
+      ? `${rejected} ${rejected === 1 ? "tap wasn't" : "taps weren't"} saved. They stay on this tracker until you retry or discard them. Leave anyway?`
+      : waiting === 1
+        ? "1 tap hasn't been sent yet. It's kept on this device and sends when you're back online. Leave anyway?"
+        : `${waiting} taps haven't been sent yet. They're kept on this device and send when you're back online. Leave anyway?`;
+    setLeaveGuard(() => warning);
+    // Checks the guard, not a closure: the 401 redirect clears it first.
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!leaveWarning()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      setLeaveGuard(null);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [waiting, rejected]);
+
+  function handleRecord(eventType: EventType) {
     if (!isOpponentMode && !selectedPlayer) {
       showFlash('Select a player first', false);
       return;
@@ -168,8 +232,9 @@ export default function TrackingPage() {
       setJustRecorded(eventType);
       const meta = getMeta(eventType);
       const jerseyNum = opponentJerseyNumber.trim() !== '' ? parseInt(opponentJerseyNumber, 10) : null;
-      await recordEvent.mutateAsync({
-        matchId: matchId!,
+      // Queued on the device and sent in the background: the buttons never
+      // wait for the network (6.7).
+      recordEvent({
         ...(isOpponentMode
           ? { isOpponentEvent: true, opponentJerseyNumber: jerseyNum }
           : { playerId: selectedPlayer!.id }),
@@ -188,25 +253,41 @@ export default function TrackingPage() {
       }
       setTimeout(() => setJustRecorded(null), 300);
       if (!keepZone) setSelectedZone(null);
-    } catch {
-      showFlash("Couldn't save that event", false);
+    } catch (err) {
+      showFlash(
+        err instanceof QueueFullError
+          ? '2,000 taps are waiting to send. Reconnect before recording more.'
+          : "Couldn't save that event",
+        false,
+      );
       setJustRecorded(null);
     }
   }
 
   async function handleUndo() {
     try {
-      await undoEvent.mutateAsync();
+      await undo();
       showFlash('Undone', true);
-    } catch {
-      showFlash('Nothing to undo', false);
+    } catch (err) {
+      const noConnection = queue.offline || (axios.isAxiosError(err) && !err.response);
+      showFlash(noConnection ? 'Undo needs a connection for that one' : 'Nothing to undo', false);
     }
   }
 
   // Destructive — zeroes the current set's score and clears its manual
   // adjustment history, so confirm before doing it (consistent with the
   // Delete confirm in MatchesPage.tsx).
+  // Manual score changes and resets wait for queued taps: a score change is
+  // sent as an absolute from the server's last-known score, which the queue
+  // is still moving. (Undo goes through the queue, so it never waits.)
+  function tapsStillSaving(): boolean {
+    if (waiting === 0) return false;
+    showFlash('Wait for your taps to finish saving', false);
+    return true;
+  }
+
   function handleResetSetScore() {
+    if (tapsStillSaving()) return;
     if (confirm(`Reset the score for Set ${currentSet} to 0–0? This cannot be undone.`)) {
       resetSetScore.mutate();
     }
@@ -214,6 +295,7 @@ export default function TrackingPage() {
 
   // The scoreboard reports a delta; the score API takes absolutes.
   function handleScore(side: ScoreSide, delta: number) {
+    if (tapsStillSaving()) return;
     const current = (side === 'home' ? match?.homeScore : match?.awayScore) ?? 0;
     const next = Math.max(0, current + delta);
     updateScore.mutate(side === 'home' ? { homeScore: next } : { awayScore: next });
@@ -222,10 +304,11 @@ export default function TrackingPage() {
   // The most destructive action on this screen — wipes every set and the whole
   // score history, not just the current set. Same confirm pattern as above.
   async function handleResetMatch() {
+    if (tapsStillSaving()) return;
     if (!confirm('Reset the ENTIRE match? Every set score and set won will be cleared. Recorded stats are kept. This cannot be undone.')) return;
     try {
       await resetMatch.mutateAsync();
-      setCurrentSet(1);
+      setSelectedSet(null);
       showFlash('Match reset', true);
     } catch {
       showFlash("Couldn't reset the match", false);
@@ -247,7 +330,6 @@ export default function TrackingPage() {
         key={eventType}
         className={clsx(cls, justRecorded === eventType && 'scale-95 btn-event-just-recorded')}
         onClick={() => handleRecord(eventType)}
-        disabled={recordEvent.isPending}
       >
         {meta.label}
       </button>
@@ -258,7 +340,12 @@ export default function TrackingPage() {
 
   if (!match) {
     return (
-      <p className="text-grey-600">Match not found. <Link to="/teams" className="text-navy-700 font-medium">Go back</Link></p>
+      <p className="text-grey-600">
+        {queue.offline && !refused
+          ? "This match isn't saved on this device yet. Connect to open it."
+          : 'Match not found.'}{' '}
+        <Link to="/teams" className="text-navy-700 font-medium">Go back</Link>
+      </p>
     );
   }
 
@@ -269,8 +356,34 @@ export default function TrackingPage() {
     return <Navigate to={`/matches/${matchId}/events`} replace />;
   }
 
-  const recentEvents = [...(events ?? [])].reverse().slice(0, 5);
   const players = match.team?.players ?? [];
+
+  // Recent taps: this device's queued ones first (with a waiting or not-saved
+  // mark), then the server's. Anything being undone is left out, and every
+  // rejected tap is shown, never hidden past the fifth row.
+  const serverKeys = new Set((events ?? []).map((e) => e.clientKey).filter(Boolean));
+  // Only live deletes hide their event: a refused one leaves it on the server.
+  const deleting = new Set(queue.items.filter((i) => i.op === 'delete' && i.state !== 'rejected').map((i) => i.serverId));
+  const undoneKeys = new Set(queue.items.filter((i) => i.undoRequested).map((i) => i.clientKey));
+  const pendingRows = queue.items
+    .filter((i) => i.op === 'create' && !i.undoRequested && !serverKeys.has(i.clientKey))
+    .reverse();
+  const serverRows = [...(events ?? [])]
+    .reverse()
+    .filter((e) => !deleting.has(e.id) && !(e.clientKey && undoneKeys.has(e.clientKey)));
+  // Refused undos show too, so every "not saved" in the badge has a row.
+  const rejectedRows = [
+    ...pendingRows.filter((i) => i.state === 'rejected'),
+    ...queue.items.filter((i) => i.op === 'delete' && i.state === 'rejected'),
+  ];
+  const liveRows = [...pendingRows.filter((i) => i.state !== 'rejected'), ...serverRows].slice(0, Math.max(0, 5 - rejectedRows.length));
+  const recentRows: Array<QueueItem | NonNullable<typeof events>[number]> = [...rejectedRows, ...liveRows];
+
+  // Someone else tapping this match in the last two minutes: a key this
+  // device never made (or none: the web, an older app).
+  const otherDevice = (events ?? []).some(
+    (e) => Date.now() - new Date(e.recordedAt).getTime() < OTHER_DEVICE_WINDOW_MS && !(e.clientKey && queue.myKeys.has(e.clientKey)),
+  );
 
   // One in-flight score mutation is enough to freeze the board's controls —
   // double-tapping End Set or Reset Match while a request lands would apply twice.
@@ -278,13 +391,15 @@ export default function TrackingPage() {
     updateScore.isPending ||
     resetSetScore.isPending ||
     resetMatch.isPending ||
-    undoEvent.isPending;
+    undoPending;
 
   // Undo reaches into both action logs, so the button has to account for both:
   // a manual score tap writes a ScoreAdjustment, not an Event, and a match can
-  // have adjustments with no stat events recorded yet.
+  // have adjustments with no stat events recorded yet. Offline, only this
+  // device's own taps can be undone (the server's undo-last needs a connection).
   const canUndo =
-    (events?.length ?? 0) > 0 || (match._count?.scoreAdjustments ?? 0) > 0;
+    queue.canUndoLocally ||
+    (!queue.offline && ((events?.length ?? 0) > 0 || (match._count?.scoreAdjustments ?? 0) > 0));
 
   // Focus mode re-sorts the roster so the most relevant positions surface first
   // (stable — everyone else keeps their original order and stays tappable) and
@@ -327,24 +442,58 @@ export default function TrackingPage() {
         canTrack={canTrack}
       />
 
+      {/* ── Sync status (6.9) ── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <SyncBadge waiting={waiting} rejected={rejected} offline={queue.offline} />
+        {board.provisional && <span className="text-xs text-grey-600">Score shown includes taps still syncing.</span>}
+      </div>
+      {rejected > 1 && (
+        <div className="card p-3 flex items-center gap-3 flex-wrap">
+          <span className="text-sm text-error-strong flex-1 min-w-0">
+            {rejected} taps weren't saved. Retry them below, or discard them all.
+          </span>
+          <button
+            onClick={() => { if (window.confirm(`Discard all ${rejected} taps that weren't saved? This cannot be undone.`)) queue.discardAll(); }}
+            className="btn-secondary text-sm min-h-[44px] px-3"
+          >
+            Discard all
+          </button>
+        </div>
+      )}
+      {!queue.canPersist && (
+        <p className="card p-3 text-sm text-error-strong">This device can't save offline. Stay connected while tracking.</p>
+      )}
+      {otherDevice && (
+        <p className="card p-3 text-sm text-grey-900">
+          Someone else is also tracking this match. Check you're not both recording the same rallies.
+        </p>
+      )}
+
       {/* ── Live Scoreboard + controls ── */}
+      {/* Offline, taps and undo still work; manual score changes and resets
+          need the server, so their controls aren't offered. */}
       <LiveScoreboard
         homeName={match.team?.name ?? 'Home'}
         awayName={match.opponent}
-        homeScore={match.homeScore ?? 0}
-        awayScore={match.awayScore ?? 0}
-        homeSetsWon={match.homeSetsWon ?? 0}
-        awaySetsWon={match.awaySetsWon ?? 0}
+        homeScore={board.homeScore}
+        awayScore={board.awayScore}
+        homeSetsWon={board.homeSetsWon}
+        awaySetsWon={board.awaySetsWon}
         status={match.status}
         currentSet={currentSet}
-        onSelectSet={setCurrentSet}
-        onScore={handleScore}
-        onResetSet={handleResetSetScore}
-        onResetMatch={handleResetMatch}
+        onSelectSet={setSelectedSet}
+        onScore={queue.offline ? undefined : handleScore}
+        onResetSet={queue.offline ? undefined : handleResetSetScore}
+        onResetMatch={queue.offline ? undefined : handleResetMatch}
         onUndoEvent={handleUndo}
         canUndoEvent={canUndo}
         busy={scoreboardBusy}
       />
+      {queue.offline && (
+        <p className="text-sm text-grey-600 -mt-3">
+          Offline: taps and Undo still save on this device. Score changes and resets need a connection.
+        </p>
+      )}
 
       {/* ── Main ── */}
       <div className="space-y-4">
@@ -552,7 +701,6 @@ export default function TrackingPage() {
                       {renderEventButton('PASS_3')}
                       <SplitPassButton
                         justRecorded={justRecorded}
-                        disabled={recordEvent.isPending}
                         onRecord={handleRecord}
                       />
                       {renderEventButton('PASS_0')}
@@ -608,13 +756,14 @@ export default function TrackingPage() {
         </div>
 
         {/* ── Recent events feed ── */}
-        {recentEvents.length > 0 && (
+        {recentRows.length > 0 && (
           <div className="card overflow-hidden mt-2">
             {/* The feed is only the last handful — the Events tab is the full log.
                 Sized to the brand's h3 role (§3: 1.125rem / Inter 600, for
                 sub-sections), so it reads as a section header rather than a caption. */}
             <Link
               to={`/matches/${matchId}/events`}
+              onClick={(e) => { if (!confirmLeave()) e.preventDefault(); }}
               className="flex items-center justify-between gap-2 px-4 py-3 border-b border-grey-200 text-grey-900 hover:bg-grey-50 transition-colors group"
             >
               <span className="text-lg font-semibold group-hover:text-navy-700 transition-colors">
@@ -627,63 +776,111 @@ export default function TrackingPage() {
               </span>
             </Link>
             <div className="divide-y divide-grey-200">
-              {recentEvents.map((event) => {
-                const meta = getMeta(event.eventType);
+              {recentRows.map((row) => {
+                // A queued tap (still on this device) or a saved event.
+                const queued = 'op' in row ? row : null;
+                const saved = 'op' in row ? null : row;
+                if (queued?.op === 'delete') {
+                  return (
+                    <div key={queued.clientKey} className="px-4 py-3 min-h-[60px] flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-error-strong flex-1 min-w-0">Undo not saved: {queued.error}</span>
+                      <button onClick={() => queue.retry(queued.clientKey)} className="btn-secondary text-sm min-h-[44px] px-3">
+                        Retry
+                      </button>
+                      <button
+                        onClick={() => { if (window.confirm('Discard this undo? The event stays recorded.')) queue.discard(queued.clientKey); }}
+                        className="btn-secondary text-sm min-h-[44px] px-3"
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  );
+                }
+                const meta = getMeta((queued ? queued.payload!.eventType : saved!.eventType) as EventType);
+                const setNumber = queued ? queued.payload!.setNumber : saved!.setNumber;
+                const player = queued
+                  ? players.find((pl) => pl.id === queued.payload!.playerId) ?? null
+                  : saved!.player ?? null;
+                const zone = queued ? queued.payload!.courtZone : saved!.courtZone;
+                const rotation = queued ? queued.payload!.rotationNumber : saved!.rotationNumber;
+                const at = queued ? queued.recordedAt : saved!.recordedAt;
                 return (
                   // min-h matches an avatar row's height so opponent events —
                   // which have no player, and so no avatar — don't sit visibly
                   // shorter than the rows around them.
-                  <div key={event.id} className="flex items-center gap-3 px-4 py-3 min-h-[60px]">
-                    <span
-                      className={clsx(
-                        'w-2 h-2 rounded-full shrink-0',
-                        meta.outcome === 'positive'
-                          ? 'bg-success'
-                          : meta.outcome === 'negative'
-                          ? 'bg-error'
-                          : 'bg-grey-400'
+                  <div key={queued ? queued.clientKey : saved!.id} className="px-4 py-3 min-h-[60px]">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={clsx(
+                          'w-2 h-2 rounded-full shrink-0',
+                          meta.outcome === 'positive'
+                            ? 'bg-success'
+                            : meta.outcome === 'negative'
+                            ? 'bg-error'
+                            : 'bg-grey-400'
+                        )}
+                      />
+                      <span className="tabular-nums text-xs text-grey-600 shrink-0">
+                        S{setNumber}
+                      </span>
+                      <span className="text-sm font-medium text-grey-900 flex-1 min-w-0 truncate">
+                        {meta.label}
+                      </span>
+                      {player && (
+                        // Same jersey-in-a-circle placeholder as the Player
+                        // Statistics table (StatsOverview.tsx), scaled down for a
+                        // list row — structured so a real photoUrl can drop an
+                        // <img> in here later without restructuring. It carries
+                        // the jersey number, so the name beside it doesn't repeat it.
+                        <div className="w-9 h-9 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center shrink-0">
+                          <span className="tabular-nums font-bold text-xs">
+                            {player.jerseyNumber}
+                          </span>
+                        </div>
                       )}
-                    />
-                    <span className="tabular-nums text-xs text-grey-600 shrink-0">
-                      S{event.setNumber}
-                    </span>
-                    <span className="text-sm font-medium text-grey-900 flex-1 min-w-0 truncate">
-                      {meta.label}
-                    </span>
-                    {event.player && (
-                      // Same jersey-in-a-circle placeholder as the Player
-                      // Statistics table (StatsOverview.tsx), scaled down for a
-                      // list row — structured so a real photoUrl can drop an
-                      // <img> in here later without restructuring. It carries
-                      // the jersey number, so the name beside it doesn't repeat it.
-                      <div className="w-9 h-9 rounded-full bg-navy-100 text-navy-700 flex items-center justify-center shrink-0">
-                        <span className="tabular-nums font-bold text-xs">
-                          {event.player.jerseyNumber}
+                      {/* The two text spans give way first (min-w-0 lets a flex
+                          item shrink past its content); the badges, time and
+                          avatar hold their size. Without this a long full name
+                          pushes the row wider than the card on narrow screens. */}
+                      {player && (
+                        <span className="text-xs text-grey-600 min-w-0 truncate">
+                          {player.firstName} {player.lastName}
                         </span>
+                      )}
+                      {zone != null && (
+                        <span className="badge shrink-0 bg-grey-50 text-navy-700 border border-grey-200">
+                          Z{zone}
+                        </span>
+                      )}
+                      {rotation != null && (
+                        <span className="badge shrink-0 bg-grey-50 text-navy-700 border border-grey-200">
+                          R{rotation}
+                        </span>
+                      )}
+                      {queued && queued.state !== 'rejected' && (
+                        <span className="badge shrink-0 bg-gold-500/15 text-navy-900 border border-gold-500/40">waiting</span>
+                      )}
+                      <span className="text-xs text-grey-600 shrink-0">
+                        {format(new Date(at), 'HH:mm:ss')}
+                      </span>
+                    </div>
+                    {queued?.state === 'rejected' && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-error-strong flex-1 min-w-0">Not saved: {queued.error}</span>
+                        <button
+                          onClick={() => queue.retry(queued.clientKey)}
+                          className="btn-secondary text-sm min-h-[44px] px-3"
+                        >
+                          Retry
+                        </button>
+                        <button
+                          onClick={() => { if (window.confirm('Discard this tap? It was never saved, and this cannot be undone.')) queue.discard(queued.clientKey); }}
+                          className="btn-secondary text-sm min-h-[44px] px-3"
+                        >
+                          Discard
+                        </button>
                       </div>
                     )}
-                    {/* The two text spans give way first (min-w-0 lets a flex
-                        item shrink past its content); the badges, time and
-                        avatar hold their size. Without this a long full name
-                        pushes the row wider than the card on narrow screens. */}
-                    {event.player && (
-                      <span className="text-xs text-grey-600 min-w-0 truncate">
-                        {event.player.firstName} {event.player.lastName}
-                      </span>
-                    )}
-                    {event.courtZone != null && (
-                      <span className="badge shrink-0 bg-grey-50 text-navy-700 border border-grey-200">
-                        Z{event.courtZone}
-                      </span>
-                    )}
-                    {event.rotationNumber != null && (
-                      <span className="badge shrink-0 bg-grey-50 text-navy-700 border border-grey-200">
-                        R{event.rotationNumber}
-                      </span>
-                    )}
-                    <span className="text-xs text-grey-600 shrink-0">
-                      {format(new Date(event.recordedAt), 'HH:mm:ss')}
-                    </span>
                   </div>
                 );
               })}

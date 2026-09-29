@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { replayTimeline, buildTimeline } from './scoreReplay';
 import type { ReplayItem } from './scoreReplay';
 
@@ -127,5 +129,61 @@ describe('buildTimeline', () => {
     assert.equal(result.homeScore, 0);
     assert.equal(result.awayScore, 0);
     assert.equal(result.completed, false);
+  });
+});
+
+// ─── Continuing from a known state (6.8) ──────────────────────────────────────
+
+describe('replayTimeline from a start state', () => {
+  const kill = (n: number) => ({ kind: 'event' as const, eventType: 'KILL', isOpponentEvent: false, at: new Date(n) });
+  const oppKill = (n: number) => ({ kind: 'event' as const, eventType: 'KILL', isOpponentEvent: true, at: new Date(n) });
+
+  it('adds queued taps to the server score', () => {
+    const start = { homeScore: 10, awayScore: 8, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }] };
+    const r = replayTimeline([kill(1), oppKill(2), kill(3)], start);
+    assert.deepEqual(r, { homeScore: 12, awayScore: 9, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }], completed: false });
+    assert.equal(start.setScores.length, 1, 'the start state is not mutated');
+  });
+
+  it('completes a set provisionally with the current set target', () => {
+    // Set 2 at 24-23: one more of ours closes it.
+    const r = replayTimeline([kill(1)], { homeScore: 24, awayScore: 23, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }] });
+    assert.equal(r.homeSetsWon, 2);
+    assert.deepEqual(r.setScores[1], { set: 2, home: 25, away: 23 });
+    assert.equal(r.homeScore, 0);
+  });
+
+  it('uses 15 in the fifth set', () => {
+    const r = replayTimeline([kill(1)], { homeScore: 14, awayScore: 10, homeSetsWon: 2, awaySetsWon: 2, setScores: [] });
+    assert.equal(r.homeSetsWon, 3);
+    assert.equal(r.completed, true);
+  });
+
+  it('a finished match stays finished', () => {
+    const r = replayTimeline([oppKill(1)], { homeScore: 0, awayScore: 0, homeSetsWon: 3, awaySetsWon: 1, setScores: [] });
+    assert.equal(r.completed, true);
+    assert.equal(r.awayScore, 0);
+  });
+});
+
+// ─── Frontend copies (6.8) ────────────────────────────────────────────────────
+// The tracker shows a provisional score from the same rules. The frontend has
+// no test runner, so its copies must stay identical to these tested files from
+// the marker line down.
+describe('frontend copies', () => {
+  const from = (file: string, marker: string) => {
+    const src = readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    assert.ok(src.includes(marker), `${file} lost its marker`);
+    return src.slice(src.indexOf(marker));
+  };
+  const front = (name: string) => path.join(__dirname, '../../../frontend/src/lib', name);
+
+  it('scoringRules.ts has not drifted', () => {
+    const marker = 'export const HOME_POINT_EVENTS';
+    assert.equal(from(front('scoringRules.ts'), marker), from(path.join(__dirname, 'scoringRules.ts'), marker));
+  });
+  it('scoreReplay.ts has not drifted', () => {
+    const marker = "import { scoringTeam } from './scoringRules';";
+    assert.equal(from(front('scoreReplay.ts'), marker), from(path.join(__dirname, 'scoreReplay.ts'), marker));
   });
 });

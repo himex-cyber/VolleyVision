@@ -103,7 +103,7 @@ function TeamPanel({ name, score, setsWon, side, onScore, busy }: TeamPanelProps
           : undefined
       }
       className={clsx(
-        'flex flex-col min-w-0 p-5 sm:p-6 transition-colors outline-none',
+        'flex flex-col min-w-0 p-3 sm:p-6 transition-colors outline-none',
         isHome
           ? 'border-l-4 border-gold-500 bg-gradient-to-b from-gold-500/10 to-transparent'
           : 'border-r-4 border-navy-500 items-end text-right',
@@ -111,11 +111,15 @@ function TeamPanel({ name, score, setsWon, side, onScore, busy }: TeamPanelProps
         interactive && (isHome ? 'hover:bg-gold-500/15' : 'hover:bg-navy-500/5'),
       )}
     >
-      <div className={clsx('flex items-center gap-2.5 min-w-0 min-h-[26px]', !isHome && 'flex-row-reverse')}>
+      {/* self-stretch: the away panel is items-end, which would size this row
+          to the whole name and stop it truncating. */}
+      <div className={clsx('flex items-center gap-2.5 min-w-0 min-h-[26px] self-stretch', !isHome && 'flex-row-reverse')}>
         <span className="flex-1 min-w-0 font-display font-bold text-lg sm:text-2xl uppercase tracking-wide leading-none text-navy-700 truncate">
           {name}
         </span>
-        <span className="text-[10px] font-bold tracking-widest text-grey-600 border border-grey-200 rounded px-1.5 py-0.5 shrink-0">
+        {/* Below sm there's no room for it beside the name; the gold (home)
+            and navy (away) edges already say which side is which. */}
+        <span className="hidden sm:inline text-[10px] font-bold tracking-widest text-grey-600 border border-grey-200 rounded px-1.5 py-0.5 shrink-0">
           {isHome ? 'HOME' : 'AWAY'}
         </span>
       </div>
@@ -230,7 +234,9 @@ export default function LiveScoreboard({
       </div>
 
       {/* ── Scorebug ── */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-stretch rounded-2xl overflow-hidden">
+      {/* minmax(0,1fr): a plain 1fr won't shrink below a long team name, so
+          one side took the whole board at 360px. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch rounded-2xl overflow-hidden">
         <TeamPanel
           name={homeName}
           score={homeScore}
