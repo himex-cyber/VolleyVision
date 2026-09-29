@@ -14,12 +14,15 @@ export function useSyncTrackWatchRoute(
   matchId: string | undefined,
   status: MatchStatus | undefined,
   canTrack: boolean,
+  // False while the caller's role is unknown (loading, or offline on a cold
+  // start): don't bounce a tracker to Watch before the answer arrives (6.6a).
+  roleKnown = true,
 ) {
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    if (!matchId || status !== 'IN_PROGRESS') return;
+    if (!matchId || status !== 'IN_PROGRESS' || !roleKnown) return;
     const onTrackRoute = location.pathname.endsWith('/track');
     const onWatchRoute = location.pathname.endsWith('/watch');
     if (canTrack && onWatchRoute) {
@@ -27,5 +30,5 @@ export function useSyncTrackWatchRoute(
     } else if (!canTrack && onTrackRoute) {
       navigate(`/matches/${matchId}/watch`, { replace: true });
     }
-  }, [matchId, status, canTrack, location.pathname, navigate]);
+  }, [matchId, status, canTrack, roleKnown, location.pathname, navigate]);
 }

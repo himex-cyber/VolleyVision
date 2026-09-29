@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { getToken, clearToken } from './tokenStorage';
+import { clearOfflineCache } from './offlineCache';
+import { setLeaveGuard } from './leaveGuard';
 import { isNative } from './native';
 import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
@@ -42,12 +44,26 @@ api.interceptors.request.use((config) => {
 // treat it as a session revocation when the request actually carried a
 // token; credential endpoints never do (see PUBLIC_AUTH_PATHS), so a bad
 // password stays a normal per-form error instead of forcing a logout.
+// The offline queue listens for any answer from the API: the device is
+// reachable again (eventQueue.ts can't import from here the other way round).
+let responseHook: (() => void) | null = null;
+export function onApiResponse(fn: () => void): void {
+  responseHook = fn;
+}
+
 api.interceptors.response.use(
-  (res) => res,
+  (res) => { responseHook?.(); return res; },
   (error) => {
+    if (error.response) responseHook?.();
     const hadAuth = !!error.config?.headers?.Authorization;
     if (error.response?.status === 401 && hadAuth) {
       clearToken();
+      // The offline queue (vv_queue:*) is kept: it flushes once the same user
+      // signs back in. The cached user and rosters go.
+      clearOfflineCache();
+      // The tracker's "taps still waiting" prompt would otherwise stop this
+      // redirect and leave the user signed out on the page.
+      setLeaveGuard(null);
       if (window.location.pathname !== '/login') {
         window.location.assign('/login');
       }
@@ -198,7 +214,18 @@ export const eventsApi = {
   }) => api.post<Event>('/events', data).then((r) => r.data),
   undoLast: (matchId: string) =>
     api.delete<{ deleted: string }>(`/events/undo/${matchId}`).then((r) => r.data),
-  delete: (id: string) => api.delete(`/events/${id}`),
+  // The queue's requests time out: a request hung on a wifi handoff would
+  // hold the flush lock (the function itself is capped at 10 s).
+  delete: (id: string) => api.delete(`/events/${id}`, { timeout: 30_000 }),
+  /** The offline queue's sender (6.4): items run in order, each with its own outcome. */
+  batch: (matchId: string, events: Array<Record<string, unknown> & { clientKey: string }>) =>
+    api
+      .post<{ results: Array<{ clientKey: string; status: 'created' | 'duplicate' | 'rejected' | 'retry'; event?: Event; error?: string }> }>(
+        '/events/batch',
+        { matchId, events },
+        { timeout: 30_000 },
+      )
+      .then((r) => r.data.results),
 };
 
 export const analyticsApi = {

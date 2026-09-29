@@ -1,7 +1,29 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import type { User } from '../types';
 import { authApi } from '../lib/api';
 import { getToken, setToken as storeToken, clearToken } from '../lib/tokenStorage';
+import { cacheUser, cachedUser, cachedUserId, clearOfflineCache } from '../lib/offlineCache';
+import { forgetSession } from '../lib/eventQueue';
+
+/** The user id inside a stored JWT (read locally; the server still verifies it). */
+function tokenUserId(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload?.userId === 'string' ? payload.userId : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Another account signing in on this device: the last one's cached data goes. */
+function switchCache(u: User) {
+  if (cachedUserId() !== u.id) {
+    clearOfflineCache();
+    forgetSession();
+  }
+  cacheUser(u);
+}
 
 interface AuthContextValue {
   user: User | null;
@@ -21,15 +43,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => getToken());
   const [isLoading, setIsLoading] = useState(true);
 
-  // On mount, restore session from stored token
+  // On mount, restore session from stored token. Only a 401 ends the session
+  // (revoked or expired: the server said so). With no signal the tracker must
+  // still open offline and keep its queued taps (6.6a), so the token stays and
+  // the cached name and role stand in until /auth/me answers again.
   useEffect(() => {
     const stored = getToken();
     if (!stored) { setIsLoading(false); return; }
-    authApi.me()
-      .then((u) => setUser(u))
-      .catch(() => {
-        clearToken();
-        setToken(null);
+    const restore = () => authApi.me().then((u) => { cacheUser(u); setUser(u); });
+    restore()
+      .catch((err) => {
+        if (axios.isAxiosError(err) && err.response?.status === 401) {
+          clearToken();
+          clearOfflineCache();
+          setToken(null);
+          return;
+        }
+        // Only the account this token belongs to: a cache left by someone
+        // else must never pair with this token (their queue, their rosters).
+        const cached = cachedUser();
+        if (cached && cached.id === tokenUserId(stored)) setUser(cached);
+        window.addEventListener('online', () => { restore().catch(() => {}); }, { once: true });
       })
       .finally(() => setIsLoading(false));
   }, []);
@@ -37,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const res = await authApi.login({ email, password });
     storeToken(res.token);
+    switchCache(res.user);
     setToken(res.token);
     setUser(res.user);
   }, []);
@@ -44,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) => {
     const res = await authApi.register(data);
     storeToken(res.token);
+    switchCache(res.user);
     setToken(res.token);
     setUser(res.user);
   }, []);
@@ -51,6 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     authApi.logout().catch(() => {});
     clearToken();
+    // Queued taps stay (keyed by this user, no names); the cached user and
+    // match rosters don't.
+    clearOfflineCache();
+    forgetSession();
     setToken(null);
     setUser(null);
   }, []);
@@ -58,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useCallback(async () => {
     if (!getToken()) return;
     const u = await authApi.me();
+    cacheUser(u);
     setUser(u);
   }, []);
 

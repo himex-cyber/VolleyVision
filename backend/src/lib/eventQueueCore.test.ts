@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   enqueueCreate, enqueueDelete, resetSending, nextSend, markSending, applyBatchResults,
-  rejectItems, removeItem, retryItem, undoNewest, queueSummary, provisionalScore,
+  rejectItems, removeItem, retryItem, undoNewest, queueSummary, provisionalScore, failureKind,
   MAX_QUEUE, MAX_BATCH,
 } from './eventQueueCore';
 import type { QueueItem } from './eventQueueCore';
@@ -92,6 +92,21 @@ r = applyBatchResults(markSending(build(tap('a'), tap('b')), ['a', 'b']), [{ cli
 assert.deepEqual(r.items.map((i) => [i.clientKey, i.state]), [['b', 'queued']]);
 
 assert.deepEqual(queueSummary(rejectItems(build(tap('a'), tap('b'), tap('c')), ['a'], 'x')), { waiting: 2, rejected: 1 });
+
+// A whole-request refusal drops an undone tap rather than leave it rejected
+// and invisible (undo skips it, no row shows it).
+const undoneThenRefused = rejectItems(undoNewest(markSending(build(tap('a'), tap('b')), ['a', 'b'])).items, ['a', 'b'], 'Match not found.');
+assert.deepEqual(undoneThenRefused.map((i) => [i.clientKey, i.state]), [['a', 'rejected']]);
+
+// failureKind: what each failed send means.
+assert.equal(failureKind(null, false), 'network', 'no response: offline or timed out');
+assert.equal(failureKind(401, false), 'auth');
+assert.equal(failureKind(429, false), 'rate');
+assert.equal(failureKind(409, true), 'retry');
+assert.equal(failureKind(409, false), 'reject', 'a plain 409 is a refusal');
+assert.equal(failureKind(500, false), 'server');
+assert.equal(failureKind(502, false), 'server');
+for (const s of [400, 403, 404]) assert.equal(failureKind(s, false), 'reject');
 
 // ─── provisionalScore ───────────────────────────────────────────────────────
 const server = { homeScore: 10, awayScore: 8, homeSetsWon: 0, awaySetsWon: 0, setScores: [] };

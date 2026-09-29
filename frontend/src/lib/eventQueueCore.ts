@@ -1,11 +1,6 @@
-// The offline event queue's pure core (6.6). Tested here; the frontend keeps
-// an identical copy from the marker line down (eventQueueCore.test.ts fails if
-// it drifts), and adds storage and the network around it.
-//
-// A tracker's taps go into this queue first, online or offline, and are sent
-// in order. Nothing here is ever dropped silently: an item leaves the queue
-// only when the server has it (created/duplicate), a delete has landed, or the
-// user discards a rejected tap.
+// Copy of backend/src/lib/eventQueueCore.ts, tested there
+// (eventQueueCore.test.ts fails if this drifts from the marker line down).
+// Storage and the network live in eventQueue.ts.
 
 import { scoringTeam } from './scoringRules';
 import { replayTimeline } from './scoreReplay';
