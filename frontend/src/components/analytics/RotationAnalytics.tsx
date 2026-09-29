@@ -13,6 +13,7 @@ import type { TooltipContentProps } from 'recharts';
 import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import clsx from 'clsx';
 import { useRotations } from '../../hooks';
+import type { DateRange } from '../../types';
 import type { RotationStat } from '../../types';
 import {
   CHART_POSITIVE,
@@ -43,12 +44,14 @@ function RotationTooltip({ active, payload }: TooltipContentProps<ValueType, Nam
   );
 }
 
-export default function RotationAnalytics({ scope, id, canTrack = false }: {
+export default function RotationAnalytics({ scope, id, canTrack = false, range }: {
   scope: 'match' | 'team';
   id: string;
   canTrack?: boolean;
+  // Team scope only: the match dashboard never filters by date.
+  range?: DateRange;
 }) {
-  const { data, isLoading, isError } = useRotations(scope, id);
+  const { data, isLoading, isError } = useRotations(scope, id, range);
 
   if (isLoading) return <div className="card p-4 h-48 animate-pulse bg-grey-50" aria-label="Loading rotations" />;
   if (isError || !data) return <p className="text-sm text-error-strong">Couldn't load rotations. Try refreshing the page.</p>;

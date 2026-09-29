@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import StatLeaderboardChart from '../components/charts/StatLeaderboardChart';
@@ -9,6 +9,8 @@ import { generateTeamInsights } from '../lib/insights';
 import PlayerInsights from '../components/analytics/PlayerInsights';
 import TeamSubNav from '../components/ui/TeamSubNav';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
+import DateRangeFilter from '../components/analytics/DateRangeFilter';
+import { rangeText, useDateRangeParams } from '../lib/dateRange';
 
 // Point-flow panels (7.9): their own chunks (recharts and all), so the
 // dashboard's first paint doesn't wait for them.
@@ -18,9 +20,17 @@ const panelFallback = <div className="card p-6 h-40 animate-pulse bg-grey-50" ar
 
 export default function TeamDashboardPage() {
   const { teamId } = useParams<{ teamId: string }>();
-  const { data, isLoading, isError } = useTeamAnalytics(teamId!);
-  const trends = useTeamTrends(teamId!);
-  const zones = useTeamZones(teamId!);
+  const range = useDateRangeParams();
+  const query = useTeamAnalytics(teamId!, range);
+  // A new range is a new query key, so `data` goes undefined while it loads.
+  // Keeping the last result stops the whole page (and the date input being
+  // typed into) from unmounting on every change.
+  const lastData = useRef(query.data);
+  if (query.data) lastData.current = query.data;
+  const data = query.data ?? lastData.current;
+  const { isLoading, isError } = query;
+  const trends = useTeamTrends(teamId!, range);
+  const zones = useTeamZones(teamId!, range);
   // Individual player analytics are for this team's staff and the player
   // themself — gate the drill-down links the same way. Always fetched (not
   // just for non-staff): a coach who also has a linked player record on this
@@ -40,8 +50,12 @@ export default function TeamDashboardPage() {
     : [];
 
 
-  if (isLoading) return <p className="text-grey-600">Loading analytics...</p>;
+  if (isLoading && !data) return <p className="text-grey-600">Loading analytics...</p>;
   if (isError || !data) return <p className="text-error">Couldn't load team analytics.</p>;
+
+  // Scheduled and cancelled matches have no events, so they don't count as shown.
+  const matchCount = data.matchSummary.completed + data.matchSummary.inProgress;
+  const hasRange = !!(range.from || range.to);
 
   return (
     <div className="space-y-6">
@@ -52,6 +66,17 @@ export default function TeamDashboardPage() {
           {data.team.division && `${data.team.division} | `}Season {data.team.season}
         </p>
       </div>
+
+      <DateRangeFilter season={data.team.season} />
+      <p className="text-sm text-grey-600">
+        {hasRange ? `Showing ${matchCount} ${matchCount === 1 ? 'match' : 'matches'} ${rangeText(range)}` : `Showing all ${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}
+      </p>
+
+      {hasRange && matchCount === 0 && (
+        <div className="card p-6 text-center text-grey-600 text-sm">
+          No matches in these dates. Try a wider range.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Object.entries(data.matchSummary).map(([label, value]) => (
@@ -77,10 +102,10 @@ export default function TeamDashboardPage() {
       {/* Team-level point flow across the team's matches: every member. */}
       <Suspense fallback={panelFallback}>
         <section id="rotations">
-          <RotationAnalytics scope="team" id={teamId!} canTrack={canTrack} />
+          <RotationAnalytics scope="team" id={teamId!} canTrack={canTrack} range={range} />
         </section>
         <section id="advanced">
-          <AdvancedMetricsPanel scope="team" id={teamId!} canTrack={canTrack} />
+          <AdvancedMetricsPanel scope="team" id={teamId!} canTrack={canTrack} range={range} />
         </section>
       </Suspense>
 
@@ -135,6 +160,7 @@ export default function TeamDashboardPage() {
             teamId={teamId!}
             canOpen={canOpenPlayer}
             canOpenAll={canTrack}
+            range={range}
           />
 
           <StatLeaderboardChart
@@ -144,6 +170,7 @@ export default function TeamDashboardPage() {
             teamId={teamId!}
             canOpen={canOpenPlayer}
             canOpenAll={canTrack}
+            range={range}
           />
 
           <StatLeaderboardChart
@@ -153,6 +180,7 @@ export default function TeamDashboardPage() {
             teamId={teamId!}
             canOpen={canOpenPlayer}
             canOpenAll={canTrack}
+            range={range}
           />
 
           <StatLeaderboardChart
@@ -162,6 +190,7 @@ export default function TeamDashboardPage() {
             teamId={teamId!}
             canOpen={canOpenPlayer}
             canOpenAll={canTrack}
+            range={range}
           />
         </div>
       )}
@@ -173,21 +202,21 @@ export default function TeamDashboardPage() {
           <PlayerInsights players={data.playerStats} />
           <section>
             <h2 className="text-lg font-semibold text-grey-900 mb-3">Season Player Statistics</h2>
-            <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} />
+            <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
           </section>
           {/* Coach/staff who also have a linked player record on this team — the
               non-staff branch below already covers "Your Stats" for everyone else. */}
           {myOwnStats.length > 0 && (
             <section>
               <h2 className="text-lg font-semibold text-grey-900 mb-3">My Stats</h2>
-              <PlayerStatsTable rows={myOwnStats} teamId={teamId!} canOpen={canOpenPlayer} />
+              <PlayerStatsTable rows={myOwnStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
             </section>
           )}
         </>
       ) : data.playerStats[0] ? (
         <section>
           <h2 className="text-lg font-semibold text-grey-900 mb-3">Your Stats</h2>
-          <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} />
+          <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
         </section>
       ) : null}
     </div>

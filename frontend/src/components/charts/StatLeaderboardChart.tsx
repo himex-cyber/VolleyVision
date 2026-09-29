@@ -7,7 +7,8 @@ import {
   YAxis,
   Tooltip,
 } from 'recharts';
-import type { PlayerStatLine } from '../../types';
+import type { DateRange, PlayerStatLine } from '../../types';
+import { rangeQuery } from '../../lib/dateRange';
 import { CHART_SERIES, CHART_TICK, CHART_TOOLTIP_BG, CHART_TOOLTIP_TEXT, CHART_GRID } from '../../lib/chartColors';
 
 interface Props {
@@ -20,6 +21,8 @@ interface Props {
   canOpen: (playerId: string) => boolean;
   /** Staff can open every bar, so the hint and pointer show for them only. */
   canOpenAll: boolean;
+  /** Carried to the player page so it shows the same dates. */
+  range?: DateRange;
 }
 
 export default function StatLeaderboardChart({
@@ -29,6 +32,7 @@ export default function StatLeaderboardChart({
   teamId,
   canOpen,
   canOpenAll,
+  range,
 }: Props) {
   const navigate = useNavigate();
   const data = [...players]
@@ -87,7 +91,7 @@ export default function StatLeaderboardChart({
               radius={[4, 4, 0, 0]}
               cursor={canOpenAll ? 'pointer' : 'default'}
               onClick={(data) => {
-                if (data.id && canOpen(data.id)) navigate(`/players/${data.id}/dashboard?teamId=${teamId}`);
+                if (data.id && canOpen(data.id)) navigate(`/players/${data.id}/dashboard?teamId=${teamId}${rangeQuery(range)}`);
               }}
             />
           </BarChart>

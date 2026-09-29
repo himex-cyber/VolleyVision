@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import axios from 'axios';
@@ -7,6 +7,8 @@ import { StatsCards } from '../components/analytics/StatsOverview';
 import { POSITION_FULL_LABELS } from '../types';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
+import DateRangeFilter from '../components/analytics/DateRangeFilter';
+import { rangeQuery, rangeText, useDateRangeParams } from '../lib/dateRange';
 import type { StatLine } from '../types';
 import { ArrowLeftIcon } from '../components/ui/icons';
 
@@ -20,10 +22,17 @@ export default function PlayerDashboardPage() {
   // The team these stats are scoped to — defaults server-side to the player's
   // home team when absent (e.g. a bookmarked link from before this param existed).
   const teamId = searchParams.get('teamId') ?? undefined;
-  const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId);
+  // The date filter only exists outside match context: a match is its own window.
+  const range = useDateRangeParams();
+  const query = usePlayerAnalytics(playerId!, teamId, matchId ? undefined : range);
+  // Same reason as the team page: keep the last result while a new range loads.
+  const lastData = useRef(query.data);
+  if (query.data) lastData.current = query.data;
+  const data = query.data ?? lastData.current;
+  const { isLoading, isError, error } = query;
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
   // Waits for the stats: a caller refused those (403) is refused the map too.
-  const zones = usePlayerZones(data ? playerId! : '', teamId, matchId);
+  const zones = usePlayerZones(data ? playerId! : '', teamId, matchId, range);
   // Roster context (no matchId) gets a full-team tab bar. Guarded by the hook's
   // own `enabled: !!id`, so this stays above the early returns below.
   const { data: team } = useTeam(data?.teamId ?? '');
@@ -39,7 +48,7 @@ export default function PlayerDashboardPage() {
     return () => { document.title = previous; };
   }, [matchId, matchData]);
 
-  if (isLoading) return <p className="text-navy-300">Loading analytics…</p>;
+  if (isLoading && !data) return <p className="text-navy-300">Loading analytics…</p>;
   if (axios.isAxiosError(error) && error.response?.status === 403) {
     return (
       <p className="text-error">
@@ -90,6 +99,17 @@ export default function PlayerDashboardPage() {
         </p>
       </div>
 
+      {!matchId && (
+        <div className="space-y-3">
+          <DateRangeFilter season={team?.season} />
+          {(range.from || range.to) && (
+            <p className="text-sm text-grey-600">
+              Showing stats {rangeText(range)}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Player tab bar — only in match context, listing every player with
           stats in that match (not the full roster), so the coach can compare
           players while staying inside the same match. */}
@@ -122,7 +142,7 @@ export default function PlayerDashboardPage() {
             .map((p) => (
               <NavLink
                 key={p.id}
-                to={`/players/${p.id}/dashboard?teamId=${data.teamId}`}
+                to={`/players/${p.id}/dashboard?teamId=${data.teamId}${rangeQuery(range)}`}
                 className={({ isActive }) =>
                   `px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive
