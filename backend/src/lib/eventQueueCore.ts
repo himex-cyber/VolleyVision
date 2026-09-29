@@ -19,6 +19,8 @@ export interface QueuedEventPayload {
   rotationNumber?: number | null;
   isOpponentEvent?: boolean;
   opponentJerseyNumber?: number | null;
+  /** Who served the rally (7.2), as set on the tracker when tapped. */
+  servingSide?: 'US' | 'THEM' | null;
 }
 
 export interface QueueItem {

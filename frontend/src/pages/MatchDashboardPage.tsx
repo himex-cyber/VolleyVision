@@ -1,9 +1,17 @@
+import { lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMatchAnalytics, useMatchReport, useMatchZones, useHasPermission, useMyPlayerIds } from '../hooks';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import MatchReportCard from '../components/analytics/MatchReportCard';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
+
+// Point-flow panels (7.9): their own chunks (recharts and all), so the
+// dashboard's first paint doesn't wait for them.
+const MomentumChart = lazy(() => import('../components/charts/MomentumChart'));
+const RotationAnalytics = lazy(() => import('../components/analytics/RotationAnalytics'));
+const AdvancedMetricsPanel = lazy(() => import('../components/analytics/AdvancedMetricsPanel'));
+const panelFallback = <div className="card p-6 h-40 animate-pulse bg-grey-50" aria-hidden="true" />;
 
 export default function MatchDashboardPage() {
   const { matchId } = useParams<{ matchId: string }>();
@@ -107,6 +115,19 @@ export default function MatchDashboardPage() {
           <CourtHeatMap data={zonesData} title="Court zones" canTrack={canTrack} />
         )}
       </section>
+
+      {/* Team-level point flow: every member, no per-player rows. */}
+      <Suspense fallback={panelFallback}>
+        <section id="momentum">
+          <MomentumChart matchId={matchId!} homeName={data.match.teamName} awayName={data.match.opponent} />
+        </section>
+        <section id="rotations">
+          <RotationAnalytics scope="match" id={matchId!} canTrack={canTrack} />
+        </section>
+        <section id="advanced">
+          <AdvancedMetricsPanel scope="match" id={matchId!} canTrack={canTrack} />
+        </section>
+      </Suspense>
 
       <section>
         <h2 className="text-lg font-semibold text-grey-900 mb-3">Set Breakdown</h2>
