@@ -7,8 +7,10 @@
 #   .\backup.ps1                              # -> $HOME\Backups\vv-backup-<date>.sql
 #   .\backup.ps1 -OutDir D:\Backups           # somewhere else
 #
-# It reads DIRECT_URL (else DATABASE_URL) from backend/.env and never prints it.
-# The URL goes to the container as an environment variable, not an argument.
+# It reads DIRECT_URL, then DATABASE_URL, from backend/.env and never prints
+# them; the first that works is used. (Docker on Windows often can't reach
+# Supabase's direct host, which is IPv6-only; the pooler URL then works.) The
+# URL goes to the container as an environment variable, not an argument.
 # Prisma's query options (pgbouncer=true, connection_limit, schema, ...) aren't
 # valid libpq options, so they're dropped. Supabase's transaction pooler (port
 # 6543) can't run pg_dump, so the session pooler on 5432 is used instead.
@@ -36,17 +38,24 @@ function Read-EnvValue([string]$Path, [string]$Key) {
   return $null
 }
 
-if (-not (Test-Path -LiteralPath $EnvFile)) { throw "Can't find $EnvFile." }
-$url = Read-EnvValue $EnvFile 'DIRECT_URL'
-if (-not $url) { $url = Read-EnvValue $EnvFile 'DATABASE_URL' }
-if (-not $url) { throw "Neither DIRECT_URL nor DATABASE_URL is set in $EnvFile." }
-
 # libpq-safe URL: no Prisma query options; session pooler instead of the
 # transaction pooler; SSL for Supabase.
-$uri = [System.Uri]$url
-$port = if ($uri.Port -eq 6543) { 5432 } else { $uri.Port }
-$ssl = if ($uri.Host -like '*.supabase.com' -or $uri.Host -like '*.supabase.co') { '?sslmode=require' } else { '' }
-$clean = '{0}://{1}@{2}:{3}{4}{5}' -f $uri.Scheme, $uri.UserInfo, $uri.Host, $port, $uri.AbsolutePath, $ssl
+function ConvertTo-PgDumpUrl([string]$Url) {
+  $uri = [System.Uri]$Url
+  $port = if ($uri.Port -eq 6543) { 5432 } else { $uri.Port }
+  $ssl = if ($uri.Host -like '*.supabase.com' -or $uri.Host -like '*.supabase.co') { '?sslmode=require' } else { '' }
+  return @{
+    Url  = '{0}://{1}@{2}:{3}{4}{5}' -f $uri.Scheme, $uri.UserInfo, $uri.Host, $port, $uri.AbsolutePath, $ssl
+    Where = "host $($uri.Host), port $port"
+  }
+}
+
+if (-not (Test-Path -LiteralPath $EnvFile)) { throw "Can't find $EnvFile." }
+$candidates = @('DIRECT_URL', 'DATABASE_URL') |
+  ForEach-Object { Read-EnvValue $EnvFile $_ } |
+  Where-Object { $_ } |
+  Select-Object -Unique
+if (-not $candidates) { throw "Neither DIRECT_URL nor DATABASE_URL is set in $EnvFile." }
 
 & $Docker info *> $null
 if ($LASTEXITCODE -ne 0) { throw 'Docker is not running. Start Docker Desktop and try again.' }
@@ -55,20 +64,21 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $name = 'vv-backup-{0}.sql' -f (Get-Date -Format 'yyyy-MM-dd-HHmm')
 $file = Join-Path $OutDir $name
 
-Write-Host "Backing up to $file (host $($uri.Host), port $port)..."
-& $Docker run --rm -e "DBURL=$clean" -v "${OutDir}:/backup" postgres:17 `
-  sh -c "pg_dump `"`$DBURL`" --no-owner --no-privileges -f /backup/$name"
-$code = $LASTEXITCODE
-
-if ($code -ne 0 -or -not (Test-Path -LiteralPath $file) -or (Get-Item -LiteralPath $file).Length -eq 0) {
-  if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
-  Write-Host "BACKUP FAILED (pg_dump exit $code). Nothing was saved." -ForegroundColor Red
-  if ($uri.Host -like 'db.*.supabase.co') {
-    Write-Host "Docker on Windows often can't reach Supabase's direct host (IPv6 only). Put the Session pooler URL from Supabase > Connect into DIRECT_URL, or run with -EnvFile pointing at a file that has it."
+foreach ($raw in $candidates) {
+  $target = ConvertTo-PgDumpUrl $raw
+  Write-Host "Backing up ($($target.Where)) to $file ..."
+  & $Docker run --rm -e "DBURL=$($target.Url)" -v "${OutDir}:/backup" postgres:17 `
+    sh -c "pg_dump `"`$DBURL`" --no-owner --no-privileges -f /backup/$name"
+  if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $file) -and (Get-Item -LiteralPath $file).Length -gt 0) {
+    $kb = [math]::Round((Get-Item -LiteralPath $file).Length / 1KB)
+    $tables = (Select-String -LiteralPath $file -Pattern '^CREATE TABLE' | Measure-Object).Count
+    Write-Host "Backup saved: $file ($kb KB, $tables tables). Keep it private." -ForegroundColor Green
+    exit 0
   }
-  exit 1
+  if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
+  Write-Host "That connection didn't work; trying the next one if there is one." -ForegroundColor Yellow
 }
 
-$kb = [math]::Round((Get-Item -LiteralPath $file).Length / 1KB)
-$tables = (Select-String -LiteralPath $file -Pattern '^CREATE TABLE' | Measure-Object).Count
-Write-Host "Backup saved: $file ($kb KB, $tables tables). Keep it private." -ForegroundColor Green
+Write-Host 'BACKUP FAILED. Nothing was saved.' -ForegroundColor Red
+Write-Host "If Docker can't reach Supabase, put the Session pooler URL (Supabase > Connect > Session pooler) into DIRECT_URL in backend/.env and run this again."
+exit 1
