@@ -330,9 +330,14 @@ export default function TrackingPage() {
     return true;
   }
 
+  // A reset puts the match under manual scoring for good (8.0.2): late taps
+  // from other devices only add points, in the order they arrive, and no
+  // replay can put them back in time order. Say so before it happens.
+  const RESET_NOTE = 'From now on, taps still syncing from other devices are added as they arrive, and momentum for this match follows sync order.';
+
   function handleResetSetScore() {
     if (tapsStillSaving()) return;
-    if (confirm(`Reset the score for Set ${currentSet} to 0–0? This cannot be undone.`)) {
+    if (confirm(`Reset Set ${currentSet} to 0–0? This can't be undone. ${RESET_NOTE}`)) {
       resetSetScore.mutate();
     }
   }
@@ -352,7 +357,7 @@ export default function TrackingPage() {
   // score history, not just the current set. Same confirm pattern as above.
   async function handleResetMatch() {
     if (tapsStillSaving()) return;
-    if (!confirm('Reset the ENTIRE match? Every set score and set won will be cleared. Recorded stats are kept. This cannot be undone.')) return;
+    if (!confirm(`Reset the ENTIRE match? Every set score and set won will be cleared. Recorded stats are kept. This can't be undone. ${RESET_NOTE}`)) return;
     try {
       await resetMatch.mutateAsync();
       setSelectedSet(null);

@@ -2,6 +2,36 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.13.0 — unreleased
+
+Phase 8.0 (fixes carried over from the Phases 6–7 review) and Phase 8 of the
+rebuild roadmap (analytics B). No migration.
+
+**Scoring with more than one device**
+- **Manual +1 / −1 no longer wipes out another device's points.** The tracker
+  used to send the whole new score, worked out from the last score it had
+  fetched; if another phone had added points since, they were lost. It now
+  sends just the change, and the server applies it to the latest score.
+  Every other score change (undo, delete, Reset Set, Reset Match, changing a
+  match's status) now waits its turn on the match too. Older app versions
+  still send whole scores and keep working as before.
+- **Undo after a set is re-ordered takes back the right set.** When a tap that
+  was made offline syncs late, the point that closed a set can move. The
+  record of which point closed each set now moves with it, so a later undo
+  (especially after a reset) no longer takes away a set that was really won.
+
+**Resets say what they change**
+- Reset Set and Reset Match now explain, before you confirm, that for the
+  rest of that match taps still syncing from other devices are added as they
+  arrive, and momentum follows the order they synced. This has been the case
+  since v9.11.0 for both resets; it just wasn't said.
+
+**A stuck sync is shown**
+- If the server keeps failing to save queued taps (five errors in a row), the
+  tracker's badge says "Can't save right now — N waiting. Keep tracking;
+  we'll keep trying." Taps are never dropped, and retrying carries on as
+  normal. We're told about it too (the match and the error code only).
+
 ## v9.12.0 — 2026-09-29
 
 Phase 7 of the rebuild roadmap: analytics A. One migration
