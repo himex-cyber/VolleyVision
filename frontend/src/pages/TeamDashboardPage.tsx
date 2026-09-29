@@ -1,6 +1,9 @@
 import { lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
+import CsvButton from '../components/analytics/CsvButton';
+import { playerStatsCsv, rangePart, teamTotalsCsv } from '../lib/analyticsCsv';
+import { safeFileName } from '../lib/csv';
 import StatLeaderboardChart from '../components/charts/StatLeaderboardChart';
 import { useTeamAnalytics, useTeamTrends, useTeamZones, useHasPermission, useMyPlayerIds } from '../hooks';
 import TeamTrendChart from '../components/charts/TeamTrendChart';
@@ -50,6 +53,7 @@ export default function TeamDashboardPage() {
   // Scheduled and cancelled matches have no events, so they don't count as shown.
   const matchCount = data.matchSummary.completed + data.matchSummary.inProgress;
   const hasRange = !!(range.from || range.to);
+  const csvName = (table: string) => safeFileName(['VolleyVision', data.team.name, table, rangePart(range)]);
 
   return (
     <div className="space-y-6">
@@ -81,6 +85,10 @@ export default function TeamDashboardPage() {
         ))}
       </div>
 
+      {/* Exactly the team totals on screen, from the same response. */}
+      <div className="flex justify-end">
+        <CsvButton filename={csvName('team totals')} build={() => teamTotalsCsv(data.teamStats)} />
+      </div>
       <StatsCards stats={data.teamStats} />
 
       <section id="zones">
@@ -96,7 +104,7 @@ export default function TeamDashboardPage() {
       {/* Team-level point flow across the team's matches: every member. */}
       <Suspense fallback={panelFallback}>
         <section id="rotations">
-          <RotationAnalytics scope="team" id={teamId!} canTrack={canTrack} range={range} />
+          <RotationAnalytics scope="team" id={teamId!} canTrack={canTrack} range={range} fileParts={[data.team.name, rangePart(range)]} />
         </section>
         <section id="advanced">
           <AdvancedMetricsPanel scope="team" id={teamId!} canTrack={canTrack} range={range} />
@@ -195,21 +203,34 @@ export default function TeamDashboardPage() {
         <>
           <PlayerInsights players={data.playerStats} />
           <section>
-            <h2 className="text-lg font-semibold text-grey-900 mb-3">Season Player Statistics</h2>
+            {/* Rows are exactly what's on screen: staff get every player, a player
+                only their own row (the server already left the others out).
+                Names are free text and can name minors. */}
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-lg font-semibold text-grey-900">Season Player Statistics</h2>
+              <CsvButton filename={csvName('player stats')} build={() => playerStatsCsv(data.playerStats)} />
+            </div>
             <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
           </section>
           {/* Coach/staff who also have a linked player record on this team — the
               non-staff branch below already covers "Your Stats" for everyone else. */}
           {myOwnStats.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold text-grey-900 mb-3">My Stats</h2>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-lg font-semibold text-grey-900">My Stats</h2>
+                <CsvButton filename={csvName('my stats')} build={() => playerStatsCsv(myOwnStats)} />
+              </div>
               <PlayerStatsTable rows={myOwnStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
             </section>
           )}
         </>
       ) : data.playerStats[0] ? (
         <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Your Stats</h2>
+          {/* Only the player's own row: the server left the others out. */}
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-lg font-semibold text-grey-900">Your Stats</h2>
+            <CsvButton filename={csvName('my stats')} build={() => playerStatsCsv(data.playerStats)} />
+          </div>
           <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
         </section>
       ) : null}

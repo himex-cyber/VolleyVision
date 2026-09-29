@@ -13,6 +13,8 @@ import type { TooltipContentProps } from 'recharts';
 import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import clsx from 'clsx';
 import { useRotations } from '../../hooks';
+import CsvButton from './CsvButton';
+import { safeFileName, toCsv } from '../../lib/csv';
 import type { DateRange } from '../../types';
 import type { RotationStat } from '../../types';
 import {
@@ -44,12 +46,14 @@ function RotationTooltip({ active, payload }: TooltipContentProps<ValueType, Nam
   );
 }
 
-export default function RotationAnalytics({ scope, id, canTrack = false, range }: {
+export default function RotationAnalytics({ scope, id, canTrack = false, range, fileParts }: {
   scope: 'match' | 'team';
   id: string;
   canTrack?: boolean;
   // Team scope only: the match dashboard never filters by date.
   range?: DateRange;
+  // CSV file name after 'VolleyVision': team or opponent, then the range or match date.
+  fileParts: string[];
 }) {
   const { data, isLoading, isError } = useRotations(scope, id, range);
 
@@ -75,7 +79,27 @@ export default function RotationAnalytics({ scope, id, canTrack = false, range }
 
   return (
     <div className="card p-4 space-y-4 min-w-0">
-      <h3 className="font-display font-semibold text-grey-900">Rotations</h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-display font-semibold text-grey-900">Rotations</h3>
+        {/* Rows are exactly what's on screen; the server already scoped them. */}
+        <CsvButton
+          filename={safeFileName(['VolleyVision', ...fileParts, 'rotations'])}
+          build={() =>
+            toCsv(
+              [
+                { header: 'Rotation', value: (r) => `R${r.rotation}` },
+                { header: 'Won', value: (r) => r.won },
+                { header: 'Lost', value: (r) => r.lost },
+                { header: 'Net', value: (r) => r.net },
+                { header: 'Point win %', value: (r) => r.pointWinPct },
+                { header: 'Side-out %', value: (r) => r.sideOutPct },
+                { header: 'Break-point %', value: (r) => r.breakPointPct },
+              ],
+              rotations
+            )
+          }
+        />
+      </div>
 
       {insights.best && insights.worst && (
         <p className="text-sm text-grey-600">

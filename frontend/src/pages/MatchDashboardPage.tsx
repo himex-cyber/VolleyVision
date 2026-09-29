@@ -3,6 +3,9 @@ import { useParams } from 'react-router-dom';
 import { useMatchAnalytics, useMatchReport, useMatchZones, useHasPermission, useMyPlayerIds } from '../hooks';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
+import CsvButton from '../components/analytics/CsvButton';
+import { playerStatsCsv } from '../lib/analyticsCsv';
+import { safeFileName, toCsv } from '../lib/csv';
 import MatchReportCard from '../components/analytics/MatchReportCard';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
 
@@ -31,6 +34,30 @@ export default function MatchDashboardPage() {
 
   if (isLoading) return <p className="text-grey-600">Loading analytics...</p>;
   if (isError || !data) return <p className="text-error">Couldn't load match analytics.</p>;
+
+  // matchDate is fixture wall-clock time stored as UTC (8.0.7): its date part is
+  // the entered date, whereas formatting it in local time can shift the day.
+  const fileParts = [data.match.teamName, 'vs', data.match.opponent, data.match.matchDate.slice(0, 10)];
+  const csvName = (table: string) => safeFileName(['VolleyVision', ...fileParts, table]);
+
+  // A set can be in the scores only (no events) or in the stats only (no score
+  // entered), so join on the set number and leave the missing side empty.
+  const buildSetsCsv = () => {
+    const scores = Array.isArray(data.match.setScores) ? (data.match.setScores as { set: number; home: number; away: number }[]) : [];
+    const nums = [...new Set([...scores.map((s) => s.set), ...data.setStats.map((s) => s.setNumber)])].sort((a, b) => a - b);
+    return toCsv(
+      [
+        { header: 'Set', value: (n: number) => n },
+        { header: 'Us', value: (n) => scores.find((s) => s.set === n)?.home ?? null },
+        { header: 'Them', value: (n) => scores.find((s) => s.set === n)?.away ?? null },
+        { header: 'Kills', value: (n) => data.setStats.find((s) => s.setNumber === n)?.kills ?? null },
+        { header: 'Aces', value: (n) => data.setStats.find((s) => s.setNumber === n)?.aces ?? null },
+        { header: 'Digs', value: (n) => data.setStats.find((s) => s.setNumber === n)?.digs ?? null },
+        { header: 'Events', value: (n) => data.setStats.find((s) => s.setNumber === n)?.totalEvents ?? null },
+      ],
+      nums
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -122,7 +149,7 @@ export default function MatchDashboardPage() {
           <MomentumChart matchId={matchId!} homeName={data.match.teamName} awayName={data.match.opponent} canTrack={canTrack} />
         </section>
         <section id="rotations">
-          <RotationAnalytics scope="match" id={matchId!} canTrack={canTrack} />
+          <RotationAnalytics scope="match" id={matchId!} canTrack={canTrack} fileParts={fileParts} />
         </section>
         <section id="advanced">
           <AdvancedMetricsPanel scope="match" id={matchId!} canTrack={canTrack} />
@@ -130,7 +157,10 @@ export default function MatchDashboardPage() {
       </Suspense>
 
       <section>
-        <h2 className="text-lg font-semibold text-grey-900 mb-3">Set Breakdown</h2>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-lg font-semibold text-grey-900">Set Breakdown</h2>
+          <CsvButton filename={csvName('sets')} build={buildSetsCsv} />
+        </div>
         {!data.setStats.length ? (
           <div className="card p-6 text-grey-600 text-sm">Record events to generate set analytics.</div>
         ) : (
@@ -156,12 +186,21 @@ export default function MatchDashboardPage() {
           the full roster table is staff-only; a player sees just their own line. */}
       {fullView ? (
         <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Player Statistics</h2>
+          {/* Rows are exactly what's on screen: staff get every player, a player
+              only their own row (the server already left the others out).
+              Names are free text and can name minors. */}
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-lg font-semibold text-grey-900">Player Statistics</h2>
+            <CsvButton filename={csvName('player stats')} build={() => playerStatsCsv(data.playerStats)} />
+          </div>
           <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={(id) => canTrack || myPlayerIds.has(id)} />
         </section>
       ) : data.playerStats[0] ? (
         <section>
-          <h2 className="text-lg font-semibold text-grey-900 mb-3">Your Stats</h2>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-lg font-semibold text-grey-900">Your Stats</h2>
+            <CsvButton filename={csvName('my stats')} build={() => playerStatsCsv(data.playerStats)} />
+          </div>
           <PlayerStatsTable rows={data.playerStats} matchId={matchId} teamId={data.match.teamId} canOpen={(id) => myPlayerIds.has(id)} />
         </section>
       ) : null}
