@@ -104,7 +104,7 @@ export default function AdvancedMetricsPanel({ scope, id, canTrack = false }: {
         </Section>
         <Section title="Serve receive quality">
           <Rows rows={[
-            ['Serve receive quality', pct(rq.qualityPct)], ['Perfect pass rate', pct(rq.perfectPassRate)],
+            ['Passes graded 2 or 3', pct(rq.qualityPct)], ['Perfect pass rate', pct(rq.perfectPassRate)],
             ['Passes', String(rq.attempts)],
           ]} />
           <div className="grid grid-cols-4 gap-2 pt-3 mt-3 border-t border-grey-200 text-center">

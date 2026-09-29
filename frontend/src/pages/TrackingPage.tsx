@@ -208,7 +208,8 @@ export default function TrackingPage() {
   // of this set serves (a point won is the serve won); with no point yet, ask.
   // Once decided for a set, taps and corrections own it.
   useEffect(() => {
-    if (!match || servingFor === playingSet) return;
+    // Not before the events arrive: an empty list would read as a fresh set.
+    if (!match || events === undefined || servingFor === playingSet) return;
     const scored = [
       ...(events ?? []).map((e) => ({ eventType: e.eventType as string, isOpponentEvent: !!e.isOpponentEvent, setNumber: e.setNumber, at: e.recordedAt })),
       ...queue.items
