@@ -635,12 +635,6 @@ export function useTeamRole(teamId: string) {
   });
 }
 
-/**
- * Ids of the roster entries linked to the signed-in user - their own player
- * records, whose individual stats they may open. Shares the player-portal
- * dashboard query (and its cache); `enabled` lets staff, who can open every
- * player anyway, skip the request.
- */
 /** The caller's linked player records only (GET /player/teams), without the portal's stats. */
 export function useMyPlayerRecords(enabled = true) {
   return useQuery({ queryKey: ['player', 'records'], queryFn: playerPortalApi.teams, enabled });

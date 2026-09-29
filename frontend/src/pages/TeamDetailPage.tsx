@@ -185,10 +185,11 @@ export default function TeamDetailPage() {
   // above since it's gated on MANAGE_MEMBERS rather than MANAGE_TEAM.
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<{ id: string; message: string } | null>(null);
-  // Members who don't already have a player record on this team — the backend
-  // 409s otherwise, so they're excluded from the picker up front.
+  // PLAYER-role members without a player record on this team: the backend
+  // refuses anyone else (400 for other roles, 409 for a second record), so
+  // they're excluded from the picker up front.
   const linkedUserIds = new Set((team?.players ?? []).map((p) => p.userId).filter((id): id is string => id != null));
-  const availableMembers = (members ?? []).filter((m) => !linkedUserIds.has(m.user.id));
+  const availableMembers = (members ?? []).filter((m) => m.role === 'PLAYER' && !linkedUserIds.has(m.user.id));
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -486,7 +487,7 @@ export default function TeamDetailPage() {
                   {linkingId === player.id && (
                     <div className="px-5 py-3 bg-grey-50 border-t border-grey-200 flex flex-wrap items-center gap-2">
                       {availableMembers.length === 0 ? (
-                        <p className="text-grey-600 text-sm">Every team member already has a linked player record.</p>
+                        <p className="text-grey-600 text-sm">No one with the Player role is free to link. Every player already has a record, or none has joined yet.</p>
                       ) : (
                         <LinkMemberSelect
                           members={availableMembers}

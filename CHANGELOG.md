@@ -2,6 +2,18 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.11.0 — unreleased
+
+- **Only players can be linked to a player record.** Whoever holds a link sees
+  that record's own stats, so a coach can now link a record only to a team
+  member with the Player role. The roster's Link picker lists only them.
+  Existing links are unchanged; `scripts/audit-player-links.ts` lists them for
+  a check.
+- **Linking and unlinking are in the audit log** (`LINK_PLAYER`,
+  `UNLINK_PLAYER`), with the team and the account linked or unlinked.
+- **Two ownership transfers at once:** the second now gets "Ownership already
+  changed. Refresh and try again." instead of a generic conflict.
+
 ## v9.10.0 — 2026-09-29
 
 Phase 5 of the rebuild roadmap: the Android app. No migration.

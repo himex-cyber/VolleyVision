@@ -74,19 +74,23 @@ export async function getLinkedPlayers(userId: string) {
  * automatically (ensurePlayerForMember).
  *
  * The caller has passed visibility + MANAGE_MEMBERS on teamId. The record must
- * be this team's own (its home team), unclaimed, and the target a member of
- * the team with no other record here.
+ * be this team's own (its home team), unclaimed, and the target a PLAYER-role
+ * member of the team with no other record here. Whoever holds the link reads
+ * the record's individual stats as "self", and players can be minors, so a
+ * viewer or staff member must never be linked (6.0.1, Karlos 29 Sept).
  */
 export async function linkPlayerRecord(teamId: string, playerId: string, userId: string) {
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player || player.teamId !== teamId) throw new AppError(404, 'Player not found.');
-  const membership = await prisma.teamMembership.findUnique({ where: { userId_teamId: { userId, teamId } }, select: { id: true } });
-  if (!membership) throw new AppError(400, 'Only a member of this team can be linked to one of its player records.');
 
   // Player.userId has no DB-level unique constraint, so the checks and the
   // write run as one serializable transaction: two staff linking at once can't
-  // both claim the record or give one member two records.
+  // both claim the record or give one member two records, and a role change
+  // can't slip in between the role check and the link.
   return runSerializable(async (tx) => {
+    const membership = await tx.teamMembership.findUnique({ where: { userId_teamId: { userId, teamId } }, select: { role: true } });
+    if (!membership) throw new AppError(400, 'Only a member of this team can be linked to one of its player records.');
+    if (membership.role !== 'PLAYER') throw new AppError(400, 'Only a team member with the Player role can be linked to a player record.');
     const current = await tx.player.findUniqueOrThrow({ where: { id: playerId }, select: { userId: true } });
     if (current.userId) throw new AppError(409, 'This player record is already linked to someone. Unlink it first.');
     // Typically the record a code-joined player got automatically: say which,
@@ -99,12 +103,16 @@ export async function linkPlayerRecord(teamId: string, playerId: string, userId:
   });
 }
 
-/** Staff unlink a roster record from whoever it's linked to. The record and its events stay. */
+/**
+ * Staff unlink a roster record from whoever it's linked to. The record and its
+ * events stay. Returns the previous holder for the audit log.
+ */
 export async function unlinkPlayerRecord(teamId: string, playerId: string) {
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player || player.teamId !== teamId) throw new AppError(404, 'Player not found.');
   if (!player.userId) throw new AppError(409, "This player record isn't linked to anyone.");
-  return prisma.player.update({ where: { id: playerId }, data: { userId: null } });
+  const updated = await prisma.player.update({ where: { id: playerId }, data: { userId: null } });
+  return { player: updated, previousUserId: player.userId };
 }
 
 /**

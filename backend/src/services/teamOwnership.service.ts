@@ -84,6 +84,11 @@ export async function transferOwnership(teamId: string, requesterId: string, new
   // pushing someone out (Karlos, 2026-09-27). The new owner's own slot counts
   // as free, since they are leaving it.
   return runSerializable(async (tx) => {
+    // The check above ran outside the transaction. Without this re-read, a
+    // stale second transfer only failed on the one-head-coach index with a
+    // generic 409 (6.0.4).
+    const current = await tx.team.findUnique({ where: { id: teamId }, select: { ownerId: true } });
+    if (current?.ownerId !== requesterId) throw new AppError(409, 'Ownership already changed. Refresh and try again.');
     await assertRoomForAnotherTeam(tx, membership.userId, receiverIsAdmin,
       `They already own ${MAX_OWNED_TEAMS} teams, the most one account can. They'd need to transfer or delete one first.`);
     const assistants = await tx.teamMembership.count({
