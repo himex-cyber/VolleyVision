@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AccessTier, ApprovalAction, MatchStatus } from '@prisma/client';
+import { AccessTier, ApprovalAction, MatchStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { checkSetCompletion, loadScoreState } from '../lib/scoring';
@@ -9,9 +9,11 @@ import { checkSetCompletion, loadScoreState } from '../lib/scoring';
 import { resetMatchScore } from '../lib/setOperations';
 import type { MatchScoreState } from '../lib/setOperations';
 import { logAudit } from '../lib/audit';
-import { getAccessTier } from '../services/permission.service';
+import { maskOtherUserIds } from '../lib/playerPrivacy';
+import { getAccessTier, seesEveryPlayer } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreateMatch, applyUpdateMatch, applyDeleteMatch } from '../services/teamActions.service';
+import { withMatchLock } from '../services/eventRecording.service';
 
 // Response body when a non-head-coach action is queued for approval.
 const pending = (requestId: string) => ({ status: 'pending_approval' as const, requestId });
@@ -53,7 +55,9 @@ export async function getMatch(req: Request, res: Response, next: NextFunction) 
       },
     });
     if (!match) throw new AppError(404, 'Match not found.');
-    res.json(match);
+    const callerId = req.user?.userId ?? null;
+    const players = maskOtherUserIds(match.team.players, await seesEveryPlayer(callerId, match.teamId), callerId);
+    res.json({ ...match, team: { ...match.team, players } });
   } catch (err) {
     next(err);
   }
@@ -139,44 +143,64 @@ export async function deleteMatch(req: Request, res: Response, next: NextFunctio
 // survives recalculateMatchState after undo/delete operations.
 export async function updateScore(req: Request, res: Response, next: NextFunction) {
   try {
-    const { homeScore, awayScore, homeSetsWon, awaySetsWon } = req.body;
+    const { homeScore, awayScore, homeSetsWon, awaySetsWon, homeDelta: homeChange, awayDelta: awayChange } = req.body;
 
-    const existing = await prisma.match.findUnique({
-      where: { id: req.params.id },
-      select: { homeScore: true, awayScore: true, homeSetsWon: true, awaySetsWon: true },
-    });
-    if (!existing) throw new AppError(404, 'Match not found.');
+    // 8.0.1: a delta is applied to the score read under the lock. An absolute
+    // score built from a copy fetched earlier erases whatever another device
+    // added since; installed apps still send absolutes, so both are accepted.
+    // When both come for a side the delta wins: the tracker sends the absolute
+    // too, only so it still scores against a server that predates deltas.
+    for (const [name, change] of [['homeDelta', homeChange], ['awayDelta', awayChange]] as const) {
+      if (change != null && (!Number.isInteger(change) || Math.abs(change) > 100)) {
+        throw new AppError(400, `${name} must be a whole number from -100 to 100.`);
+      }
+    }
 
-    // API keeps absolute-value semantics; the delta is derived for persistence.
-    const homeDelta = homeScore != null ? Number(homeScore) - existing.homeScore : 0;
-    const awayDelta = awayScore != null ? Number(awayScore) - existing.awayScore : 0;
-
-    let adjustmentId: string | null = null;
-    if (homeDelta !== 0 || awayDelta !== 0) {
-      const currentSet = existing.homeSetsWon + existing.awaySetsWon + 1;
-      const adjustment = await prisma.scoreAdjustment.create({
-        data: { matchId: req.params.id, homeDelta, awayDelta, setNumber: currentSet },
+    const match = await withMatchLock(req.params.id, async (tx) => {
+      const existing = await tx.match.findUnique({
+        where: { id: req.params.id },
+        select: { homeScore: true, awayScore: true, homeSetsWon: true, awaySetsWon: true },
       });
-      adjustmentId = adjustment.id;
-    }
+      if (!existing) throw new AppError(404, 'Match not found.');
 
-    const match = await prisma.match.update({
-      where: { id: req.params.id },
-      data: {
-        ...(homeScore != null ? { homeScore: Number(homeScore) } : {}),
-        ...(awayScore != null ? { awayScore: Number(awayScore) } : {}),
-        ...(homeSetsWon != null ? { homeSetsWon: Number(homeSetsWon) } : {}),
-        ...(awaySetsWon != null ? { awaySetsWon: Number(awaySetsWon) } : {}),
-      },
+      const nextHome = homeChange != null ? Math.max(0, existing.homeScore + homeChange)
+        : homeScore != null ? Number(homeScore) : existing.homeScore;
+      const nextAway = awayChange != null ? Math.max(0, existing.awayScore + awayChange)
+        : awayScore != null ? Number(awayScore) : existing.awayScore;
+      // Persisted as the delta actually applied, so a replay reproduces it.
+      const homeDelta = nextHome - existing.homeScore;
+      const awayDelta = nextAway - existing.awayScore;
+
+      let adjustmentId: string | null = null;
+      if (homeDelta !== 0 || awayDelta !== 0) {
+        const currentSet = existing.homeSetsWon + existing.awaySetsWon + 1;
+        const adjustment = await tx.scoreAdjustment.create({
+          data: { matchId: req.params.id, homeDelta, awayDelta, setNumber: currentSet },
+        });
+        adjustmentId = adjustment.id;
+      }
+
+      const updated = await tx.match.update({
+        where: { id: req.params.id },
+        data: {
+          homeScore: nextHome,
+          awayScore: nextAway,
+          ...(homeSetsWon != null ? { homeSetsWon: Number(homeSetsWon) } : {}),
+          ...(awaySetsWon != null ? { awaySetsWon: Number(awaySetsWon) } : {}),
+        },
+      });
+
+      // Check if the manual update completed a set. If it did, mark the very
+      // adjustment that caused it — completion zeroes the running score, so undo
+      // can't work this out later and needs the flag to find the right baseline.
+      const completedSet = await checkSetCompletion(req.params.id, tx);
+      if (completedSet && adjustmentId) {
+        await tx.scoreAdjustment.update({ where: { id: adjustmentId }, data: { completedSet: true } });
+      }
+      // Completion zeroed the score and banked the set after `updated` was
+      // read; answer with what's stored now.
+      return completedSet ? tx.match.findUniqueOrThrow({ where: { id: req.params.id } }) : updated;
     });
-
-    // Check if the manual update completed a set. If it did, mark the very
-    // adjustment that caused it — completion zeroes the running score, so undo
-    // can't work this out later and needs the flag to find the right baseline.
-    const completedSet = await checkSetCompletion(req.params.id);
-    if (completedSet && adjustmentId) {
-      await prisma.scoreAdjustment.update({ where: { id: adjustmentId }, data: { completedSet: true } });
-    }
 
     res.json(match);
   } catch (err) {
@@ -189,24 +213,26 @@ export async function updateScore(req: Request, res: Response, next: NextFunctio
 // isn't undone by the next recalculation replaying stale deltas.
 export async function resetSetScore(req: Request, res: Response, next: NextFunction) {
   try {
-    const existing = await prisma.match.findUnique({
-      where: { id: req.params.id },
-      select: { homeSetsWon: true, awaySetsWon: true },
-    });
-    if (!existing) throw new AppError(404, 'Match not found.');
+    const match = await withMatchLock(req.params.id, async (tx) => {
+      const existing = await tx.match.findUnique({
+        where: { id: req.params.id },
+        select: { homeSetsWon: true, awaySetsWon: true },
+      });
+      if (!existing) throw new AppError(404, 'Match not found.');
 
-    const currentSet = existing.homeSetsWon + existing.awaySetsWon + 1;
-    await prisma.scoreAdjustment.deleteMany({
-      where: { matchId: req.params.id, setNumber: currentSet },
-    });
+      const currentSet = existing.homeSetsWon + existing.awaySetsWon + 1;
+      await tx.scoreAdjustment.deleteMany({
+        where: { matchId: req.params.id, setNumber: currentSet },
+      });
 
-    // The reset is authored, like Reset Match: no replay of the events can
-    // reproduce it, and an out-of-order offline tap (6.3) or an undo would
-    // replay the set straight back to its old score. Override makes both
-    // adjust the running score instead.
-    const match = await prisma.match.update({
-      where: { id: req.params.id },
-      data: { homeScore: 0, awayScore: 0, manualScoreOverride: true },
+      // The reset is authored, like Reset Match: no replay of the events can
+      // reproduce it, and an out-of-order offline tap (6.3) or an undo would
+      // replay the set straight back to its old score. Override makes both
+      // adjust the running score instead.
+      return tx.match.update({
+        where: { id: req.params.id },
+        data: { homeScore: 0, awayScore: 0, manualScoreOverride: true },
+      });
     });
     res.json(match);
   } catch (err) {
@@ -223,8 +249,8 @@ export async function resetSetScore(req: Request, res: Response, next: NextFunct
 // services/matchState.service.ts.
 
 /** Persists a pure set-operation result, marking the match as manually overridden. */
-async function writeOverriddenState(matchId: string, next: MatchScoreState) {
-  return prisma.match.update({
+async function writeOverriddenState(tx: Prisma.TransactionClient, matchId: string, next: MatchScoreState) {
+  return tx.match.update({
     where: { id: matchId },
     data: {
       homeScore: next.homeScore,
@@ -264,7 +290,7 @@ async function writeOverriddenState(matchId: string, next: MatchScoreState) {
 //       where: { matchId: req.params.id, setNumber: state.homeSetsWon + state.awaySetsWon + 1 },
 //     });
 //
-//     const match = await writeOverriddenState(req.params.id, completeSet(state, winner));
+//     const match = await writeOverriddenState(prisma, req.params.id, completeSet(state, winner)); // under withMatchLock if restored
 //     res.json(match);
 //   } catch (err) {
 //     next(err);
@@ -281,16 +307,19 @@ async function writeOverriddenState(matchId: string, next: MatchScoreState) {
 // write an audit entry recording what the reset actually wiped.
 export async function resetMatch(req: Request, res: Response, next: NextFunction) {
   try {
-    const state = await loadScoreState(req.params.id);
-    if (!state) throw new AppError(404, 'Match not found.');
+    const { state, match, scoreAdjustmentsDeleted, eventsKept } = await withMatchLock(req.params.id, async (tx) => {
+      const state = await loadScoreState(req.params.id, tx);
+      if (!state) throw new AppError(404, 'Match not found.');
 
-    // Every adjustment belonged to a set that no longer exists.
-    const { count: scoreAdjustmentsDeleted } = await prisma.scoreAdjustment.deleteMany({
-      where: { matchId: req.params.id },
+      // Every adjustment belonged to a set that no longer exists.
+      const { count: scoreAdjustmentsDeleted } = await tx.scoreAdjustment.deleteMany({
+        where: { matchId: req.params.id },
+      });
+      const eventsKept = await tx.event.count({ where: { matchId: req.params.id } });
+
+      const match = await writeOverriddenState(tx, req.params.id, resetMatchScore(state));
+      return { state, match, scoreAdjustmentsDeleted, eventsKept };
     });
-    const eventsKept = await prisma.event.count({ where: { matchId: req.params.id } });
-
-    const match = await writeOverriddenState(req.params.id, resetMatchScore(state));
 
     logAudit(req.user!.userId, 'RESET_MATCH', 'match', req.params.id, {
       clearedHomeScore: state.homeScore,

@@ -6,7 +6,7 @@ import { checkSetCompletion, loadScoreState } from '../lib/scoring';
 import { resolveUndoTarget, reverseAdjustmentScore, reverseCompletingAction } from '../lib/undo';
 import { redactEvents } from '../lib/playerPrivacy';
 import { seesEveryPlayer } from '../services/permission.service';
-import { recordOneEvent, removeEventLocked } from '../services/eventRecording.service';
+import { recordOneEvent, removeEventLocked, withMatchLock } from '../services/eventRecording.service';
 import { parseEventInput } from '../lib/eventInput';
 import { idempotencyKey, normalizeIdempotencyKey } from '../lib/idempotencyKey';
 
@@ -118,17 +118,24 @@ export async function deleteLastEvent(req: Request, res: Response, next: NextFun
   try {
     const matchId = req.params.matchId;
 
-    const [latestEvent, latestAdjustment] = await Promise.all([
-      prisma.event.findFirst({ where: { matchId }, orderBy: { recordedAt: 'desc' } }),
-      prisma.scoreAdjustment.findFirst({ where: { matchId }, orderBy: { createdAt: 'desc' } }),
-    ]);
+    // The target is chosen under the lock: chosen before it, another device's
+    // tap could land in between and the undo would reverse the wrong thing.
+    const result = await withMatchLock(matchId, async (tx) => {
+      const [latestEvent, latestAdjustment] = await Promise.all([
+        tx.event.findFirst({ where: { matchId }, orderBy: { recordedAt: 'desc' } }),
+        tx.scoreAdjustment.findFirst({ where: { matchId }, orderBy: { createdAt: 'desc' } }),
+      ]);
 
-    const target = resolveUndoTarget(latestEvent, latestAdjustment);
-    if (!target) throw new AppError(404, 'No events to undo.');
+      const target = resolveUndoTarget(latestEvent, latestAdjustment);
+      if (!target) throw new AppError(404, 'No events to undo.');
 
-    if (target === 'adjustment') {
+      if (target === 'event') {
+        await removeEventLocked(tx, latestEvent!.id);
+        return { deleted: latestEvent!.id, kind: 'event' };
+      }
+
       const adjustment = latestAdjustment!;
-      const state = await loadScoreState(matchId);
+      const state = await loadScoreState(matchId, tx);
       if (!state) throw new AppError(404, 'Match not found.');
 
       // The tap that closed a set can't be reversed against the current score —
@@ -137,48 +144,38 @@ export async function deleteLastEvent(req: Request, res: Response, next: NextFun
       const uncompleted = adjustment.completedSet ? reverseCompletingAction(state, adjustment) : null;
 
       if (uncompleted) {
-        await prisma.$transaction([
-          prisma.match.update({
-            where: { id: matchId },
-            data: {
-              homeScore: uncompleted.homeScore,
-              awayScore: uncompleted.awayScore,
-              homeSetsWon: uncompleted.homeSetsWon,
-              awaySetsWon: uncompleted.awaySetsWon,
-              setScores: uncompleted.setScores,
-              status: uncompleted.status as MatchStatus,
-            },
-          }),
-          prisma.scoreAdjustment.delete({ where: { id: adjustment.id } }),
-        ]);
+        await tx.match.update({
+          where: { id: matchId },
+          data: {
+            homeScore: uncompleted.homeScore,
+            awayScore: uncompleted.awayScore,
+            homeSetsWon: uncompleted.homeSetsWon,
+            awaySetsWon: uncompleted.awaySetsWon,
+            setScores: uncompleted.setScores,
+            status: uncompleted.status as MatchStatus,
+          },
+        });
+        await tx.scoreAdjustment.delete({ where: { id: adjustment.id } });
         // Deliberately no checkSetCompletion here: we just un-completed this
         // set on purpose, and the restored score is pre-threshold by definition.
-        res.json({ deleted: adjustment.id, kind: 'adjustment', uncompletedSet: true });
-        return;
+        return { deleted: adjustment.id, kind: 'adjustment', uncompletedSet: true };
       }
 
       // A direct, symmetrical reversal — not applyEventRemoval, which is
-      // event-specific. Both writes go in one transaction so the score and the
-      // adjustment log can't disagree if one of them fails.
+      // event-specific.
       const reversed = reverseAdjustmentScore(state, adjustment);
-      await prisma.$transaction([
-        prisma.match.update({
-          where: { id: matchId },
-          data: { homeScore: reversed.homeScore, awayScore: reversed.awayScore },
-        }),
-        prisma.scoreAdjustment.delete({ where: { id: adjustment.id } }),
-      ]);
+      await tx.match.update({
+        where: { id: matchId },
+        data: { homeScore: reversed.homeScore, awayScore: reversed.awayScore },
+      });
+      await tx.scoreAdjustment.delete({ where: { id: adjustment.id } });
 
       // Mirrors updateScore, which checks after every manual score change:
       // reversing a negative adjustment raises the score and could carry a set.
-      await checkSetCompletion(matchId);
-      res.json({ deleted: adjustment.id, kind: 'adjustment' });
-      return;
-    }
-
-    const event = latestEvent!;
-    await removeEventLocked(event);
-    res.json({ deleted: event.id, kind: 'event' });
+      await checkSetCompletion(matchId, tx);
+      return { deleted: adjustment.id, kind: 'adjustment' };
+    });
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -187,11 +184,18 @@ export async function deleteLastEvent(req: Request, res: Response, next: NextFun
 // Delete a specific event by ID (admin correction).
 export async function deleteEvent(req: Request, res: Response, next: NextFunction) {
   try {
-    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
-    if (!event) throw new AppError(404, 'Event not found.');
-    // A repeat delete racing this one gets P2025, mapped to 404: the queue
-    // treats that as done.
-    await removeEventLocked(event);
+    // Read without the lock only to learn the match: an event never moves.
+    // removeEventLocked re-reads it under the lock, and a repeat delete that
+    // lost the race gets 404, which the queue treats as done.
+    const found = await prisma.event.findUnique({ where: { id: req.params.id }, select: { matchId: true } });
+    if (!found) throw new AppError(404, 'Event not found.');
+    const { matchId } = found;
+    if (matchId) {
+      await withMatchLock(matchId, (tx) => removeEventLocked(tx, req.params.id));
+    } else {
+      // A training event: no match state to fix.
+      await prisma.event.delete({ where: { id: req.params.id } });
+    }
     res.status(204).send();
   } catch (err) {
     next(err);

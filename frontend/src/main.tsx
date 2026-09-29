@@ -11,6 +11,7 @@ import { isNative, initNative } from './lib/native';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
 import QueueFlusher from './components/tracking/QueueFlusher';
+import { trimCachedMatches } from './lib/offlineCache';
 import PageLoadingFallback from './components/ui/PageLoadingFallback';
 
 // Fail-soft: unset VITE_SENTRY_DSN is normal in local dev (see
@@ -229,6 +230,8 @@ window.addEventListener('vite:preloadError', (event) => {
 // A failure here (e.g. its lazy chunk didn't load) would leave Back closing
 // the app from every screen, so it's reported rather than dropped.
 if (isNative()) initNative().catch((err) => Sentry.captureException(err));
+
+trimCachedMatches();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

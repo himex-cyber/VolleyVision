@@ -42,6 +42,8 @@ function world(opts: { manualScoreOverride?: boolean; latestAdjustmentAt?: strin
   // recalculateMatchState reads these.
   db.event.findMany = async () => rows.map((r) => ({ eventType: r.eventType, isOpponentEvent: r.isOpponentEvent, recordedAt: r.recordedAt }));
   db.scoreAdjustment.findMany = async () => [];
+  db.event.updateMany = async () => ({ count: 0 });
+  db.scoreAdjustment.updateMany = async () => ({ count: 0 });
   return { rows, match };
 }
 

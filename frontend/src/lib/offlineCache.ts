@@ -1,9 +1,11 @@
 // What the app keeps on the device so a tracker can reopen offline (6.6a): the
 // signed-in user's name and role, and the last copy of each match opened on
-// the tracker (its roster included, so taps can still name a player). Players
-// can be minors, so all of it is cleared on sign-out.
+// the tracker (its roster included, so taps can still name a player; only the
+// fields the tracker reads, see matchCacheShape). Players can be minors, so all
+// of it is cleared on sign-out.
 import type { Match, User } from '../types';
 import { storageGet, storageKeys, storageRemove, storageSet } from './safeStorage';
+import { trimCachedMatch } from './matchCacheShape';
 
 const USER_KEY = 'vv_user';
 const MATCH_PREFIX = 'vv_match:';
@@ -34,7 +36,7 @@ export function cachedUser(): User | null {
 export function cacheMatch(match: Match): void {
   const others = storageKeys(MATCH_PREFIX).filter((k) => k !== `${MATCH_PREFIX}${match.id}`);
   for (const k of others.slice(0, Math.max(0, others.length - (MAX_CACHED_MATCHES - 1)))) storageRemove(k);
-  storageSet(`${MATCH_PREFIX}${match.id}`, JSON.stringify(match));
+  storageSet(`${MATCH_PREFIX}${match.id}`, JSON.stringify(trimCachedMatch(match as unknown as Record<string, unknown>)));
 }
 
 /** The server says this caller can't see the match (removed from the team, deleted). */
@@ -50,9 +52,26 @@ export function cachedUserId(): string | null {
 export function cachedMatch(id: string): Match | undefined {
   try {
     const raw = storageGet(`${MATCH_PREFIX}${id}`);
-    return raw ? (JSON.parse(raw) as Match) : undefined;
+    // Trimmed on read too: v9.12.0 cached the whole response.
+    return raw ? (trimCachedMatch(JSON.parse(raw)) as unknown as Match) : undefined;
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Trims every stored match to the tracker's shape: v9.12.0 kept the whole
+ * response, other players' account ids included. Run once at startup, so an
+ * old copy the user never reopens doesn't wait for sign-out.
+ */
+export function trimCachedMatches(): void {
+  for (const k of storageKeys(MATCH_PREFIX)) {
+    try {
+      const raw = storageGet(k);
+      if (raw) storageSet(k, JSON.stringify(trimCachedMatch(JSON.parse(raw))));
+    } catch {
+      storageRemove(k);
+    }
   }
 }
 

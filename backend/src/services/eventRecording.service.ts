@@ -23,19 +23,33 @@ export async function lockMatch(tx: Prisma.TransactionClient, matchId: string): 
   await tx.$queryRaw`SELECT 1 FROM "matches" WHERE "id" = ${matchId} FOR UPDATE`;
 }
 
-/** Deletes an event and brings the score back in line, under the match lock. */
-export async function removeEventLocked(event: { id: string; matchId: string | null; eventType: string; isOpponentEvent: boolean; completedSet?: boolean }): Promise<void> {
-  const { matchId } = event;
-  if (!matchId) {
-    // A training event: no match state to fix.
-    await prisma.event.delete({ where: { id: event.id } });
-    return;
-  }
-  await prisma.$transaction(async (tx) => {
+/**
+ * Runs `fn` in a Read Committed transaction holding the match lock. Every
+ * writer of a match's score state goes through here (8.0.1): one that read the
+ * score before taking the lock would compute from a copy another device is
+ * about to change, and write that stale result back.
+ */
+export function withMatchLock<T>(matchId: string, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return prisma.$transaction(async (tx) => {
     await lockMatch(tx, matchId);
-    await tx.event.delete({ where: { id: event.id } });
-    await applyEventRemoval(matchId, event, tx);
+    return fn(tx);
   }, { isolationLevel: 'ReadCommitted' });
+}
+
+/**
+ * Deletes a match event and brings the score back in line. Call it under
+ * lockMatch: the event is re-read here, because a replay since the caller
+ * last looked may have moved its completedSet mark, and a stale mark undoes
+ * the wrong set.
+ */
+export async function removeEventLocked(tx: Prisma.TransactionClient, eventId: string): Promise<void> {
+  const event = await tx.event.findUnique({
+    where: { id: eventId },
+    select: { matchId: true, eventType: true, isOpponentEvent: true, completedSet: true },
+  });
+  if (!event) throw new AppError(404, 'Event not found.');
+  await tx.event.delete({ where: { id: eventId } });
+  if (event.matchId) await applyEventRemoval(event.matchId, event, tx);
 }
 
 const isUniqueViolation = (err: unknown) =>
@@ -73,9 +87,7 @@ export async function recordOneEvent(
     // makes writers on one match wait their turn instead, and each statement
     // sees what the one before it committed, so a resend of the same key
     // queued behind the original finds its row.
-    return await prisma.$transaction(async (tx) => {
-      await lockMatch(tx, matchId);
-
+    return await withMatchLock(matchId, async (tx) => {
       if (clientKey) {
         const existing = await findExisting(tx, clientKey);
         if (existing) return { event: existing, duplicate: true };
@@ -166,14 +178,12 @@ export async function recordOneEvent(
             event = await tx.event.update({ where: { id: event.id }, data: { completedSet: true }, include: eventInclude });
           }
         } else {
-          // ponytail: the replay doesn't rewrite other events' completedSet
-          // marks; they only matter once a match goes to manual override.
           await recalculateMatchState(matchId, tx);
         }
       }
 
       return { event, duplicate: false };
-    }, { isolationLevel: 'ReadCommitted' });
+    });
   } catch (err) {
     // Belt and braces: the lock orders resends, but the unique index is the
     // guarantee.

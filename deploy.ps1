@@ -7,6 +7,7 @@
 #   .\deploy.ps1 -Message "hotfix x"  # explicit message override
 #   .\deploy.ps1 -SkipMigrationCheck  # skip the pending-migrations check below
 #   .\deploy.ps1 -Force               # prod from a dirty tree or a branch other than main
+#   .\deploy.ps1 -NoBackup            # prod without today's backup.ps1 file
 #
 # The auto-built message is "<tag> (<sha>): <commit subject>", with a
 # "+ uncommitted local changes" suffix when the working tree is dirty —
@@ -20,7 +21,10 @@
 # own .env loading) and restores the environment afterwards.
 #
 # Prod refuses a dirty working tree or a branch other than main unless -Force:
-# a prod deploy publishes the working tree, not a git ref.
+# a prod deploy publishes the working tree, not a git ref. It also refuses
+# unless today's backup (backup.ps1, $HOME\Backups\vv-backup-<today>-*.sql)
+# exists and isn't empty, unless -NoBackup: the Supabase free plan keeps no
+# downloadable backups, so that file is the only way back.
 #
 # After a successful deploy it runs backend/scripts/smoke.mjs: against prod
 # with no credentials (read-only checks), against staging with the SMOKE_*
@@ -43,7 +47,8 @@ param(
   [ValidateSet('prod', 'staging')][string]$Target = 'prod',
   [string]$Message,
   [switch]$SkipMigrationCheck,
-  [switch]$Force
+  [switch]$Force,
+  [switch]$NoBackup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,6 +121,15 @@ if ($Target -eq 'staging') {
     Write-Host "DEPLOY ABORTED: prod deploys run from a clean checkout of main (branch: $branch, uncommitted changes: $isDirty)."
     Write-Host "Commit or stash, switch to main, or pass -Force if you really mean it."
     exit 1
+  }
+  if (-not $NoBackup) {
+    $bk = Get-ChildItem (Join-Path $HOME 'Backups') -Filter ('vv-backup-{0}-*.sql' -f (Get-Date -Format 'yyyy-MM-dd')) -ErrorAction SilentlyContinue |
+      Where-Object Length -gt 0 | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $bk) {
+      Write-Host "DEPLOY ABORTED: no backup from today in $(Join-Path $HOME 'Backups'). Run .\backup.ps1 first, or pass -NoBackup if you really mean it."
+      exit 1
+    }
+    Write-Host "Today's backup: $($bk.FullName)"
   }
 }
 

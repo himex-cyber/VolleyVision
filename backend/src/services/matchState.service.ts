@@ -32,20 +32,20 @@ export async function recalculateMatchState(matchId: string, db: Prisma.Transact
   const [events, adjustments] = await Promise.all([
     db.event.findMany({
       where: { matchId },
-      select: { eventType: true, isOpponentEvent: true, recordedAt: true },
+      select: { id: true, eventType: true, isOpponentEvent: true, recordedAt: true },
       // id breaks ties: taps sharing a timestamp must replay the same way every
       // time (cuids roughly follow insert order, like the increment path).
       orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
     }),
     db.scoreAdjustment.findMany({
       where: { matchId },
-      select: { homeDelta: true, awayDelta: true, createdAt: true },
+      select: { id: true, homeDelta: true, awayDelta: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     }),
   ]);
 
   const timeline = buildTimeline(events, adjustments);
-  const { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed } =
+  const { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers } =
     replayTimeline(timeline);
 
   const newStatus =
@@ -65,6 +65,17 @@ export async function recalculateMatchState(matchId: string, db: Prisma.Transact
       status: newStatus,
     },
   });
+
+  // 8.0.3: the completedSet marks follow the replay. An out-of-order tap moves
+  // which point closes a set, and undo trusts the marks once the match is
+  // under manual override (applyEventRemoval) and on adjustments always
+  // (deleteLastEvent), so a stale one would undo the wrong set.
+  await Promise.all([
+    db.event.updateMany({ where: { matchId, completedSet: true, id: { notIn: closers.events } }, data: { completedSet: false } }),
+    db.event.updateMany({ where: { matchId, completedSet: false, id: { in: closers.events } }, data: { completedSet: true } }),
+    db.scoreAdjustment.updateMany({ where: { matchId, completedSet: true, id: { notIn: closers.adjustments } }, data: { completedSet: false } }),
+    db.scoreAdjustment.updateMany({ where: { matchId, completedSet: false, id: { in: closers.adjustments } }, data: { completedSet: true } }),
+  ]);
 }
 
 /**
