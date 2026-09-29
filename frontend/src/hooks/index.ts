@@ -457,6 +457,32 @@ export function useMatchZones(matchId: string) {
   });
 }
 
+// ─── Point flow (7.9) ─────────────────────────────────────────────────────────
+
+export function useRotations(scope: 'match' | 'team', id: string) {
+  return useQuery({
+    queryKey: ['analytics', 'rotations', scope, id],
+    queryFn: () => (scope === 'match' ? analyticsApi.matchRotations(id) : analyticsApi.teamRotations(id)),
+    enabled: !!id,
+  });
+}
+
+export function useMomentum(matchId: string) {
+  return useQuery({
+    queryKey: ['analytics', 'momentum', 'match', matchId],
+    queryFn: () => analyticsApi.matchMomentum(matchId),
+    enabled: !!matchId,
+  });
+}
+
+export function useAdvancedMetrics(scope: 'match' | 'team', id: string) {
+  return useQuery({
+    queryKey: ['analytics', 'advanced', scope, id],
+    queryFn: () => (scope === 'match' ? analyticsApi.matchAdvanced(id) : analyticsApi.teamAdvanced(id)),
+    enabled: !!id,
+  });
+}
+
 export function useTeamZones(teamId: string) {
   return useQuery({
     queryKey: ['analytics', 'zones', 'team', teamId],
