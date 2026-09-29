@@ -6,10 +6,8 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 
 Phase 7 of the rebuild roadmap: analytics A. One migration
 (`20260929034654_event_serving_side`, additive).
-Released but not deployed yet (Netlify build credits are low): production stays
-on v9.10.0. Deploying needs both migrations (v9.11.0's and this one), and the
-v9.12.0 Android build needs this backend: don't share it before the deploy.
-KPI labels approved by Karlos: Point win %, Side-out %, Break-point %, Serve
+Deployed to production on 2026-09-29, together with v9.11.0 (both migrations
+applied first). KPI labels approved by Karlos: Point win %, Side-out %, Break-point %, Serve
 receive quality.
 
 **Serving: Us / Them**
@@ -57,9 +55,7 @@ individual numbers)
 
 Phases 6.0 and 6 of the rebuild roadmap: carry-over fixes, then tracking that
 keeps working with no signal. One migration (`20260929010857_event_client_key`).
-Released but not deployed yet (Netlify build credits are low): production stays
-on v9.10.0, and the migration must be applied before this version is deployed.
-The v9.11.0 Android build needs this backend: don't share it before the deploy.
+Deployed to production on 2026-09-29, together with v9.12.0.
 
 **Tracking offline**
 - **Tracking keeps working with no signal.** Every tap is saved on the device
