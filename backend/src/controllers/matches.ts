@@ -198,7 +198,9 @@ export async function updateScore(req: Request, res: Response, next: NextFunctio
       if (completedSet && adjustmentId) {
         await tx.scoreAdjustment.update({ where: { id: adjustmentId }, data: { completedSet: true } });
       }
-      return updated;
+      // Completion zeroed the score and banked the set after `updated` was
+      // read; answer with what's stored now.
+      return completedSet ? tx.match.findUniqueOrThrow({ where: { id: req.params.id } }) : updated;
     });
 
     res.json(match);

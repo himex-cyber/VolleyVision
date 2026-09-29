@@ -10,6 +10,7 @@ import { rawCallsMade } from '../testing/fakePrisma';
 import { updateScore, resetSetScore, resetMatch } from '../controllers/matches';
 import { deleteLastEvent, deleteEvent } from '../controllers/events';
 import { applyUpdateMatch } from '../services/teamActions.service';
+import { recalculateMatchState } from '../services/matchState.service';
 
 const LOCK = /FROM "matches" WHERE "id" = \? FOR UPDATE/;
 
@@ -29,6 +30,7 @@ function world(score: Partial<{ homeScore: number; awayScore: number; manualScor
     setScores: [], status: 'IN_PROGRESS', manualScoreOverride: false, ...score,
   };
   db.match.findUnique = locked('match.findUnique', () => ({ ...match }));
+  db.match.findUniqueOrThrow = locked('match.findUniqueOrThrow', () => ({ ...match }));
   db.match.update = async (args: any) => {
     for (const [k, v] of Object.entries(args.data)) if (v !== undefined) match[k] = v;
     return { ...match };
@@ -96,8 +98,9 @@ async function main() {
   // A set closed by a delta marks that adjustment, still under the lock.
   {
     const m = world({ homeScore: 24, awayScore: 10 });
-    await call(updateScore, { params: { id: 'M' }, body: { homeDelta: 1 } });
+    const r = await call(updateScore, { params: { id: 'M' }, body: { homeDelta: 1 } });
     assert.equal(m.homeSetsWon, 1);
+    assert.deepEqual([r.body.homeScore, r.body.homeSetsWon], [0, 1], 'the response is the stored, completed state');
     assert.deepEqual(callsFor('scoreAdjustment', 'update')[0][0].data, { completedSet: true });
   }
 
@@ -183,6 +186,23 @@ async function main() {
     db.match.update = async () => ({});
     await applyUpdateMatch('M', { opponent: 'Hawks' });
     assert.equal(rawCallsMade().length, 0, 'a name change needs no lock');
+  }
+
+  // 8.0.3: a replay moves the completedSet marks to the items that close
+  // each set now, on events and adjustments, and clears the rest.
+  {
+    world();
+    db.match.findUnique = async () => ({ status: 'IN_PROGRESS' }); // called directly here, not under a writer's lock
+    const kills = Array.from({ length: 25 }, (_, i) => ({ id: `e${i + 1}`, eventType: 'KILL', isOpponentEvent: false, recordedAt: new Date(i * 1000) }));
+    db.event.findMany = async () => kills;
+    db.scoreAdjustment.findMany = async () => [{ id: 'a1', homeDelta: -1, awayDelta: 0, createdAt: new Date(30_000) }];
+    await recalculateMatchState('M', db);
+    const [clearEvents, setEvents] = callsFor('event', 'updateMany').map((c) => c[0]);
+    assert.deepEqual(clearEvents, { where: { matchId: 'M', completedSet: true, id: { notIn: ['e25'] } }, data: { completedSet: false } });
+    assert.deepEqual(setEvents, { where: { matchId: 'M', completedSet: false, id: { in: ['e25'] } }, data: { completedSet: true } });
+    const [clearAdj, setAdj] = callsFor('scoreAdjustment', 'updateMany').map((c) => c[0]);
+    assert.deepEqual(clearAdj.where.id, { notIn: [] }, 'an adjustment that closed nothing loses any old mark');
+    assert.deepEqual(setAdj.where.id, { in: [] });
   }
 
   console.log('scoreWriterLocks: all tests passed');

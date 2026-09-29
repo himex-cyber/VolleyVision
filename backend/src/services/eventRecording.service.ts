@@ -87,9 +87,7 @@ export async function recordOneEvent(
     // makes writers on one match wait their turn instead, and each statement
     // sees what the one before it committed, so a resend of the same key
     // queued behind the original finds its row.
-    return await prisma.$transaction(async (tx) => {
-      await lockMatch(tx, matchId);
-
+    return await withMatchLock(matchId, async (tx) => {
       if (clientKey) {
         const existing = await findExisting(tx, clientKey);
         if (existing) return { event: existing, duplicate: true };
@@ -185,7 +183,7 @@ export async function recordOneEvent(
       }
 
       return { event, duplicate: false };
-    }, { isolationLevel: 'ReadCommitted' });
+    });
   } catch (err) {
     // Belt and braces: the lock orders resends, but the unique index is the
     // guarantee.

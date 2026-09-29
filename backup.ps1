@@ -27,6 +27,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Resolved against PowerShell's location, not .NET's current directory (which
+# Set-Location doesn't move): the in-repo check below and docker's -v mount
+# must see the folder New-Item actually creates.
+$OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
 $Docker = 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
 
 function Read-EnvValue([string]$Path, [string]$Key) {
