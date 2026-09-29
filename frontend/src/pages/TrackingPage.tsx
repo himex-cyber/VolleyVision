@@ -321,28 +321,36 @@ export default function TrackingPage() {
   // Destructive — zeroes the current set's score and clears its manual
   // adjustment history, so confirm before doing it (consistent with the
   // Delete confirm in MatchesPage.tsx).
-  // Manual score changes and resets wait for queued taps: a score change is
-  // sent as an absolute from the server's last-known score, which the queue
-  // is still moving. (Undo goes through the queue, so it never waits.)
+  // Manual score changes and resets wait for queued taps, so they land after
+  // this device's own points rather than between them. (Undo goes through the
+  // queue, so it never waits.)
   function tapsStillSaving(): boolean {
     if (waiting === 0) return false;
     showFlash('Wait for your taps to finish saving', false);
     return true;
   }
 
+  // A reset puts the match under manual scoring for good (8.0.2): late taps
+  // from other devices only add points, in the order they arrive, and no
+  // replay can put them back in time order. Say so before it happens.
+  const RESET_NOTE = 'From now on, taps still syncing from other devices are added as they arrive, and momentum for this match follows sync order.';
+
   function handleResetSetScore() {
     if (tapsStillSaving()) return;
-    if (confirm(`Reset the score for Set ${currentSet} to 0–0? This cannot be undone.`)) {
+    if (confirm(`Reset Set ${currentSet} to 0–0? This can't be undone. ${RESET_NOTE}`)) {
       resetSetScore.mutate();
     }
   }
 
-  // The scoreboard reports a delta; the score API takes absolutes.
+  // Sent as a delta: the server applies it to the score it holds, so points
+  // another device added since this one last fetched aren't overwritten. The
+  // absolute rides along for a server that predates deltas (it ignores them);
+  // a current server ignores the absolute when a delta comes with it.
   function handleScore(side: ScoreSide, delta: number) {
     if (tapsStillSaving()) return;
     const current = (side === 'home' ? match?.homeScore : match?.awayScore) ?? 0;
     const next = Math.max(0, current + delta);
-    updateScore.mutate(side === 'home' ? { homeScore: next } : { awayScore: next }, {
+    updateScore.mutate(side === 'home' ? { homeDelta: delta, homeScore: next } : { awayDelta: delta, awayScore: next }, {
       // A point added by hand was won by that side, so they serve next, once
       // the server has taken it.
       onSuccess: () => { if (delta > 0) setServing(side === 'home' ? 'US' : 'THEM'); },
@@ -353,7 +361,7 @@ export default function TrackingPage() {
   // score history, not just the current set. Same confirm pattern as above.
   async function handleResetMatch() {
     if (tapsStillSaving()) return;
-    if (!confirm('Reset the ENTIRE match? Every set score and set won will be cleared. Recorded stats are kept. This cannot be undone.')) return;
+    if (!confirm(`Reset the ENTIRE match? Every set score and set won will be cleared. Recorded stats are kept. This can't be undone. ${RESET_NOTE}`)) return;
     try {
       await resetMatch.mutateAsync();
       setSelectedSet(null);
@@ -492,7 +500,7 @@ export default function TrackingPage() {
 
       {/* ── Sync status (6.9) ── */}
       <div className="flex items-center gap-3 flex-wrap">
-        <SyncBadge waiting={waiting} rejected={rejected} offline={queue.offline} />
+        <SyncBadge waiting={waiting} rejected={rejected} offline={queue.offline} stuck={queue.stuck} />
         {board.provisional && <span className="text-xs text-grey-600">Score shown includes taps still syncing.</span>}
       </div>
       {rejected > 1 && (

@@ -20,6 +20,16 @@ export function visiblePlayers<T extends WithUser>(players: T[], isStaff: boolea
     .map(({ userId: _userId, ...rest }) => rest);
 }
 
+/**
+ * Roster rows for this caller (8.0.4): every row stays (the roster is visible
+ * to every member), but userId, an internal account id, is only on the
+ * caller's own row unless they're staff. Null rather than removed: installed
+ * apps read the field.
+ */
+export function maskOtherUserIds<T extends WithUser>(players: T[], isStaff: boolean, callerId: string | null): T[] {
+  return isStaff ? players : players.map((p) => (isCaller(p.userId, callerId) ? p : { ...p, userId: null }));
+}
+
 type EventWithPlayer = {
   playerId: string | null;
   notes: string | null;

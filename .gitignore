@@ -35,3 +35,7 @@ CLAUDE.md
 
 # Browser-automation tool logs
 .playwright-mcp/
+
+# backup.ps1 dumps: everyone's data in plain text. Not *.sql: that would stop
+# new prisma/migrations/*/migration.sql files from being committed.
+vv-backup-*.sql

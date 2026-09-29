@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { AccessTier, ApprovalAction } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { getAccessTier } from '../services/permission.service';
+import { getAccessTier, seesEveryPlayer } from '../services/permission.service';
+import { maskOtherUserIds } from '../lib/playerPrivacy';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreatePlayer, applyUpdatePlayer, applyDeletePlayer } from '../services/playerActions.service';
 import { logAudit } from '../lib/audit';
@@ -16,7 +17,8 @@ export async function getPlayersByTeam(req: Request, res: Response, next: NextFu
       where: { teamId: req.params.teamId },
       orderBy: { jerseyNumber: 'asc' },
     });
-    res.json(players);
+    const callerId = req.user?.userId ?? null;
+    res.json(maskOtherUserIds(players, await seesEveryPlayer(callerId, req.params.teamId), callerId));
   } catch (err) {
     next(err);
   }
@@ -33,7 +35,10 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       include: { team: { select: { id: true, name: true, division: true, season: true } } },
     });
     if (!player) throw new AppError(404, 'Player not found.');
-    res.json(player);
+    const callerId = req.user?.userId ?? null;
+    // visibleByPlayerParam sets no visibleTeamId; the record's own team decides.
+    const [masked] = maskOtherUserIds([player], await seesEveryPlayer(callerId, player.teamId), callerId);
+    res.json(masked);
   } catch (err) {
     next(err);
   }

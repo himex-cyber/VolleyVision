@@ -141,7 +141,7 @@ describe('replayTimeline from a start state', () => {
   it('adds queued taps to the server score', () => {
     const start = { homeScore: 10, awayScore: 8, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }] };
     const r = replayTimeline([kill(1), oppKill(2), kill(3)], start);
-    assert.deepEqual(r, { homeScore: 12, awayScore: 9, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }], completed: false });
+    assert.deepEqual(r, { homeScore: 12, awayScore: 9, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }], completed: false, closers: { events: [], adjustments: [] } });
     assert.equal(start.setScores.length, 1, 'the start state is not mutated');
   });
 
@@ -163,6 +163,42 @@ describe('replayTimeline from a start state', () => {
     const r = replayTimeline([oppKill(1)], { homeScore: 0, awayScore: 0, homeSetsWon: 3, awaySetsWon: 1, setScores: [] });
     assert.equal(r.completed, true);
     assert.equal(r.awayScore, 0);
+  });
+});
+
+// ─── Set-closing marks (8.0.3) ────────────────────────────────────────────────
+// recalculateMatchState writes these back as completedSet, which undo trusts
+// under manual override; a mark left on a point that no longer closes a set
+// undoes the wrong set.
+describe('replayTimeline — closers', () => {
+  const t = (s: number) => new Date(s * 1000);
+  const kills = (from: number, n: number, prefix: string) =>
+    buildTimeline(Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i + 1}`, eventType: 'KILL', isOpponentEvent: false, recordedAt: t(from + i) })), []);
+
+  it('names the event and the adjustment that closed each set', () => {
+    // Set 1: 25 kills (e25 closes). Set 2: 24 kills then a +1 adjustment closes it.
+    const events = [...kills(0, 25, 'e'), ...kills(100, 24, 'f')];
+    const items = [...events, ...buildTimeline([], [{ id: 'a1', homeDelta: 1, awayDelta: 0, createdAt: t(200) }])];
+    const r = replayTimeline(items);
+    assert.equal(r.homeSetsWon, 2);
+    assert.deepEqual(r.closers, { events: ['e25'], adjustments: ['a1'] });
+  });
+
+  it('an out-of-order insert moves the closing point', () => {
+    const late = { id: 'late', eventType: 'KILL', isOpponentEvent: false, recordedAt: t(0.5) }; // made before e2
+    const timeline = buildTimeline([
+      ...Array.from({ length: 25 }, (_, i) => ({ id: `e${i + 1}`, eventType: 'KILL', isOpponentEvent: false, recordedAt: t(i) })),
+      late,
+    ], []);
+    const r = replayTimeline(timeline);
+    assert.deepEqual(r.closers.events, ['e24'], 'e24 is now the 25th point; e25 opens set 2');
+    assert.equal(r.homeScore, 1);
+  });
+
+  it('items without ids (queued taps) close sets without being named', () => {
+    const r = replayTimeline([evt('KILL')], { homeScore: 24, awayScore: 0, homeSetsWon: 0, awaySetsWon: 0, setScores: [] });
+    assert.equal(r.homeSetsWon, 1);
+    assert.deepEqual(r.closers, { events: [], adjustments: [] });
   });
 });
 

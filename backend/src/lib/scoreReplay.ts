@@ -9,6 +9,7 @@ import { scoringTeam } from './scoringRules';
 
 export interface ReplayEventItem {
   kind: 'event';
+  id?: string; // absent on taps still queued on the device
   eventType: string;
   isOpponentEvent: boolean;
   at: Date;
@@ -16,6 +17,7 @@ export interface ReplayEventItem {
 
 export interface ReplayAdjustmentItem {
   kind: 'adjustment';
+  id?: string;
   homeDelta: number;
   awayDelta: number;
   at: Date;
@@ -30,6 +32,8 @@ export interface ReplayResult {
   awaySetsWon: number;
   setScores: { set: number; home: number; away: number }[];
   completed: boolean;
+  /** Ids of the items whose point closed a set (8.0.3): the completedSet marks. */
+  closers: { events: string[]; adjustments: string[] };
 }
 
 function setWinTarget(setNumber: number): number {
@@ -41,7 +45,7 @@ function hasWonSet(score: number, opponentScore: number, setNumber: number): boo
   return score >= target && score - opponentScore >= 2;
 }
 
-export type ReplayStart = Omit<ReplayResult, 'completed'>;
+export type ReplayStart = Omit<ReplayResult, 'completed' | 'closers'>;
 
 const ZERO: ReplayStart = { homeScore: 0, awayScore: 0, homeSetsWon: 0, awaySetsWon: 0, setScores: [] };
 
@@ -54,8 +58,9 @@ const ZERO: ReplayStart = { homeScore: 0, awayScore: 0, homeSetsWon: 0, awaySets
 export function replayTimeline(items: ReplayItem[], start: ReplayStart = ZERO): ReplayResult {
   let { homeScore, awayScore, homeSetsWon, awaySetsWon } = start;
   const setScores = [...start.setScores];
+  const closers: ReplayResult['closers'] = { events: [], adjustments: [] };
   let completed = homeSetsWon >= 3 || awaySetsWon >= 3;
-  if (completed) return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed };
+  if (completed) return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers };
 
   for (const item of items) {
     if (item.kind === 'event') {
@@ -71,17 +76,15 @@ export function replayTimeline(items: ReplayItem[], start: ReplayStart = ZERO): 
     }
 
     const currentSet = homeSetsWon + awaySetsWon + 1;
+    const homeWon = hasWonSet(homeScore, awayScore, currentSet);
 
-    if (hasWonSet(homeScore, awayScore, currentSet)) {
+    if (homeWon || hasWonSet(awayScore, homeScore, currentSet)) {
       setScores.push({ set: currentSet, home: homeScore, away: awayScore });
-      homeSetsWon++;
+      if (homeWon) homeSetsWon++;
+      else awaySetsWon++;
       homeScore = 0;
       awayScore = 0;
-    } else if (hasWonSet(awayScore, homeScore, currentSet)) {
-      setScores.push({ set: currentSet, home: homeScore, away: awayScore });
-      awaySetsWon++;
-      homeScore = 0;
-      awayScore = 0;
+      if (item.id) (item.kind === 'event' ? closers.events : closers.adjustments).push(item.id);
     }
 
     if (homeSetsWon >= 3 || awaySetsWon >= 3) {
@@ -90,20 +93,20 @@ export function replayTimeline(items: ReplayItem[], start: ReplayStart = ZERO): 
     }
   }
 
-  return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed };
+  return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers };
 }
 
 /** Merges event and adjustment streams into one chronologically sorted timeline. */
 export function buildTimeline(
-  events: { eventType: string; isOpponentEvent: boolean; recordedAt: Date }[],
-  adjustments: { homeDelta: number; awayDelta: number; createdAt: Date }[],
+  events: { id?: string; eventType: string; isOpponentEvent: boolean; recordedAt: Date }[],
+  adjustments: { id?: string; homeDelta: number; awayDelta: number; createdAt: Date }[],
 ): ReplayItem[] {
   const items: ReplayItem[] = [
     ...events.map((e): ReplayEventItem => ({
-      kind: 'event', eventType: e.eventType, isOpponentEvent: e.isOpponentEvent, at: e.recordedAt,
+      kind: 'event', id: e.id, eventType: e.eventType, isOpponentEvent: e.isOpponentEvent, at: e.recordedAt,
     })),
     ...adjustments.map((a): ReplayAdjustmentItem => ({
-      kind: 'adjustment', homeDelta: a.homeDelta, awayDelta: a.awayDelta, at: a.createdAt,
+      kind: 'adjustment', id: a.id, homeDelta: a.homeDelta, awayDelta: a.awayDelta, at: a.createdAt,
     })),
   ];
   return items.sort((a, b) => a.at.getTime() - b.at.getTime());
