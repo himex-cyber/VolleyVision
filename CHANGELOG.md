@@ -2,6 +2,57 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.12.0 — 2026-09-29
+
+Phase 7 of the rebuild roadmap: analytics A. One migration
+(`20260929034654_event_serving_side`, additive).
+Released but not deployed yet (Netlify build credits are low): production stays
+on v9.10.0. Deploying needs both migrations (v9.11.0's and this one), and the
+v9.12.0 Android build needs this backend: don't share it before the deploy.
+KPI labels approved by Karlos: Point win %, Side-out %, Break-point %, Serve
+receive quality.
+
+**Serving: Us / Them**
+- **The tracker records who served each rally.** A Serving control by the
+  scoreboard asks "Who serves first?" at the start of each set, then follows
+  the point: whoever wins a point serves next (manual +1 taps too). A tap
+  corrects it any time, and Undo puts it back. It works offline like every
+  other tap. Older app versions send nothing, and those points are left out
+  of side-out figures.
+
+**New panels** (match and team dashboards, every member; no player's
+individual numbers)
+- **Side-out % and break-point %**: how often we win the rally when they
+  serve, and when we serve. Overall and per rotation.
+- **Rotations**: points won and lost in each rotation, net, point win %,
+  side-out % and break-point %.
+- **Momentum** (match dashboard): the lead point by point, set by set, with
+  each set's runs and lead changes.
+- **Advanced**: side-out %, break-point %, ace rate and kill rate up top, then
+  serve, attack, block and serve receive quality (passes graded 2 or 3).
+- Each panel says how many points it's based on when some have no serving
+  side, and what to do when nothing's tracked yet.
+
+**Corrected figures**
+- **The opponent's points now count** in rotations, momentum and the match
+  report's momentum line and best rotation. Before, an opponent's kill or ace
+  was missing, so rotations and runs were one-sided. Player stats, attack,
+  serve, pass, block and the heat maps still count only our players' actions.
+- **Momentum resets each set**: score, lead and runs no longer carry across
+  sets. A run can't span two sets, and the match's longest run and largest
+  lead are the best of any set.
+- **A tie is no longer a lead change.** The report's lead-change count only
+  counts the lead passing from one side to the other.
+- **The rotation figure called "efficiency" is the point win %.** The API
+  still returns `efficiency` on the report's best rotation (installed apps
+  read it); its value is now counted with the opponent's points.
+
+**API** (additive; installed apps keep working)
+- `servingSide` (`US` or `THEM`, optional) on `POST /events` and each
+  `POST /events/batch` item; returned on events.
+- `GET /analytics/matches/:id/rotations`, `/momentum`, `/advanced` and
+  `GET /analytics/teams/:id/rotations`, `/advanced`: team-level, members only.
+
 ## v9.11.0 — 2026-09-29
 
 Phases 6.0 and 6 of the rebuild roadmap: carry-over fixes, then tracking that

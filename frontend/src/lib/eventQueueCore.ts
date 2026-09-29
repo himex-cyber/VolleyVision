@@ -14,6 +14,8 @@ export interface QueuedEventPayload {
   rotationNumber?: number | null;
   isOpponentEvent?: boolean;
   opponentJerseyNumber?: number | null;
+  /** Who served the rally (7.2), as set on the tracker when tapped. */
+  servingSide?: 'US' | 'THEM' | null;
 }
 
 export interface QueueItem {
@@ -173,12 +175,12 @@ export function retryItem(items: QueueItem[], clientKey: string): QueueItem[] {
  * thinks they undid; mark it, and applyBatchResults queues its delete.
  * 'none' means the caller undoes from the session history, or online.
  */
-export function undoNewest(items: QueueItem[]): { items: QueueItem[]; result: 'removed' | 'undo-requested' | 'none' } {
+export function undoNewest(items: QueueItem[]): { items: QueueItem[]; result: 'removed' | 'undo-requested' | 'none'; undone?: QueueItem } {
   for (let n = items.length - 1; n >= 0; n--) {
     const i = items[n];
     if (!isCreate(i) || i.undoRequested || i.state === 'rejected') continue;
-    if (i.attempts === 0 && i.state === 'queued') return { items: items.filter((_, k) => k !== n), result: 'removed' };
-    return { items: items.map((x, k) => (k === n ? { ...x, undoRequested: true } : x)), result: 'undo-requested' };
+    if (i.attempts === 0 && i.state === 'queued') return { items: items.filter((_, k) => k !== n), result: 'removed', undone: i };
+    return { items: items.map((x, k) => (k === n ? { ...x, undoRequested: true } : x)), result: 'undo-requested', undone: i };
   }
   return { items, result: 'none' };
 }

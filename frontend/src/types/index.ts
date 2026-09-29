@@ -464,6 +464,8 @@ export interface Event {
   isOpponentEvent?: boolean;
   opponentJerseyNumber?: number | null;
   recordedAt: string;
+  /** Who served this rally (7.2); null for older taps and apps. */
+  servingSide?: ServingSide | null;
   /** The recording device's offline-queue key (staff only; null for older taps). */
   clientKey?: string | null;
 }
@@ -677,3 +679,81 @@ export interface Invitation {
   invitedBy?: { id: string; firstName: string; lastName: string; email: string };
 }
 
+// ─── Point flow: rotations, momentum, advanced metrics (7.9) ─────────────────
+// Team-level (no per-player rows). Shapes mirror backend/src/services/
+// rotation.service.ts, momentum.service.ts and lib/advancedMetrics.ts.
+
+export type ServingSide = 'US' | 'THEM';
+
+/** Points with a serving side, of all points: side-out needs it (Serving: Us / Them). */
+export interface ServingCoverage {
+  withServingSide: number;
+  totalPoints: number;
+}
+
+export interface RotationStat {
+  rotation: number;
+  won: number;
+  lost: number;
+  total: number;
+  net: number;
+  pointWinPct: number | null;
+  sideOutPct: number | null;
+  breakPointPct: number | null;
+  receiveRallies: number;
+  serveRallies: number;
+}
+
+export interface RotationData {
+  rotations: RotationStat[];
+  insights: {
+    best: RotationStat | null;
+    worst: RotationStat | null;
+    highestPointWin: RotationStat | null;
+    lowestPointWin: RotationStat | null;
+  };
+  coverage: ServingCoverage;
+}
+
+export interface MomentumPoint {
+  pointNumber: number;
+  pointInSet: number;
+  scorer: 'home' | 'away';
+  homeScore: number;
+  awayScore: number;
+  lead: number;
+  setNumber: number;
+  runLength: number;
+}
+
+export interface MomentumStats {
+  totalPoints: number;
+  longestHomeRun: number;
+  longestAwayRun: number;
+  longestRun: number;
+  leadChanges: number;
+  largestHomeLead: number;
+  largestAwayLead: number;
+}
+
+export interface MomentumData {
+  timeline: MomentumPoint[];
+  stats: MomentumStats;
+  sets: (MomentumStats & { setNumber: number; homeScore: number; awayScore: number })[];
+  significantRuns: { team: 'home' | 'away'; length: number; startPoint: number; setNumber: number }[];
+}
+
+export interface AdvancedMetrics {
+  receptionQuality: {
+    attempts: number; qualityPasses: number; qualityPct: number | null; perfectPassRate: number | null;
+    pass3: number; pass2: number; pass1: number; pass0: number;
+  };
+  serve: { attempts: number; aces: number; errors: number; aceRate: number | null; errorRate: number | null; positiveRate: number | null };
+  attack: { attempts: number; kills: number; errors: number; killRate: number | null; hittingPct: number | null };
+  blocking: { soloBlocks: number; blockAssists: number; totalBlocks: number; blocksPerSet: number | null };
+  setsPlayed: number;
+  sideOut: {
+    sideOutPct: number | null; breakPointPct: number | null;
+    receiveRallies: number; serveRallies: number; coverage: ServingCoverage;
+  };
+}

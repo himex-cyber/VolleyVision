@@ -232,20 +232,21 @@ function scheduleFlush(userId: string, matchId: string) {
 }
 
 /**
- * Undo this device's last tap. 'queue' = handled in the queue (removed, or a
- * delete queued); 'online' = nothing of ours to undo, so the caller falls
- * back to the server's undo-last, which needs a connection.
+ * Undo this device's last tap, in the queue: a queued tap (its payload) or one
+ * that reached the server this session (its server id). null = nothing of
+ * ours to undo, so the caller falls back to the server's undo-last, which
+ * needs a connection.
  */
-export function undoTap(userId: string, matchId: string): 'queue' | 'online' {
-  const { items, result } = undoNewest(read(userId, matchId));
+export function undoTap(userId: string, matchId: string): { payload?: QueuedEventPayload; serverId?: string } | null {
+  const { items, result, undone } = undoNewest(read(userId, matchId));
   if (result !== 'none') {
     write(userId, matchId, items);
-    return 'queue';
+    return { payload: undone?.payload };
   }
   const serverId = history.get(hKey(userId, matchId))?.pop();
-  if (!serverId) return 'online';
+  if (!serverId) return null;
   queueDelete(userId, matchId, serverId);
-  return 'queue';
+  return { serverId };
 }
 
 function queueDelete(userId: string, matchId: string, serverId: string): void {

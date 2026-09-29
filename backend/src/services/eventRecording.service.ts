@@ -138,6 +138,7 @@ export async function recordOneEvent(
           notes: input.notes,
           isOpponentEvent: input.isOpponentEvent,
           opponentJerseyNumber: input.opponentJerseyNumber,
+          servingSide: input.servingSide,
           clientKey,
           recordedAt,
         },

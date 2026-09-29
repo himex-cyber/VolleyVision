@@ -14,7 +14,7 @@ const base = { matchId: 'm1', playerId: 'p1', eventType: 'KILL', setNumber: 2 };
 assert.deepEqual(parseEventInput(base), {
   matchId: 'm1', playerId: 'p1', eventType: 'KILL', setNumber: 2,
   rallyNumber: null, courtZone: null, rotationNumber: null, notes: null,
-  isOpponentEvent: false, opponentJerseyNumber: null, recordedAt: undefined,
+  isOpponentEvent: false, opponentJerseyNumber: null, servingSide: null, recordedAt: undefined,
 });
 // Strings from a form still parse, as today.
 assert.equal(parseEventInput({ ...base, setNumber: '3', courtZone: '4', rotationNumber: '6' }).courtZone, 4);
@@ -62,5 +62,14 @@ for (const bad of ['x', -3, 1000, 2.5]) {
   assert.equal(parseEventInput({ matchId: 'm1', eventType: 'ACE', setNumber: 1, isOpponentEvent: true, opponentJerseyNumber: bad }).opponentJerseyNumber, null);
 }
 assert.equal(parseEventInput({ ...base, rallyNumber: 12, notes: 'ok' }).rallyNumber, 12);
+
+// 7.2: servingSide is optional (older apps send none) and must be US or THEM.
+assert.equal(parseEventInput(base).servingSide, null);
+assert.equal(parseEventInput({ ...base, servingSide: 'US' }).servingSide, 'US');
+assert.equal(parseEventInput({ ...base, servingSide: 'THEM' }).servingSide, 'THEM');
+assert.equal(parseEventInput({ ...base, servingSide: null }).servingSide, null);
+for (const bad of ['us', 'BOTH', 1, {}]) {
+  assert.equal(status(() => parseEventInput({ ...base, servingSide: bad })), 400, `servingSide ${JSON.stringify(bad)}`);
+}
 
 console.log('eventInput.test.ts passed');

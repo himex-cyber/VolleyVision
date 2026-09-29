@@ -339,12 +339,13 @@ const ar = calculateMomentum(awayRun4);
 assert.equal(ar.stats.longestAwayRun, 4,  'Longest away run should be 4');
 assert.equal(ar.timeline[3].lead, -4,     'Lead should be -4 after 4 away points');
 
-// Lead changes
-const seeSaw = Array(6).fill(null).flatMap((_, i) =>
-  i % 2 === 0 ? [mkEvent('KILL')] : [mkEvent('ATTACK_ERROR')],
-);
+// Lead changes: the lead passing from one side to the other. A tie isn't one
+// (the old count added one every time the score went level).
+const seeSaw = ['KILL', 'ATTACK_ERROR', 'ATTACK_ERROR', 'KILL', 'KILL'].map((t) => mkEvent(t)); // leads 1, 0, -1, 0, 1
 const ss = calculateMomentum(seeSaw);
-assert.ok(ss.stats.leadChanges >= 1, 'See-saw scoring should have lead changes');
+assert.equal(ss.stats.leadChanges, 2, 'us -> them -> us');
+const levelOnly = calculateMomentum(['KILL', 'ATTACK_ERROR', 'KILL', 'ATTACK_ERROR'].map((t) => mkEvent(t)));
+assert.equal(levelOnly.stats.leadChanges, 0, 'going level and back is not a lead change');
 
 // Largest lead
 const leads = [
@@ -365,6 +366,41 @@ const mixed = [mkEvent('DIG'), mkEvent('KILL'), mkEvent('PASS_3')];
 const mx = calculateMomentum(mixed);
 assert.equal(mx.stats.totalPoints, 1, 'Only 1 scoring event in mixed set');
 
+// 7.5: opponent events score with the inversion (an opponent kill is their point).
+const t0 = new Date('2026-09-29T10:00:00Z').getTime();
+const at = (s: number) => new Date(t0 + s * 1000);
+const ev = (eventType: string, set: number, sec: number, isOpponentEvent = false) =>
+  ({ eventType, setNumber: set, recordedAt: at(sec), isOpponentEvent });
+const opp = calculateMomentum([ev('KILL', 1, 1, true), ev('SERVICE_ERROR', 1, 2, true)]);
+assert.deepEqual(opp.timeline.map((p) => p.scorer), ['away', 'home'], 'opponent kill -> them; opponent error -> us');
+
+// Score, lead and runs reset each set; runs never cross a set.
+const twoSets = calculateMomentum([
+  ev('KILL', 1, 1), ev('KILL', 1, 2), ev('KILL', 1, 3), // set 1: us 3-0
+  ev('KILL', 2, 10), ev('KILL', 2, 11),                   // set 2 opens with 2 of ours (not a run of 5)
+  ev('ATTACK_ERROR', 2, 12), ev('ATTACK_ERROR', 2, 13), ev('ATTACK_ERROR', 2, 14), ev('ATTACK_ERROR', 2, 15),
+]);
+const s2first = twoSets.timeline.find((p) => p.setNumber === 2)!;
+assert.deepEqual([s2first.homeScore, s2first.awayScore, s2first.runLength, s2first.pointInSet], [1, 0, 1, 1], 'set 2 starts from 0-0');
+assert.equal(twoSets.stats.longestHomeRun, 3, 'a run across a set boundary counts as two runs');
+assert.equal(twoSets.stats.longestAwayRun, 4);
+assert.equal(twoSets.stats.largestHomeLead, 3, 'max over the sets');
+assert.equal(twoSets.stats.largestAwayLead, 2, 'set 2: 2-4');
+assert.equal(twoSets.stats.leadChanges, 1, 'summed over the sets: set 2 went 2-0 to 2-3');
+assert.ok(twoSets.significantRuns.every((r) => r.length <= 4));
+assert.deepEqual(twoSets.significantRuns.map((r) => [r.setNumber, r.team, r.length]), [[1, 'home', 3], [2, 'away', 4]]);
+assert.deepEqual(twoSets.sets.map((x) => [x.setNumber, x.homeScore, x.awayScore, x.totalPoints]), [[1, 3, 0, 3], [2, 2, 4, 6]]);
+
+// A set's taps interleaving with another's in time (the tracker jumped back to
+// fix set 1 during set 2) still make one entry per set.
+const jumped = calculateMomentum([ev('KILL', 2, 10), ev('KILL', 1, 11), ev('KILL', 2, 12), ev('KILL', 2, 13)]);
+assert.deepEqual(jumped.sets.map((x) => [x.setNumber, x.homeScore]), [[1, 1], [2, 3]]);
+assert.equal(jumped.stats.longestHomeRun, 3, 'set 2 is one run of 3, not split by the set-1 fix');
+
+// Sorted by time inside the function: arrival order doesn't matter.
+const shuffled = calculateMomentum([ev('ATTACK_ERROR', 1, 3), ev('KILL', 1, 1), ev('KILL', 1, 2)]);
+assert.deepEqual(shuffled.timeline.map((p) => p.scorer), ['home', 'home', 'away']);
+
 console.log('Momentum analytics tests passed.');
 
 // ─── Rotation analytics ───────────────────────────────────────────────────────
@@ -382,7 +418,7 @@ const r3 = r3result.rotations.find((r) => r.rotation === 3)!;
 assert.equal(r3.won, 8);
 assert.equal(r3.lost, 0);
 assert.equal(r3.net, 8);
-assert.equal(r3.efficiency, 100, 'Efficiency should be 100% for rotation with only wins');
+assert.equal(r3.pointWinPct, 100, 'Point win % is 100 for a rotation with only wins');
 
 // Best and worst rotation
 const mixed2 = [
@@ -395,18 +431,37 @@ const mr = calculateRotations(mixed2);
 assert.equal(mr.insights.best!.rotation, 1,  'Rotation 1 has better net (+3)');
 assert.equal(mr.insights.worst!.rotation, 2, 'Rotation 2 has worse net (-3)');
 
-// Side-out efficiency
+// Point win % (what the old "side-out efficiency" really measured)
 const eff = [
   ...Array(3).fill({ eventType: 'KILL', rotationNumber: 5 }),
   { eventType: 'ATTACK_ERROR', rotationNumber: 5 },
 ];
 const effR = calculateRotations(eff);
 const r5 = effR.rotations.find((r) => r.rotation === 5)!;
-assert.equal(r5.efficiency, 75, 'Side-out efficiency: 3/4 = 75%');
+assert.equal(r5.pointWinPct, 75, 'Point win %: 3/4 = 75%');
 
-// highestSideOut / lowestSideOut
-assert.ok(effR.insights.highestSideOut !== null);
-assert.ok(effR.insights.lowestSideOut !== null);
+// highestPointWin / lowestPointWin (renamed from highestSideOut / lowestSideOut)
+assert.ok(effR.insights.highestPointWin !== null);
+assert.ok(effR.insights.lowestPointWin !== null);
+
+// 7.4: opponent events score with the inversion.
+const oppRot = calculateRotations([
+  { eventType: 'KILL', rotationNumber: 2, isOpponentEvent: true },          // their kill: we lost it
+  { eventType: 'SERVICE_ERROR', rotationNumber: 2, isOpponentEvent: true }, // their error: we won it
+  { eventType: 'KILL', rotationNumber: 2 },
+]);
+const r2 = oppRot.rotations.find((r) => r.rotation === 2)!;
+assert.deepEqual([r2.won, r2.lost, r2.net, r2.pointWinPct], [2, 1, 1, 67]);
+
+// Side-out and break-point per rotation, from the serving side.
+const served = calculateRotations([
+  { eventType: 'KILL', rotationNumber: 1, servingSide: 'THEM' },
+  { eventType: 'ATTACK_ERROR', rotationNumber: 1, servingSide: 'THEM' },
+  { eventType: 'ACE', rotationNumber: 1, servingSide: 'US' },
+  { eventType: 'KILL', rotationNumber: 1 },
+]);
+const s1 = served.rotations.find((r) => r.rotation === 1)!;
+assert.deepEqual([s1.sideOutPct, s1.breakPointPct, s1.receiveRallies, s1.serveRallies], [50, 100, 2, 1]);
 
 // Null rotation numbers must be ignored
 const nullRot = [

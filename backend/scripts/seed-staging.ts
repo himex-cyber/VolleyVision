@@ -13,8 +13,9 @@
  * Prints the team and match ids for the smoke env (SMOKE_TEAM_ID / SMOKE_MATCH_ID).
  */
 import bcrypt from 'bcryptjs';
-import { EventType, Position, TeamRole, UserRole } from '@prisma/client';
+import { EventType, Position, ServingSide, TeamRole, UserRole } from '@prisma/client';
 import { stagingGuardError } from '../src/lib/stagingGuard';
+import { scoringTeam } from '../src/lib/scoringRules';
 
 // Prisma Client loads backend/.env (prod) on its own for any variable the shell
 // didn't set, so the guard inspects the resolved DATABASE_URL itself rather
@@ -81,28 +82,40 @@ const RALLY_ACTIONS: EventType[] = [
 ];
 const OPPONENT_SERVES: EventType[] = [EventType.SERVE_IN, EventType.SERVE_IN, EventType.SERVICE_ERROR, EventType.SERVE_IN, EventType.ACE];
 
+const rallyWinner = (e: { eventType: EventType; isOpponentEvent: boolean }) => scoringTeam(e.eventType, e.isOpponentEvent);
+
 function buildEvents(plan: MatchPlan, playerIds: string[]) {
   const rows: {
     matchId: string; playerId: string | null; eventType: EventType; setNumber: number;
     rallyNumber: number; rotationNumber: number; courtZone: number;
-    isOpponentEvent: boolean; opponentJerseyNumber: number | null;
+    isOpponentEvent: boolean; opponentJerseyNumber: number | null; servingSide: ServingSide;
   }[] = [];
   let n = 0;
   for (const { set } of plan.setScores) {
+    // Who serves: we open each set, then the winner of each rally serves the
+    // next (7.11), so the seeded side-out and break-point figures reconcile.
+    let server: ServingSide = ServingSide.US;
     // A dozen rallies per set is plenty for charts without bloating the table.
     for (let rally = 1; rally <= 12; rally++, n++) {
       const rotationNumber = (Math.floor(n / 2) % 6) + 1;
-      const base = { matchId: plan.id, setNumber: set, rallyNumber: rally, rotationNumber };
-      // Serve alternates: odd rallies we serve, even rallies the opponent does.
-      if (rally % 2 === 1) {
+      const servingSide: ServingSide = server;
+      const base = { matchId: plan.id, setNumber: set, rallyNumber: rally, rotationNumber, servingSide };
+      const start = rows.length;
+      if (servingSide === ServingSide.US) {
         rows.push({ ...base, playerId: playerIds[n % playerIds.length], eventType: n % 7 === 0 ? EventType.ACE : EventType.SERVE_IN,
           courtZone: 1, isOpponentEvent: false, opponentJerseyNumber: null });
       } else {
         rows.push({ ...base, playerId: null, eventType: OPPONENT_SERVES[n % OPPONENT_SERVES.length],
           courtZone: 1, isOpponentEvent: true, opponentJerseyNumber: (n % 12) + 1 });
       }
-      rows.push({ ...base, playerId: playerIds[(n + 3) % playerIds.length], eventType: RALLY_ACTIONS[n % RALLY_ACTIONS.length],
-        courtZone: (n % 6) + 1, isOpponentEvent: false, opponentJerseyNumber: null });
+      // One point per rally: the rally action only if the serve didn't end it.
+      const serveWon = rallyWinner(rows[start]);
+      if (!serveWon) {
+        rows.push({ ...base, playerId: playerIds[(n + 3) % playerIds.length], eventType: RALLY_ACTIONS[n % RALLY_ACTIONS.length],
+          courtZone: (n % 6) + 1, isOpponentEvent: false, opponentJerseyNumber: null });
+      }
+      const winner = serveWon ?? rallyWinner(rows[rows.length - 1]);
+      if (winner) server = winner === 'home' ? ServingSide.US : ServingSide.THEM;
     }
   }
   return rows;

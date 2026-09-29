@@ -16,6 +16,8 @@ import type { ScoreSide } from '../components/scoreboard/LiveScoreboard';
 import SyncBadge from '../components/tracking/SyncBadge';
 import { QueueFullError } from '../lib/eventQueue';
 import { provisionalScore, queueSummary } from '../lib/eventQueueCore';
+import { scoringTeam } from '../lib/scoringRules';
+import type { ServingSide } from '../types';
 import type { QueueItem } from '../lib/eventQueueCore';
 import { confirmLeave, leaveWarning, setLeaveGuard } from '../lib/leaveGuard';
 
@@ -130,7 +132,7 @@ export default function TrackingPage() {
   // The server said no (403/404): never keep showing the device's old copy.
   const refused = axios.isAxiosError(matchError) && [403, 404].includes(matchError.response?.status ?? 0);
   const match = refused ? undefined : cachedOrLive;
-  const { data: events } = useEvents(matchId!);
+  const { data: events, isFetchedAfterMount: eventsFresh } = useEvents(matchId!);
   const recordEvent = useRecordEvent(matchId!);
   const { undo, isPending: undoPending } = useUndoEvent(matchId!);
   const queue = useEventQueue(matchId!);
@@ -151,6 +153,11 @@ export default function TrackingPage() {
   // the provisional state while taps are queued, 6.10), unless the coach has
   // jumped to another with the set buttons.
   const [selectedSet, setSelectedSet] = useState<number | null>(null);
+  // Who is serving (7.2): sent with every tap so side-out and break-point are
+  // real. Page state only; the queue carries each tap's own value. null asks
+  // "Who serves first?". servingFor is the set it was decided in.
+  const [serving, setServing] = useState<ServingSide | null>(null);
+  const [servingFor, setServingFor] = useState<number | null>(null);
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
   const [selectedRotation, setSelectedRotation] = useState<number | null>(null);
   const [keepZone, setKeepZone] = useState(true);
@@ -197,6 +204,28 @@ export default function TrackingPage() {
   // When a set closes, follow the match into the next one.
   useEffect(() => { setSelectedSet(null); }, [playingSet]);
 
+  // Serving at the start of a set, or on (re)load: whoever won the last point
+  // of this set serves (a point won is the serve won); with no point yet, ask.
+  // Once decided for a set, taps and corrections own it.
+  useEffect(() => {
+    // The first decision waits for a fresh event list (a stale or missing one
+    // would read as a fresh set) unless offline, where the queue is all there
+    // is. A later set change decides at once: a new set has no server points.
+    const firstDecision = servingFor === null;
+    if (!match || servingFor === playingSet || (firstDecision && !eventsFresh && !queue.offline)) return;
+    const scored = [
+      ...(events ?? []).map((e) => ({ eventType: e.eventType as string, isOpponentEvent: !!e.isOpponentEvent, setNumber: e.setNumber, at: e.recordedAt })),
+      ...queue.items
+        .filter((i) => i.op === 'create' && i.state !== 'rejected' && !i.undoRequested)
+        .map((i) => ({ eventType: i.payload!.eventType, isOpponentEvent: !!i.payload!.isOpponentEvent, setNumber: i.payload!.setNumber, at: i.recordedAt })),
+    ]
+      .filter((e) => e.setNumber === playingSet && scoringTeam(e.eventType, e.isOpponentEvent))
+      .sort((a, b) => a.at.localeCompare(b.at));
+    const last = scored[scored.length - 1];
+    setServing(last ? (scoringTeam(last.eventType, last.isOpponentEvent) === 'home' ? 'US' : 'THEM') : null);
+    setServingFor(playingSet);
+  }, [match, events, eventsFresh, queue.offline, queue.items, playingSet, servingFor]);
+
   const { waiting, rejected } = queueSummary(queue.items);
 
   // Leaving with taps still queued or not saved: they're kept (and queued
@@ -234,7 +263,11 @@ export default function TrackingPage() {
       const jerseyNum = opponentJerseyNumber.trim() !== '' ? parseInt(opponentJerseyNumber, 10) : null;
       // Queued on the device and sent in the background: the buttons never
       // wait for the network (6.7).
+      // Serving belongs to the set being played; a fix-up tap in an earlier
+      // set (after a set jump) carries none and doesn't move it.
+      const inPlayingSet = currentSet === playingSet;
       recordEvent({
+        servingSide: inPlayingSet ? serving : null,
         ...(isOpponentMode
           ? { isOpponentEvent: true, opponentJerseyNumber: jerseyNum }
           : { playerId: selectedPlayer!.id }),
@@ -251,6 +284,9 @@ export default function TrackingPage() {
         setRecentPlayerIds((prev) => [usedId, ...prev.filter((id) => id !== usedId)].slice(0, 3));
         showFlash(`${meta.label} → #${selectedPlayer!.jerseyNumber}`, true);
       }
+      // The side that won the point serves next.
+      const won = scoringTeam(eventType, isOpponentMode);
+      if (won && inPlayingSet) setServing(won === 'home' ? 'US' : 'THEM');
       setTimeout(() => setJustRecorded(null), 300);
       if (!keepZone) setSelectedZone(null);
     } catch (err) {
@@ -266,7 +302,15 @@ export default function TrackingPage() {
 
   async function handleUndo() {
     try {
-      await undo();
+      const undone = await undo();
+      // A tap of ours that scored in the set being played: serving goes back
+      // to what it was when that tap was made (null too: ask again). After
+      // the server's undo-last we can't know what it removed, so leave it.
+      const tap = undone?.payload
+        ?? (undone?.serverId ? (events ?? []).find((e) => e.id === undone.serverId) : undefined);
+      if (tap && tap.setNumber === playingSet && scoringTeam(tap.eventType, !!tap.isOpponentEvent)) {
+        setServing(tap.servingSide ?? null);
+      }
       showFlash('Undone', true);
     } catch (err) {
       const noConnection = queue.offline || (axios.isAxiosError(err) && !err.response);
@@ -298,7 +342,11 @@ export default function TrackingPage() {
     if (tapsStillSaving()) return;
     const current = (side === 'home' ? match?.homeScore : match?.awayScore) ?? 0;
     const next = Math.max(0, current + delta);
-    updateScore.mutate(side === 'home' ? { homeScore: next } : { awayScore: next });
+    updateScore.mutate(side === 'home' ? { homeScore: next } : { awayScore: next }, {
+      // A point added by hand was won by that side, so they serve next, once
+      // the server has taken it.
+      onSuccess: () => { if (delta > 0) setServing(side === 'home' ? 'US' : 'THEM'); },
+    });
   }
 
   // The most destructive action on this screen — wipes every set and the whole
@@ -468,6 +516,33 @@ export default function TrackingPage() {
           Someone else is also tracking this match. Check you're not both recording the same rallies.
         </p>
       )}
+
+      {/* ── Serving: Us / Them (7.2) ── */}
+      <div className="card p-3 flex items-center gap-3 flex-wrap">
+        <span className="text-sm text-grey-600 font-medium shrink-0">
+          {serving ? 'Serving:' : 'Who serves first?'}
+        </span>
+        <div className="flex rounded-lg overflow-hidden border border-grey-200 text-sm font-semibold" role="group" aria-label="Serving">
+          {(['US', 'THEM'] as const).map((side) => (
+            <button
+              key={side}
+              onClick={() => setServing(side)}
+              aria-pressed={serving === side}
+              className={clsx(
+                'h-11 px-5 transition-colors',
+                serving === side
+                  ? side === 'US' ? 'bg-gold-500 text-navy-900' : 'bg-navy-700 text-white'
+                  : 'bg-grey-50 text-grey-600 hover:bg-grey-200',
+              )}
+            >
+              {side === 'US' ? 'Us' : 'Them'}
+            </button>
+          ))}
+        </div>
+        {!serving && (
+          <span className="text-xs text-grey-600 min-w-0">Side-out % needs it. It follows each point after that.</span>
+        )}
+      </div>
 
       {/* ── Live Scoreboard + controls ── */}
       {/* Offline, taps and undo still work; manual score changes and resets
