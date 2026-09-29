@@ -10,6 +10,7 @@ import { resetMatchScore } from '../lib/setOperations';
 import type { MatchScoreState } from '../lib/setOperations';
 import { logAudit } from '../lib/audit';
 import { maskOtherUserIds } from '../lib/playerPrivacy';
+import { parseDateWindow, matchDateWhere } from '../lib/dateWindow';
 import { getAccessTier, seesEveryPlayer } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreateMatch, applyUpdateMatch, applyDeleteMatch } from '../services/teamActions.service';
@@ -20,19 +21,21 @@ const pending = (requestId: string) => ({ status: 'pending_approval' as const, r
 
 export async function getMatchesByTeam(req: Request, res: Response, next: NextFunction) {
   try {
-    const { opponent, status, from, to } = req.query as Record<string, string | undefined>;
+    const { opponent, status } = req.query as Record<string, string | undefined>;
+    // Bad input is a 400 here, not a Prisma error (a 500, in Sentry). `to`
+    // now takes in its whole day; it used to stop at that day's midnight.
+    const range = parseDateWindow(req.query);
+    if (!range.ok) throw new AppError(400, range.message);
+    if (status !== undefined && !Object.values(MatchStatus).includes(status as MatchStatus)) {
+      throw new AppError(400, 'Invalid match status.');
+    }
 
     const matches = await prisma.match.findMany({
       where: {
         teamId: req.params.teamId,
         ...(opponent ? { opponent: { contains: opponent, mode: 'insensitive' } } : {}),
-        ...(status   ? { status: status as any } : {}),
-        ...(from || to ? {
-          matchDate: {
-            ...(from ? { gte: new Date(from) } : {}),
-            ...(to   ? { lte: new Date(to)   } : {}),
-          },
-        } : {}),
+        ...(status   ? { status: status as MatchStatus } : {}),
+        ...matchDateWhere(range.window),
       },
       include: { _count: { select: { events: true } } },
       orderBy: { matchDate: 'desc' },
