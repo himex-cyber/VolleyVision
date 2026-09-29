@@ -1,3 +1,4 @@
+import { hasQueued } from '../../lib/eventQueue';
 import { Suspense, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -196,6 +197,10 @@ export default function Layout() {
   const pendingCount = invitations?.length ?? 0;
 
   function handleSignOut() {
+    // Signing out keeps queued taps on this device, but they only send once
+    // this same account signs in here again: say so first.
+    if (user && hasQueued(user.id)
+      && !window.confirm("Some taps haven't been sent yet. They stay on this device and send when you sign in here again. Sign out anyway?")) return;
     logout();
     navigate('/login', { replace: true });
   }

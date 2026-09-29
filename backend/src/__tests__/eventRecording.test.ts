@@ -145,6 +145,7 @@ async function main() {
     assert.equal(w.rows.length, 1, 'the stat is kept');
     assert.equal(increments(), 0, 'no point after match point');
     assert.equal(callsFor('event', 'findMany').length, 0, 'no replay either');
+    assert.ok(Math.abs(w.rows[0].recordedAt.getTime() - Date.now()) < 5000, 'stamped after match point, so a replay ignores it');
   }
 
   // Old apps: no key, no time. Server time, in order, as before.

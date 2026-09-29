@@ -21,8 +21,10 @@ export const DEVICE_KEYS_PREFIX = 'vv_keys:';
 const qKey = (userId: string, matchId: string) => `${QUEUE_PREFIX}${userId}:${matchId}`;
 // The API sends no Retry-After, so a 429 waits a flat 30 s.
 const RATE_LIMIT_BACKOFF_MS = 30_000;
-// This device's own keys per match, for the two-device warning (6.11).
+// This device's own keys per match, for the two-device warning (6.11), kept
+// for the few most recent matches only.
 const MAX_DEVICE_KEYS = 3000;
+const MAX_DEVICE_KEY_MATCHES = 10;
 
 /** crypto.randomUUID needs a secure context (and iOS 15.4+); a LAN test over http has neither. */
 function newKey(): string {
@@ -170,6 +172,8 @@ export function deviceKeys(userId: string, matchId: string): Set<string> {
 
 function rememberDeviceKey(userId: string, matchId: string, clientKey: string) {
   const k = deviceKeysKey(userId, matchId);
+  const others = storageKeys(DEVICE_KEYS_PREFIX).filter((x) => x !== k);
+  for (const x of others.slice(0, Math.max(0, others.length - (MAX_DEVICE_KEY_MATCHES - 1)))) storageRemove(x);
   const keys = [...deviceKeys(userId, matchId), clientKey].slice(-MAX_DEVICE_KEYS);
   if (deviceKeysMemory.has(k) || !storageWorks() || !storageSet(k, JSON.stringify(keys))) deviceKeysMemory.set(k, keys);
 }
@@ -211,8 +215,20 @@ export function enqueueTap(userId: string, matchId: string, payload: QueuedEvent
   if (!next) throw new QueueFullError();
   rememberDeviceKey(userId, matchId, clientKey);
   write(userId, matchId, next);
-  void flushMatch(userId, matchId);
+  scheduleFlush(userId, matchId);
   return clientKey;
+}
+
+// A tap waits a moment before sending, so a burst of taps (a rally) goes as
+// one batch rather than one request each. The board shows it at once anyway.
+const FLUSH_DELAY_MS = 800;
+const pendingFlush = new Map<string, number>();
+function scheduleFlush(userId: string, matchId: string) {
+  window.clearTimeout(pendingFlush.get(matchId));
+  pendingFlush.set(matchId, window.setTimeout(() => {
+    pendingFlush.delete(matchId);
+    void flushMatch(userId, matchId);
+  }, FLUSH_DELAY_MS));
 }
 
 /**

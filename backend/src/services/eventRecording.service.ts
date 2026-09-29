@@ -6,13 +6,37 @@ import { scoringTeam } from '../lib/scoringRules';
 import { acceptClientRecordedAt } from '../lib/clientTime';
 import { isOutOfOrder } from '../lib/offlineOrder';
 import type { EventInput } from '../lib/eventInput';
-import { recalculateMatchState } from './matchState.service';
+import { applyEventRemoval, recalculateMatchState } from './matchState.service';
 
 const eventInclude = {
   player: { select: { firstName: true, lastName: true, jerseyNumber: true } },
 } as const;
 
 type RecordedEvent = Prisma.EventGetPayload<{ include: typeof eventInclude }>;
+
+/**
+ * Writers on one match wait their turn: recording, and removing an event,
+ * both rewrite the match's running score, and a replay computed without a
+ * point another device just added would drop it.
+ */
+export async function lockMatch(tx: Prisma.TransactionClient, matchId: string): Promise<void> {
+  await tx.$queryRaw`SELECT 1 FROM "matches" WHERE "id" = ${matchId} FOR UPDATE`;
+}
+
+/** Deletes an event and brings the score back in line, under the match lock. */
+export async function removeEventLocked(event: { id: string; matchId: string | null; eventType: string; isOpponentEvent: boolean; completedSet?: boolean }): Promise<void> {
+  const { matchId } = event;
+  if (!matchId) {
+    // A training event: no match state to fix.
+    await prisma.event.delete({ where: { id: event.id } });
+    return;
+  }
+  await prisma.$transaction(async (tx) => {
+    await lockMatch(tx, matchId);
+    await tx.event.delete({ where: { id: event.id } });
+    await applyEventRemoval(matchId, event, tx);
+  }, { isolationLevel: 'ReadCommitted' });
+}
 
 const isUniqueViolation = (err: unknown) =>
   typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002';
@@ -50,7 +74,7 @@ export async function recordOneEvent(
     // sees what the one before it committed, so a resend of the same key
     // queued behind the original finds its row.
     return await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT 1 FROM "matches" WHERE "id" = ${matchId} FOR UPDATE`;
+      await lockMatch(tx, matchId);
 
       if (clientKey) {
         const existing = await findExisting(tx, clientKey);
@@ -84,8 +108,9 @@ export async function recordOneEvent(
       // Under manual override points are applied in arrival order (no replay
       // can reproduce authored set boundaries), so the stored time must be
       // arrival time too, or undo would pick a different "last" point than
-      // the one applied last.
-      const time = match.manualScoreOverride
+      // the one applied last. A finished match likewise: a late tap stamped
+      // after match point can't move the result when the match is replayed.
+      const time = match.manualScoreOverride || match.status === 'COMPLETED'
         ? { recordedAt: null, reason: 'absent' as const }
         : acceptClientRecordedAt(input.recordedAt, { now, matchCreatedAt: match.createdAt });
       if (time.reason !== 'accepted' && time.reason !== 'absent') {

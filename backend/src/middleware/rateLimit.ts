@@ -299,14 +299,15 @@ export const eventWriteRateLimit = createRateLimit({
 });
 
 /**
- * Offline event batches (6.4) - per user. A batch is up to MAX_EVENT_BATCH taps,
- * so 60 per 10 minutes covers far more than a whole match flushed at once; it
- * is separate from eventWriteRateLimit so a device catching up on a set can't
- * lock its statistician out of live tracking.
+ * Event batches (6.4) - per user. The app sends every tap through the queue,
+ * online too, so a batch is often one live tap: this is sized like
+ * eventWriteRateLimit (about one a second sustained), not for occasional bulk
+ * flushes. MAX_EVENT_BATCH bounds the work per request. Separate from
+ * eventWriteRateLimit, which the queue's deletes and older apps use.
  */
 export const eventBatchRateLimit = createRateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 60,
+  max: 600,
   keyFn: (req) => (req.user?.userId ? [`event-batch:user:${req.user.userId}`] : null), // requireAuth handles the 401
   message: "You're syncing events faster than we can keep up with. Wait a moment and try again.",
 });

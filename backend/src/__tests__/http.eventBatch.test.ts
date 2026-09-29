@@ -99,10 +99,11 @@ async function main() {
     assert.equal(callsFor('event', 'create').length, 0, 'nothing written on a refused batch');
     assert.equal((await post(base, 'coach', { matchId: 'm2', events: [item('a', { matchId: 'm2' })] })).status, 404, 'unknown match');
 
-    // Its own rate limit: 60 per 10 minutes per user, separate from single writes.
+    // Its own rate limit: 600 per 10 minutes per user (every live tap is a
+    // batch), separate from single writes.
     world();
     let limited = false;
-    for (let i = 0; i < 70 && !limited; i++) limited = (await send(base, 'POST', '/api/v1/events/batch', tokenFor('limit'), {})) === 429;
+    for (let i = 0; i < 620 && !limited; i++) limited = (await send(base, 'POST', '/api/v1/events/batch', tokenFor('limit'), {})) === 429;
     assert.ok(limited, 'batches are rate-limited');
     assert.notEqual(await send(base, 'POST', '/api/v1/events', tokenFor('limit'), {}), 429, 'single writes have their own budget');
     assert.notEqual(await send(base, 'POST', '/api/v1/events/batch', tokenFor('other'), {}), 429, 'per user');

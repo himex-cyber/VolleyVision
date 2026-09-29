@@ -57,7 +57,10 @@ assert.equal(status(() => parseEventInput({ ...base, notes: { a: 1 } })), 400);
 assert.equal(status(() => parseEventInput({ ...base, notes: 'n'.repeat(501) })), 400);
 assert.equal(status(() => parseEventInput({ ...base, notes: 'a\0b' })), 400, 'NUL');
 assert.equal(status(() => parseEventInput({ ...base, playerId: 'p\0' })), 400, 'NUL');
-assert.equal(status(() => parseEventInput({ matchId: 'm1', eventType: 'ACE', setNumber: 1, isOpponentEvent: true, opponentJerseyNumber: 'x' })), 400);
+// A bad opponent jersey never refuses the tap (it's optional; the tap may be a point).
+for (const bad of ['x', -3, 1000, 2.5]) {
+  assert.equal(parseEventInput({ matchId: 'm1', eventType: 'ACE', setNumber: 1, isOpponentEvent: true, opponentJerseyNumber: bad }).opponentJerseyNumber, null);
+}
 assert.equal(parseEventInput({ ...base, rallyNumber: 12, notes: 'ok' }).rallyNumber, 12);
 
 console.log('eventInput.test.ts passed');

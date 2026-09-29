@@ -3,11 +3,10 @@ import { MatchStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { checkSetCompletion, loadScoreState } from '../lib/scoring';
-import { applyEventRemoval } from '../services/matchState.service';
 import { resolveUndoTarget, reverseAdjustmentScore, reverseCompletingAction } from '../lib/undo';
 import { redactEvents } from '../lib/playerPrivacy';
 import { seesEveryPlayer } from '../services/permission.service';
-import { recordOneEvent } from '../services/eventRecording.service';
+import { recordOneEvent, removeEventLocked } from '../services/eventRecording.service';
 import { parseEventInput } from '../lib/eventInput';
 import { idempotencyKey, normalizeIdempotencyKey } from '../lib/idempotencyKey';
 
@@ -178,9 +177,7 @@ export async function deleteLastEvent(req: Request, res: Response, next: NextFun
     }
 
     const event = latestEvent!;
-    await prisma.event.delete({ where: { id: event.id } });
-    // matchId is guaranteed here (queried by matchId); guard for the nullable type.
-    if (event.matchId) await applyEventRemoval(event.matchId, event);
+    await removeEventLocked(event);
     res.json({ deleted: event.id, kind: 'event' });
   } catch (err) {
     next(err);
@@ -192,9 +189,9 @@ export async function deleteEvent(req: Request, res: Response, next: NextFunctio
   try {
     const event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) throw new AppError(404, 'Event not found.');
-    await prisma.event.delete({ where: { id: event.id } });
-    // Only match events affect match state; training events (matchId null) don't.
-    if (event.matchId) await applyEventRemoval(event.matchId, event);
+    // A repeat delete racing this one gets P2025, mapped to 404: the queue
+    // treats that as done.
+    await removeEventLocked(event);
     res.status(204).send();
   } catch (err) {
     next(err);

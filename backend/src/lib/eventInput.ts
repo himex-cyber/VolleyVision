@@ -65,9 +65,6 @@ export function parseEventInput(body: unknown): EventInput {
   if (rallyNumber != null && intInRange(rallyNumber, 1, 10_000) == null) {
     throw new AppError(400, 'Rally number must be a positive whole number.');
   }
-  if (isOpponent && opponentJerseyNumber != null && intInRange(opponentJerseyNumber, 0, 999) == null) {
-    throw new AppError(400, 'Opponent jersey number must be a whole number.');
-  }
   // 500: twenty notes of multi-byte text must still fit express.json's 100 kB.
   if (notes != null && notes !== '' && (typeof notes !== 'string' || notes.length > 500)) {
     throw new AppError(400, 'Notes must be text of at most 500 characters.');
@@ -87,7 +84,10 @@ export function parseEventInput(body: unknown): EventInput {
     rotationNumber: rotationNumber != null ? Number(rotationNumber) : null,
     notes: notes || null,
     isOpponentEvent: isOpponent,
-    opponentJerseyNumber: isOpponent && opponentJerseyNumber != null ? Number(opponentJerseyNumber) : null,
+    // Optional and typed by hand courtside: a number that isn't a jersey (-3,
+    // 1000, 'x') is dropped rather than refusing the tap, which is a point.
+    // v9.10.0 apps saved it before; a bad value is now simply not kept.
+    opponentJerseyNumber: isOpponent ? intInRange(opponentJerseyNumber, 0, 999) : null,
     recordedAt,
   };
 }

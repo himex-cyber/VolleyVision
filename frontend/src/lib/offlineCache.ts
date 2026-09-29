@@ -7,8 +7,6 @@ import { storageGet, storageKeys, storageRemove, storageSet } from './safeStorag
 
 const USER_KEY = 'vv_user';
 const MATCH_PREFIX = 'vv_match:';
-// This device's own event keys (eventQueue.ts), per user and match.
-const DEVICE_KEYS_PREFIX = 'vv_keys:';
 // ponytail: the few most recent matches opened on the tracker; a device that
 // tracks more at once can raise it.
 const MAX_CACHED_MATCHES = 5;
@@ -59,11 +57,12 @@ export function cachedMatch(id: string): Match | undefined {
 }
 
 /**
- * Sign-out, a 401, or a different account signing in: the cached user, every
- * cached match and this device's event keys go. Queued taps stay (keyed by
- * user, no names) and send once that user is back.
+ * Sign-out, a 401, or a different account signing in: the cached user and
+ * every cached match go. Queued taps and this device's own event keys stay
+ * (per user, random ids, no names): the taps send once that user is back, and
+ * their keys must still read as this device's (6.11).
  */
 export function clearOfflineCache(): void {
   storageRemove(USER_KEY);
-  for (const k of [...storageKeys(MATCH_PREFIX), ...storageKeys(DEVICE_KEYS_PREFIX)]) storageRemove(k);
+  for (const k of storageKeys(MATCH_PREFIX)) storageRemove(k);
 }
