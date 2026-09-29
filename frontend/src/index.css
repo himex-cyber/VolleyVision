@@ -251,3 +251,33 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* Print / Save PDF (8.7): the dashboards on white A4, without the app's
+   chrome. Elements hide themselves with print:hidden; this block covers what
+   applies everywhere. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: white;
+    /* The safe-area insets are the phone's, not the paper's. */
+    padding: 0;
+  }
+
+  body::before {
+    display: none;
+  }
+
+  /* Nothing on paper can be pressed. */
+  button {
+    display: none !important;
+  }
+
+  .card {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+

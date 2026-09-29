@@ -164,6 +164,8 @@ export default function CourtHeatMap({ data, title, defaultCategory = 'attack', 
           ))}
         </div>
       </div>
+      {/* Only the open tab prints (8.7); say which. */}
+      <p className="hidden print:block text-xs text-grey-600">Printed tab: {cat.label}</p>
 
       {tagged === 0 ? (
         <p className="text-sm text-grey-600 text-center py-6">

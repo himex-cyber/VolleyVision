@@ -10,6 +10,7 @@ import {
 import type { DateRange, PlayerStatLine } from '../../types';
 import { rangeQuery } from '../../lib/dateRange';
 import { CHART_SERIES, CHART_TICK, CHART_TOOLTIP_BG, CHART_TOOLTIP_TEXT, CHART_GRID } from '../../lib/chartColors';
+import { useChartWidth } from '../../lib/printing';
 
 interface Props {
   title: string;
@@ -34,6 +35,7 @@ export default function StatLeaderboardChart({
   canOpenAll,
   range,
 }: Props) {
+  const chartWidth = useChartWidth(); // fixed while printing (8.7)
   const navigate = useNavigate();
   const data = [...players]
     .sort((a, b) => b[metric] - a[metric])
@@ -56,7 +58,7 @@ export default function StatLeaderboardChart({
       )}
 
       <div className="h-64 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={chartWidth} height="100%">
           <BarChart data={data}>
             <XAxis
               dataKey="name"

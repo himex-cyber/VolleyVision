@@ -22,6 +22,7 @@ import {
   CHART_TOOLTIP_BG,
   CHART_TOOLTIP_TEXT,
 } from '../../lib/chartColors';
+import { useChartWidth } from '../../lib/printing';
 
 const US = CHART_SERIES[0];
 const THEM = CHART_SERIES[1];
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export default function MomentumChart({ matchId, homeName, awayName, canTrack = false }: Props) {
+  const chartWidth = useChartWidth(); // fixed while printing (8.7)
   const { data, isLoading, isError } = useMomentum(matchId);
   const [picked, setPicked] = useState<number | null>(null);
 
@@ -95,6 +97,8 @@ export default function MomentumChart({ matchId, homeName, awayName, canTrack = 
           </button>
         ))}
       </div>
+      {/* Only the chosen set prints (8.7); say which. */}
+      <p className="hidden print:block text-xs text-grey-600">Printed: Set {setNumber}</p>
 
       {set && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
@@ -109,7 +113,7 @@ export default function MomentumChart({ matchId, homeName, awayName, canTrack = 
       )}
 
       <div className="h-60 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={chartWidth} height="100%">
           <AreaChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 6" vertical={false} />
             <XAxis dataKey="pointInSet" tick={{ fill: CHART_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_GRID }} tickLine={false} />
