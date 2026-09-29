@@ -13,6 +13,7 @@ import type { TooltipContentProps } from 'recharts';
 import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import clsx from 'clsx';
 import { useRotations } from '../../hooks';
+import { useChartWidth } from '../../lib/printing';
 import CsvButton from './CsvButton';
 import { safeFileName, toCsv } from '../../lib/csv';
 import type { DateRange } from '../../types';
@@ -56,6 +57,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false, range, 
   fileParts: string[];
 }) {
   const { data, isLoading, isError } = useRotations(scope, id, range);
+  const chartWidth = useChartWidth(); // fixed while printing (8.7)
 
   if (isLoading) return <div className="card p-4 h-48 animate-pulse bg-grey-50" aria-label="Loading rotations" />;
   if (isError || !data) return <p className="text-sm text-error-strong">Couldn't load rotations. Try refreshing the page.</p>;
@@ -109,7 +111,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false, range, 
       )}
 
       <div className="h-48 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={chartWidth} height="100%">
           <BarChart data={rotations} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 6" vertical={false} />
             <XAxis

@@ -8,6 +8,8 @@ import { POSITION_FULL_LABELS } from '../types';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
 import DateRangeFilter from '../components/analytics/DateRangeFilter';
+import PrintButton from '../components/ui/PrintButton';
+import PrintHeader from '../components/ui/PrintHeader';
 import { rangeQuery, rangeText, useDateRangeParams } from '../lib/dateRange';
 import type { StatLine } from '../types';
 import { ArrowLeftIcon } from '../components/ui/icons';
@@ -86,9 +88,21 @@ export default function PlayerDashboardPage() {
           </div>
         )}
 
-        <h1 className="text-2xl font-bold text-grey-900 mt-2">
-          #{data.player.jerseyNumber} {data.player.firstName} {data.player.lastName}
-        </h1>
+        {/* Only staff and the player themself reach this page (the server
+            403s everyone else), so their name on the printout is theirs to see. */}
+        <PrintHeader lines={[
+          `#${data.player.jerseyNumber} ${data.player.firstName} ${data.player.lastName}${team ? `, ${team.name}` : ''}`,
+          matchId && matchData ? `vs ${matchData.match.opponent}` : (range.from || range.to) ? `Matches ${rangeText(range)}` : 'All matches',
+        ]} />
+        <div className="flex flex-wrap items-start justify-between gap-3 mt-2">
+          <h1 className="text-2xl font-bold text-grey-900">
+            #{data.player.jerseyNumber} {data.player.firstName} {data.player.lastName}
+          </h1>
+          <PrintButton
+            title={['VolleyVision', `${data.player.firstName} ${data.player.lastName}`,
+              matchId && matchData ? `vs ${matchData.match.opponent}` : (range.from || range.to) ? rangeText(range) : 'All matches'].join(' – ')}
+          />
+        </div>
         <p className="text-sm text-navy-300 mt-1">
           {POSITION_FULL_LABELS[data.player.position]}
         </p>
@@ -109,7 +123,7 @@ export default function PlayerDashboardPage() {
           stats in that match (not the full roster), so the coach can compare
           players while staying inside the same match. */}
       {canTrack && matchId && matchData && matchData.playerStats.length > 0 && (
-        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto print:hidden">
           {matchData.playerStats.map((row) => (
             <NavLink
               key={row.player.id}
@@ -131,7 +145,7 @@ export default function PlayerDashboardPage() {
           can move between players without going back. Mutually exclusive with
           the match-scoped bar above. */}
       {canTrack && !matchId && team?.players && team.players.length > 0 && (
-        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto print:hidden">
           {[...team.players]
             .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
             .map((p) => (

@@ -2,6 +2,9 @@ import { lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMatchAnalytics, useMatchReport, useMatchZones, useHasPermission, useMyPlayerIds } from '../hooks';
 import MatchPageHeader from '../components/ui/MatchPageHeader';
+import PrintButton from '../components/ui/PrintButton';
+import PrintHeader from '../components/ui/PrintHeader';
+import { format, parseISO } from 'date-fns';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import CsvButton from '../components/analytics/CsvButton';
 import { playerStatsCsv } from '../lib/analyticsCsv';
@@ -14,6 +17,13 @@ import CourtHeatMap from '../components/analytics/CourtHeatMap';
 const MomentumChart = lazy(() => import('../components/charts/MomentumChart'));
 const RotationAnalytics = lazy(() => import('../components/analytics/RotationAnalytics'));
 const AdvancedMetricsPanel = lazy(() => import('../components/analytics/AdvancedMetricsPanel'));
+// The same imports as the lazy panels (the bundler caches them): printing
+// waits for these chunks, or the PDF would hold loading placeholders.
+const panelChunks = () => Promise.all([
+  import('../components/charts/MomentumChart'),
+  import('../components/analytics/RotationAnalytics'),
+  import('../components/analytics/AdvancedMetricsPanel'),
+]);
 const panelFallback = <div className="card p-6 h-40 animate-pulse bg-grey-50" aria-hidden="true" />;
 
 export default function MatchDashboardPage() {
@@ -39,6 +49,7 @@ export default function MatchDashboardPage() {
   // the entered date, whereas formatting it in local time can shift the day.
   const fileParts = [data.match.teamName, 'vs', data.match.opponent, data.match.matchDate.slice(0, 10)];
   const csvName = (table: string) => safeFileName(['VolleyVision', ...fileParts, table]);
+  const printedMatch = `${data.match.teamName} vs ${data.match.opponent}, ${format(parseISO(data.match.matchDate.slice(0, 10)), 'd MMM yyyy')}`;
 
   // A set can be in the scores only (no events) or in the stats only (no score
   // entered), so join on the set number and leave the missing side empty.
@@ -61,6 +72,7 @@ export default function MatchDashboardPage() {
 
   return (
     <div className="space-y-6">
+      <PrintHeader lines={[printedMatch]} />
       <MatchPageHeader
         matchId={data.match.id}
         teamId={data.match.teamId}
@@ -72,6 +84,10 @@ export default function MatchDashboardPage() {
         status={data.match.status}
         canTrack={canTrack}
       />
+
+      <div className="flex justify-end">
+        <PrintButton title={`VolleyVision – ${printedMatch.replace(', ', ' – ')}`} chunks={panelChunks} />
+      </div>
 
       {/* The nav tab reads just "Stats", so name the page explicitly here —
           same pattern as the player dashboard's "Game Day Stats" eyebrow. */}

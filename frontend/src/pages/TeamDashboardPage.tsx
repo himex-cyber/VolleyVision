@@ -13,12 +13,20 @@ import PlayerInsights from '../components/analytics/PlayerInsights';
 import TeamSubNav from '../components/ui/TeamSubNav';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
 import DateRangeFilter from '../components/analytics/DateRangeFilter';
+import PrintButton from '../components/ui/PrintButton';
+import PrintHeader from '../components/ui/PrintHeader';
 import { rangeText, useDateRangeParams } from '../lib/dateRange';
 
 // Point-flow panels (7.9): their own chunks (recharts and all), so the
 // dashboard's first paint doesn't wait for them.
 const RotationAnalytics = lazy(() => import('../components/analytics/RotationAnalytics'));
 const AdvancedMetricsPanel = lazy(() => import('../components/analytics/AdvancedMetricsPanel'));
+// The same imports as the lazy panels (the bundler caches them): printing
+// waits for these chunks, or the PDF would hold loading placeholders.
+const panelChunks = () => Promise.all([
+  import('../components/analytics/RotationAnalytics'),
+  import('../components/analytics/AdvancedMetricsPanel'),
+]);
 const panelFallback = <div className="card p-6 h-40 animate-pulse bg-grey-50" aria-hidden="true" />;
 
 export default function TeamDashboardPage() {
@@ -58,11 +66,18 @@ export default function TeamDashboardPage() {
   return (
     <div className="space-y-6">
       <TeamSubNav teamId={data.team.id} teamName={data.team.name} />
-      <div>
-        <h1 className="text-2xl font-bold text-grey-900">{data.team.name} Dashboard</h1>
-        <p className="text-sm text-grey-600 mt-1">
-          {data.team.division && `${data.team.division} | `}Season {data.team.season}
-        </p>
+      <PrintHeader lines={[`${data.team.name}: team dashboard`, hasRange ? `Matches ${rangeText(range)}` : 'All matches']} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-grey-900">{data.team.name} Dashboard</h1>
+          <p className="text-sm text-grey-600 mt-1">
+            {data.team.division && `${data.team.division} | `}Season {data.team.season}
+          </p>
+        </div>
+        <PrintButton
+          title={['VolleyVision', data.team.name, hasRange ? rangeText(range) : 'All matches'].join(' – ')}
+          chunks={panelChunks}
+        />
       </div>
 
       <DateRangeFilter season={data.team.season} />
@@ -118,7 +133,7 @@ export default function TeamDashboardPage() {
       )}
 
       {trends.data && trends.data.length > 0 && (
-          <div className="grid lg:grid-cols-2 gap-4">
+          <div className="grid lg:grid-cols-2 print:grid-cols-1 gap-4">
             <TeamTrendChart
               title="Kills Trend"
               data={trends.data}
@@ -154,7 +169,7 @@ export default function TeamDashboardPage() {
           non-staff viewers 0 or 1 playerStats rows (their own), so leaderboards
           and cross-player insights have nothing meaningful to show them. */}
       {fullView && (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-2 print:grid-cols-1 gap-4">
           <StatLeaderboardChart
             title="Top Killers"
             players={data.playerStats}
