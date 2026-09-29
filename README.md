@@ -48,6 +48,7 @@ docs/design/               Design notes and mockups
 docs/audit/AUDIT-LOG.md    September 2026 audit log
 CHANGELOG.md               Release history, newest first
 deploy.ps1                  Production deploy script
+backup.ps1                  Production database backup (pg_dump in Docker)
 ```
 
 ## Local development
@@ -168,6 +169,16 @@ From the repository root:
 ```
 
 The Netlify build, function and redirect config is `netlify.toml` at the repo root. `deploy.ps1` builds the site locally and publishes it (`netlify deploy --prod --build --site <id>`, always naming the target site), with a deploy message built from the current git state. It first runs `npx prisma migrate status` against the target's database and aborts if migrations are pending or the database is unreachable (`-SkipMigrationCheck` bypasses this). A production deploy also refuses a dirty working tree or a branch other than `main` unless you pass `-Force`. After deploying, it runs the smoke check: read-only against production, logged in as the seed users on staging. It requires the Netlify CLI to be logged in as the account that owns the site. Don't rely on a push to `main` to deploy: always use the script.
+
+### Backups
+
+Take a backup before every production migration and deploy (the Supabase free plan keeps no downloadable backups). With Docker Desktop running, from the repo root:
+
+```powershell
+.ackup.ps1                  # -> $HOME\Backupsv-backup-<date>.sql
+```
+
+It reads `DIRECT_URL` (else `DATABASE_URL`) from `backend/.env` without printing it, runs `pg_dump` from the `postgres:17` image, and uses Supabase's session pooler (port 5432) because `pg_dump` can't run through the transaction pooler. If Docker can't reach Supabase's direct host (it's IPv6-only), put the Session pooler URL from Supabase > Connect into `DIRECT_URL`. The file holds every user's and player's data: keep it private and out of the repo.
 
 ## Building the Android app
 
