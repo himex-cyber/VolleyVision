@@ -3,7 +3,7 @@
 // An unknown eventType or a non-numeric setNumber used to reach Prisma as a
 // 500; in a batch that would look like a failed sync rather than a bad tap.
 
-import { EventType } from '@prisma/client';
+import { EventType, ServingSide } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
 import { isEnumValue } from './feedbackValidation';
 
@@ -18,6 +18,8 @@ export interface EventInput {
   notes: string | null;
   isOpponentEvent: boolean;
   opponentJerseyNumber: number | null;
+  /** Who served this rally (7.2); null from older apps. */
+  servingSide: ServingSide | null;
   /** Raw client time; lib/clientTime decides whether it's used. */
   recordedAt: unknown;
 }
@@ -33,7 +35,7 @@ export function parseEventInput(body: unknown): EventInput {
   const {
     matchId, playerId, eventType, setNumber,
     rallyNumber, courtZone, rotationNumber, notes,
-    isOpponentEvent, opponentJerseyNumber, recordedAt,
+    isOpponentEvent, opponentJerseyNumber, recordedAt, servingSide,
   } = body as Record<string, any>;
 
   const isOpponent = Boolean(isOpponentEvent);
@@ -69,6 +71,9 @@ export function parseEventInput(body: unknown): EventInput {
   if (notes != null && notes !== '' && (typeof notes !== 'string' || notes.length > 500)) {
     throw new AppError(400, 'Notes must be text of at most 500 characters.');
   }
+  if (servingSide != null && !isEnumValue(ServingSide, servingSide)) {
+    throw new AppError(400, 'Serving side must be US or THEM.');
+  }
   // Postgres refuses NUL in text, which would 500 (and stall) a batch.
   if ([matchId, playerId, notes].some((v) => typeof v === 'string' && v.includes('\0'))) {
     throw new AppError(400, 'Text fields must not contain NUL characters.');
@@ -88,6 +93,7 @@ export function parseEventInput(body: unknown): EventInput {
     // 1000, 'x') is dropped rather than refusing the tap, which is a point.
     // v9.10.0 apps saved it before; a bad value is now simply not kept.
     opponentJerseyNumber: isOpponent ? intInRange(opponentJerseyNumber, 0, 999) : null,
+    servingSide: servingSide ?? null,
     recordedAt,
   };
 }

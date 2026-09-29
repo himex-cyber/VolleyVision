@@ -13,7 +13,7 @@
  * Prints the team and match ids for the smoke env (SMOKE_TEAM_ID / SMOKE_MATCH_ID).
  */
 import bcrypt from 'bcryptjs';
-import { EventType, Position, TeamRole, UserRole } from '@prisma/client';
+import { EventType, Position, ServingSide, TeamRole, UserRole } from '@prisma/client';
 import { stagingGuardError } from '../src/lib/stagingGuard';
 
 // Prisma Client loads backend/.env (prod) on its own for any variable the shell
@@ -85,15 +85,18 @@ function buildEvents(plan: MatchPlan, playerIds: string[]) {
   const rows: {
     matchId: string; playerId: string | null; eventType: EventType; setNumber: number;
     rallyNumber: number; rotationNumber: number; courtZone: number;
-    isOpponentEvent: boolean; opponentJerseyNumber: number | null;
+    isOpponentEvent: boolean; opponentJerseyNumber: number | null; servingSide: ServingSide;
   }[] = [];
   let n = 0;
   for (const { set } of plan.setScores) {
     // A dozen rallies per set is plenty for charts without bloating the table.
     for (let rally = 1; rally <= 12; rally++, n++) {
       const rotationNumber = (Math.floor(n / 2) % 6) + 1;
-      const base = { matchId: plan.id, setNumber: set, rallyNumber: rally, rotationNumber };
-      // Serve alternates: odd rallies we serve, even rallies the opponent does.
+      // Serve alternates: odd rallies we serve, even rallies the opponent does,
+      // and every event in the rally carries who served it (7.11), so the
+      // side-out and break-point panels have real data.
+      const servingSide = rally % 2 === 1 ? ServingSide.US : ServingSide.THEM;
+      const base = { matchId: plan.id, setNumber: set, rallyNumber: rally, rotationNumber, servingSide };
       if (rally % 2 === 1) {
         rows.push({ ...base, playerId: playerIds[n % playerIds.length], eventType: n % 7 === 0 ? EventType.ACE : EventType.SERVE_IN,
           courtZone: 1, isOpponentEvent: false, opponentJerseyNumber: null });

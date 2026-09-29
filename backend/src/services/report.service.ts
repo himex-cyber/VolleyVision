@@ -1,7 +1,7 @@
 import { HOME_POINT_SET, AWAY_POINT_SET, scoringTeam } from '../lib/scoringRules';
 import { selectTopPerformer, PerformerPlayer, PerformerEvent } from './performer.service';
-import { calculateMomentum, MomentumEvent } from './momentum.service';
-import { calculateRotations, RotationEvent } from './rotation.service';
+import { calculateMomentum } from './momentum.service';
+import { calculateRotations } from './rotation.service';
 
 export interface ReportEvent {
   eventType: string;
@@ -9,6 +9,21 @@ export interface ReportEvent {
   courtZone: number | null;
   rotationNumber: number | null;
   playerId: string | null; // null for opponent events
+  recordedAt: Date;
+}
+
+/**
+ * Every point-flow event of the match, the opponent's included (7.10): the
+ * momentum and best-rotation lines need their points too. Everything about
+ * our players' actions keeps using `events` (ours only), or an opponent's
+ * kill would count as ours.
+ */
+export interface ReportPointEvent {
+  eventType: string;
+  isOpponentEvent: boolean;
+  setNumber: number;
+  rotationNumber: number | null;
+  servingSide: 'US' | 'THEM' | null;
   recordedAt: Date;
 }
 
@@ -48,10 +63,13 @@ export interface MatchReportData {
   };
   serve: { aceRate: number | null; aces: number; attempts: number };
   heatMapHighlight: string | null;
+  // Shape kept for installed apps (v9.10.0 reads `efficiency`): it is the
+  // rotation's point win %, now counted with the opponent's points too.
   bestRotation: {
     rotation: number;
     won: number;
     lost: number;
+    total: number;
     net: number;
     efficiency: number | null;
   } | null;
@@ -61,6 +79,7 @@ export function generateMatchReport(
   match: ReportMatch,
   events: ReportEvent[],
   players: PerformerPlayer[],
+  pointEvents: ReportPointEvent[],
 ): MatchReportData {
   const { teamName, opponent, homeSetsWon, awaySetsWon } = match;
 
@@ -81,7 +100,7 @@ export function generateMatchReport(
   const topPerformer = selectTopPerformer(players, events as PerformerEvent[]);
 
   // ── Momentum ────────────────────────────────────────────────────────────
-  const momentumResult = calculateMomentum(events as MomentumEvent[]);
+  const momentumResult = calculateMomentum(pointEvents);
   const { stats: mStats } = momentumResult;
   const momentumSummary =
     mStats.totalPoints > 0
@@ -146,10 +165,10 @@ export function generateMatchReport(
       : null;
 
   // ── Best Rotation ────────────────────────────────────────────────────────
-  const rotResult = calculateRotations(events as RotationEvent[]);
-  const withData = rotResult.rotations.filter((r) => r.total > 0);
-  const bestRotation = withData.length
-    ? withData.reduce((a, b) => (b.net > a.net ? b : a))
+  const rotResult = calculateRotations(pointEvents);
+  const best = rotResult.insights.best;
+  const bestRotation = best
+    ? { rotation: best.rotation, won: best.won, lost: best.lost, total: best.total, net: best.net, efficiency: best.pointWinPct }
     : null;
 
   return {

@@ -1,11 +1,16 @@
 import { Router } from 'express';
 import {
+  getMatchAdvanced,
   getMatchAnalytics,
+  getMatchMomentum,
+  getMatchRotations,
   getMatchReport,
   getMatchZones,
   getPlayerAnalytics,
   getPlayerZones,
+  getTeamAdvanced,
   getTeamAnalytics,
+  getTeamRotations,
   getTeamTrends,
   getTeamZones,
 } from '../controllers/analytics';
@@ -26,9 +31,15 @@ const tVis = visibleByTeamParam('teamId');
 router.get('/matches/:matchId', mVis, getMatchAnalytics);
 router.get('/matches/:matchId/report', mVis, getMatchReport);
 router.get('/matches/:matchId/zones', mVis, getMatchZones);
+// Point flow (7.8): team-level, no per-player rows, every member.
+router.get('/matches/:matchId/rotations', mVis, getMatchRotations);
+router.get('/matches/:matchId/momentum', mVis, getMatchMomentum);
+router.get('/matches/:matchId/advanced', mVis, getMatchAdvanced);
 router.get('/teams/:teamId', tVis, getTeamAnalytics);
 router.get('/teams/:teamId/trends', tVis, getTeamTrends);
 router.get('/teams/:teamId/zones', tVis, getTeamZones);
+router.get('/teams/:teamId/rotations', tVis, getTeamRotations);
+router.get('/teams/:teamId/advanced', tVis, getTeamAdvanced);
 // No pVis: that checks the player's HOME team, but staff of a linked team
 // can't see it. The controller checks visibility of the team in scope instead.
 router.get('/players/:playerId', getPlayerAnalytics);

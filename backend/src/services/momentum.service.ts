@@ -1,13 +1,21 @@
-import { HOME_POINT_SET, AWAY_POINT_SET } from '../lib/scoringRules';
+import { scoringTeam } from '../lib/scoringRules';
+
+// Momentum (7.5): the point-by-point flow of a match, set by set. Fed our events
+// AND the opponent's (an opponent kill is their point, an opponent error ours),
+// scored with scoringTeam. Score, lead and runs reset at each set: a run never
+// crosses a set boundary.
 
 export interface MomentumEvent {
   eventType: string;
+  isOpponentEvent?: boolean;
   setNumber: number;
   recordedAt: Date;
 }
 
 export interface MomentumPoint {
   pointNumber: number;
+  /** 1-based position within its set. */
+  pointInSet: number;
   scorer: 'home' | 'away';
   homeScore: number;
   awayScore: number;
@@ -26,93 +34,104 @@ export interface MomentumStats {
   largestAwayLead: number;
 }
 
+export interface SetMomentum extends MomentumStats {
+  setNumber: number;
+  homeScore: number;
+  awayScore: number;
+}
+
 export interface SignificantRun {
   team: 'home' | 'away';
   length: number;
   startPoint: number;
+  setNumber: number;
 }
 
 export interface MomentumResult {
   timeline: MomentumPoint[];
+  /** Match-level: runs and leads are the max over the sets, lead changes the sum. */
   stats: MomentumStats;
+  sets: SetMomentum[];
   significantRuns: SignificantRun[];
 }
 
 export function calculateMomentum(events: MomentumEvent[]): MomentumResult {
-  const scoringEvents = events.filter(
-    (e) => HOME_POINT_SET.has(e.eventType) || AWAY_POINT_SET.has(e.eventType),
-  );
-
-  let homeScore = 0;
-  let awayScore = 0;
-  let currentRunTeam: 'home' | 'away' | null = null;
-  let currentRunLength = 0;
-  let longestHomeRun = 0;
-  let longestAwayRun = 0;
-  let leadChanges = 0;
-  let largestHomeLead = 0;
-  let largestAwayLead = 0;
-  let prevLead = 0;
+  // Sort here, not by the caller: the momentum is the order points happened.
+  // Stable, so equal timestamps keep their given order.
+  const points = events
+    .map((e) => ({ e, scorer: scoringTeam(e.eventType, e.isOpponentEvent ?? false) }))
+    .filter((p): p is { e: MomentumEvent; scorer: 'home' | 'away' } => p.scorer !== null)
+    .sort((a, b) => a.e.recordedAt.getTime() - b.e.recordedAt.getTime());
 
   const timeline: MomentumPoint[] = [];
+  const sets: SetMomentum[] = [];
+  let set: SetMomentum | null = null;
+  let runTeam: 'home' | 'away' | null = null;
+  let runLength = 0;
+  let prevLead = 0;
 
-  for (let i = 0; i < scoringEvents.length; i++) {
-    const e = scoringEvents[i];
-    const scorer: 'home' | 'away' = HOME_POINT_SET.has(e.eventType) ? 'home' : 'away';
+  for (const { e, scorer } of points) {
+    if (!set || set.setNumber !== e.setNumber) {
+      set = { setNumber: e.setNumber, homeScore: 0, awayScore: 0, totalPoints: 0, longestHomeRun: 0, longestAwayRun: 0,
+              longestRun: 0, leadChanges: 0, largestHomeLead: 0, largestAwayLead: 0 };
+      sets.push(set);
+      runTeam = null;
+      runLength = 0;
+      prevLead = 0;
+    }
 
-    if (scorer === 'home') homeScore++;
-    else awayScore++;
+    if (scorer === 'home') set.homeScore++;
+    else set.awayScore++;
+    set.totalPoints++;
 
-    currentRunLength = scorer === currentRunTeam ? currentRunLength + 1 : 1;
-    currentRunTeam = scorer;
+    runLength = scorer === runTeam ? runLength + 1 : 1;
+    runTeam = scorer;
+    if (scorer === 'home') set.longestHomeRun = Math.max(set.longestHomeRun, runLength);
+    else set.longestAwayRun = Math.max(set.longestAwayRun, runLength);
+    set.longestRun = Math.max(set.longestHomeRun, set.longestAwayRun);
 
-    if (scorer === 'home') longestHomeRun = Math.max(longestHomeRun, currentRunLength);
-    else longestAwayRun = Math.max(longestAwayRun, currentRunLength);
-
-    const lead = homeScore - awayScore;
-    if (prevLead !== 0 && Math.sign(lead) !== Math.sign(prevLead)) leadChanges++;
-
-    largestHomeLead = Math.max(largestHomeLead, lead);
-    largestAwayLead = Math.max(largestAwayLead, -lead);
-    prevLead = lead;
+    const lead = set.homeScore - set.awayScore;
+    if (prevLead !== 0 && lead !== 0 && Math.sign(lead) !== Math.sign(prevLead)) set.leadChanges++;
+    if (lead !== 0) prevLead = lead;
+    set.largestHomeLead = Math.max(set.largestHomeLead, lead);
+    set.largestAwayLead = Math.max(set.largestAwayLead, -lead);
 
     timeline.push({
-      pointNumber: i + 1,
+      pointNumber: timeline.length + 1,
+      pointInSet: set.totalPoints,
       scorer,
-      homeScore,
-      awayScore,
+      homeScore: set.homeScore,
+      awayScore: set.awayScore,
       lead,
       setNumber: e.setNumber,
-      runLength: currentRunLength,
+      runLength,
     });
   }
 
-  // Extract significant runs (3+ consecutive)
+  // Significant runs (3+ in a row), each within one set.
   const runs: SignificantRun[] = [];
-  let runStart = 0;
   for (let i = 0; i < timeline.length; i++) {
-    if (i === 0 || timeline[i].scorer !== timeline[i - 1].scorer) runStart = i;
-    if (timeline[i].runLength >= 3) {
-      const existing = runs.find((r) => r.startPoint === runStart + 1);
-      if (!existing) {
-        runs.push({ team: timeline[i].scorer, length: timeline[i].runLength, startPoint: runStart + 1 });
-      } else {
-        existing.length = timeline[i].runLength;
-      }
+    const p = timeline[i];
+    const next = timeline[i + 1];
+    const runEnds = !next || next.setNumber !== p.setNumber || next.scorer !== p.scorer;
+    if (runEnds && p.runLength >= 3) {
+      runs.push({ team: p.scorer, length: p.runLength, startPoint: p.pointNumber - p.runLength + 1, setNumber: p.setNumber });
     }
   }
 
+  const max = (f: (s: SetMomentum) => number) => sets.reduce((m, s) => Math.max(m, f(s)), 0);
   return {
     timeline,
     stats: {
-      totalPoints: scoringEvents.length,
-      longestHomeRun,
-      longestAwayRun,
-      longestRun: Math.max(longestHomeRun, longestAwayRun),
-      leadChanges,
-      largestHomeLead,
-      largestAwayLead,
+      totalPoints: timeline.length,
+      longestHomeRun: max((s) => s.longestHomeRun),
+      longestAwayRun: max((s) => s.longestAwayRun),
+      longestRun: max((s) => s.longestRun),
+      leadChanges: sets.reduce((n, s) => n + s.leadChanges, 0),
+      largestHomeLead: max((s) => s.largestHomeLead),
+      largestAwayLead: max((s) => s.largestAwayLead),
     },
-    significantRuns: runs.filter((r) => r.length >= 3).slice(0, 10),
+    sets,
+    significantRuns: runs.slice(0, 10),
   };
 }
