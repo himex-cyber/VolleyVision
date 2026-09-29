@@ -1,18 +1,22 @@
 import { useSearchParams } from 'react-router-dom';
-import { format, parseISO } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import type { DateRange } from '../types';
 
-// The server 400s anything else, so a hand-edited URL is dropped, not sent.
+// The server 400s anything else, and the dashboards' error state has no
+// filter to recover with, so a hand-edited URL is dropped, not sent: only real
+// days (not 2026-02-30), and never a start after the end.
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
+const realDay = (s: string | null): s is string => !!s && YMD.test(s) && isValid(parseISO(s)) && format(parseISO(s), 'yyyy-MM-dd') === s;
 
 /** One source for pages and drill-down links: the range held in the URL. */
 export function useDateRangeParams(): DateRange {
   const [params] = useSearchParams();
   const from = params.get('from');
   const to = params.get('to');
+  if (realDay(from) && realDay(to) && from > to) return {};
   return {
-    ...(from && YMD.test(from) ? { from } : {}),
-    ...(to && YMD.test(to) ? { to } : {}),
+    ...(realDay(from) ? { from } : {}),
+    ...(realDay(to) ? { to } : {}),
   };
 }
 

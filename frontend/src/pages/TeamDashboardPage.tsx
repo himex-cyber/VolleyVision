@@ -33,7 +33,7 @@ export default function TeamDashboardPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const range = useDateRangeParams();
   // The hook keeps the last result while a new range loads (rangedQuery).
-  const { data, isLoading, isError } = useTeamAnalytics(teamId!, range);
+  const { data, isLoading, isError, isPlaceholderData } = useTeamAnalytics(teamId!, range);
   const trends = useTeamTrends(teamId!, range);
   const zones = useTeamZones(teamId!, range);
   // Individual player analytics are for this team's staff and the player
@@ -82,10 +82,11 @@ export default function TeamDashboardPage() {
 
       <DateRangeFilter season={data.team.season} />
       <p className="text-sm text-grey-600">
-        {hasRange ? `Showing ${matchCount} ${matchCount === 1 ? 'match' : 'matches'} ${rangeText(range)}` : `Showing all ${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}
+        {/* The previous range's numbers stay on screen while these load: say so rather than pair them with the new dates. */}
+        {isPlaceholderData ? 'Loading these dates…' : hasRange ? `Showing ${matchCount} ${matchCount === 1 ? 'match' : 'matches'} ${rangeText(range)}` : `Showing all ${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}
       </p>
 
-      {hasRange && matchCount === 0 && (
+      {hasRange && !isPlaceholderData && matchCount === 0 && (
         <div className="card p-6 text-center text-grey-600 text-sm">
           No matches in these dates. Try a wider range.
         </div>
@@ -119,7 +120,7 @@ export default function TeamDashboardPage() {
       {/* Team-level point flow across the team's matches: every member. */}
       <Suspense fallback={panelFallback}>
         <section id="rotations">
-          <RotationAnalytics scope="team" id={teamId!} canTrack={canTrack} range={range} fileParts={[data.team.name, rangePart(range)]} />
+          <RotationAnalytics scope="team" id={teamId!} canTrack={canTrack} range={range} csvName={csvName} />
         </section>
         <section id="advanced">
           <AdvancedMetricsPanel scope="team" id={teamId!} canTrack={canTrack} range={range} />

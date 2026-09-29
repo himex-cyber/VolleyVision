@@ -165,7 +165,7 @@ export default function MatchDashboardPage() {
           <MomentumChart matchId={matchId!} homeName={data.match.teamName} awayName={data.match.opponent} canTrack={canTrack} />
         </section>
         <section id="rotations">
-          <RotationAnalytics scope="match" id={matchId!} canTrack={canTrack} fileParts={fileParts} />
+          <RotationAnalytics scope="match" id={matchId!} canTrack={canTrack} csvName={csvName} />
         </section>
         <section id="advanced">
           <AdvancedMetricsPanel scope="match" id={matchId!} canTrack={canTrack} />

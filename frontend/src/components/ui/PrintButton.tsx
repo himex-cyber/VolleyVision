@@ -3,6 +3,10 @@ import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { isNative } from '../../lib/native';
 import { setPrinting } from '../../lib/printing';
 
+// The dashboards' own data. Unrelated background fetches (chat, a focus
+// refetch of the team) mustn't disable the button or swallow a click.
+const DASHBOARD = { queryKey: ['analytics'] };
+
 /**
  * "Print / Save PDF" (8.7). Web only: Android's WebView ignores
  * window.print(). Disabled until everything on the page has loaded, or the
@@ -12,7 +16,7 @@ import { setPrinting } from '../../lib/printing';
  */
 export default function PrintButton({ title, chunks }: { title: string; chunks?: () => Promise<unknown> }) {
   const queryClient = useQueryClient();
-  const fetching = useIsFetching();
+  const fetching = useIsFetching(DASHBOARD);
   const [chunksReady, setChunksReady] = useState(!chunks);
 
   useEffect(() => {
@@ -24,9 +28,12 @@ export default function PrintButton({ title, chunks }: { title: string; chunks?:
   if (isNative()) return null;
 
   function print() {
-    if (queryClient.isFetching() > 0) return;
+    if (queryClient.isFetching(DASHBOARD) > 0) return;
     const previous = document.title;
+    let done = false;
     const restore = () => {
+      if (done) return;
+      done = true;
       document.title = previous;
       setPrinting(false);
       window.removeEventListener('afterprint', restore);
@@ -36,7 +43,13 @@ export default function PrintButton({ title, chunks }: { title: string; chunks?:
     setPrinting(true);
     // Two frames: one for React to re-render the charts at print width, one
     // for the browser to lay them out before the print snapshot.
-    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.print();
+      // Chrome and Firefox block in print() and have fired afterprint by now;
+      // this only matters where it never fires, so charts don't stay at print
+      // width on screen.
+      setTimeout(restore, 0);
+    }));
   }
 
   const ready = chunksReady && fetching === 0;

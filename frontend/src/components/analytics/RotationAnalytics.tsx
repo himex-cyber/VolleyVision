@@ -15,7 +15,7 @@ import clsx from 'clsx';
 import { useRotations } from '../../hooks';
 import { useChartWidth } from '../../lib/printing';
 import CsvButton from './CsvButton';
-import { safeFileName, toCsv } from '../../lib/csv';
+import { toCsv } from '../../lib/csv';
 import type { DateRange } from '../../types';
 import type { RotationStat } from '../../types';
 import {
@@ -47,14 +47,14 @@ function RotationTooltip({ active, payload }: TooltipContentProps<ValueType, Nam
   );
 }
 
-export default function RotationAnalytics({ scope, id, canTrack = false, range, fileParts }: {
+export default function RotationAnalytics({ scope, id, canTrack = false, range, csvName }: {
   scope: 'match' | 'team';
   id: string;
   canTrack?: boolean;
   // Team scope only: the match dashboard never filters by date.
   range?: DateRange;
-  // CSV file name after 'VolleyVision': team or opponent, then the range or match date.
-  fileParts: string[];
+  // The page's CSV file namer, so this table's name matches its siblings'.
+  csvName: (table: string) => string;
 }) {
   const { data, isLoading, isError } = useRotations(scope, id, range);
   const chartWidth = useChartWidth(); // fixed while printing (8.7)
@@ -85,7 +85,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false, range, 
         <h3 className="font-display font-semibold text-grey-900">Rotations</h3>
         {/* Rows are exactly what's on screen; the server already scoped them. */}
         <CsvButton
-          filename={safeFileName(['VolleyVision', ...fileParts, 'rotations'])}
+          filename={csvName('rotations')}
           build={() =>
             toCsv(
               [

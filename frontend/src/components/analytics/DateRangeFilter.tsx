@@ -81,7 +81,8 @@ export default function DateRangeFilter({ season }: { season?: string }) {
               className="input min-h-[44px] mt-1"
               value={range.from ?? ''}
               max={range.to}
-              onChange={(e) => apply({ ...range, from: e.target.value || undefined })}
+              // A start typed past the end moves the end with it (min/max don't stop typing).
+              onChange={(e) => { const from = e.target.value || undefined; apply({ from, to: from && range.to && from > range.to ? from : range.to }); }}
             />
           </label>
           <label className="text-sm text-grey-600 flex-1 min-w-[140px]">
@@ -91,7 +92,7 @@ export default function DateRangeFilter({ season }: { season?: string }) {
               className="input min-h-[44px] mt-1"
               value={range.to ?? ''}
               min={range.from}
-              onChange={(e) => apply({ ...range, to: e.target.value || undefined })}
+              onChange={(e) => { const to = e.target.value || undefined; apply({ from: to && range.from && to < range.from ? to : range.from, to }); }}
             />
           </label>
         </div>
