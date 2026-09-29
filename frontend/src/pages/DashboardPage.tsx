@@ -5,6 +5,7 @@ import { useCoachDashboard, useMyPlayerRecords } from '../hooks';
 import { buildHomeTeams, type HomeTeamCard } from '../lib/homeTeams';
 import type { TeamRole } from '../types';
 import { ROLE_BADGE } from '../lib/teamRoles';
+import { formatMatchDate } from '../lib/matchTime';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
 import MyStats from '../components/player/MyStats';
 
@@ -26,7 +27,7 @@ function TeamCard({ card }: { card: HomeTeamCard }) {
       </div>
       <p className="text-sm text-grey-600">
         {card.nextMatch
-          ? `Next: vs ${card.nextMatch.opponent} · ${new Date(card.nextMatch.matchDate).toLocaleDateString()}`
+          ? `Next: vs ${card.nextMatch.opponent} · ${formatMatchDate(card.nextMatch.matchDate)}`
           : 'No upcoming matches'}
       </p>
     </Link>

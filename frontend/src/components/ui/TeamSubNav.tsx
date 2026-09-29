@@ -19,7 +19,7 @@ export default function TeamSubNav({ teamId, teamName }: { teamId: string; teamN
   ];
 
   return (
-    <div className="flex items-center gap-2 border-b border-grey-200 pb-px overflow-x-auto">
+    <div className="flex items-center gap-2 border-b border-grey-200 pb-px overflow-x-auto print:hidden">
       {teamName && (
         <span className="mr-1 font-display font-semibold text-grey-900 truncate max-w-[40%]">{teamName}</span>
       )}

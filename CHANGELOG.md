@@ -2,6 +2,51 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.14.0 — 2026-09-30
+
+Phase 8 of the rebuild roadmap: analytics B, plus the match-time fix carried
+from Phase 8.0 (8.0.7). No migration. Not deployed yet. Share the v9.14.0
+Android build only after the backend is deployed: the app sends date ranges
+an older server ignores, so it would show every match under a date label.
+
+**Match times show as the time on the fixture**
+- **A 6 pm game now shows as 6 pm.** Match times were shown converted to the
+  device's time zone, so on the live site a match entered as 6 pm read as
+  6 am the next day in New Zealand. They now show the time as entered, on
+  the day entered, everywhere (matches list, match pages, the home page,
+  My Stats), and the edit form opens with that same time.
+- **Editing a match no longer moves its time.** The server now stores the
+  time exactly as typed, whether it runs in UTC or New Zealand time, and a
+  date that isn't real gets a clear message instead of an error.
+- Existing matches need no change: none had been edited, so every stored
+  time is the one entered.
+
+**Date filters**
+- **Team and player dashboards can be narrowed to a date range:** All
+  matches (labelled with the season), Last 30 days, Last 3 months, or your
+  own From / To dates. The page says how many matches it's showing, the
+  range stays in the address (so it survives a reload and the Back button),
+  and clicking through to a player keeps it. The match dashboard has no
+  filter: a match is its own date. Works in the Android app too, once the
+  server is updated.
+- **The matches list's "to" date now includes that whole day.** Before, a
+  match later that day was left out. A date that isn't a real date now gets a
+  clear message instead of an error.
+
+**Downloads and printing (website only for now)**
+- **Download CSV** on the player stats, team totals, rotations and sets
+  tables. The file has exactly what's on your screen: staff get every
+  player, a player gets only their own row. It opens cleanly in Excel,
+  macrons included, and a name that looks like a formula stays plain text.
+- **Print / Save PDF** on the team, match and player dashboards: the app's
+  menus and buttons are left off, charts fit an A4 page, and the PDF is named
+  after the team, match or dates. The button waits until everything has
+  loaded.
+- Both are hidden in the Android app for now: its web view can't save
+  downloads or print yet.
+- Names containing a semicolon are quoted too, so Excel set to a
+  semicolon-separated locale keeps them in one cell.
+
 ## v9.13.0 — 2026-09-30
 
 Phase 8.0 of the rebuild roadmap: fixes carried over from the Phases 6–7

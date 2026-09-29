@@ -47,7 +47,8 @@ async function main() {
     create: {
       id: 'seed-match-1',
       teamId: team.id,
-      matchDate: new Date('2026-06-20T19:00:00'),
+      // Wall-clock fixture time, kept as UTC like the app stores it (8.0.7).
+      matchDate: new Date('2026-06-20T19:00:00Z'),
       opponent: 'Wellington Wolves',
       competition: 'National League',
       venue: 'Cowles Stadium, Christchurch',

@@ -6,6 +6,7 @@ import { StatsCards, type StatTrends } from '../analytics/StatsOverview';
 import PlayerRadarChart from '../charts/PlayerRadarChart';
 import TeamTrendChart from '../charts/TeamTrendChart';
 import { CHART_SERIES } from '../../lib/chartColors';
+import { formatMatchDate } from '../../lib/matchTime';
 import { POSITION_LABELS } from '../../types';
 import type {
   PlayerRecord, MatchSummaryItem, DevelopmentPoint, TeamStatsBreakdown,
@@ -222,7 +223,7 @@ function NextMatchPanel({ next, form }: { next?: UpcomingMatchItem; form: MatchS
               {next.opponent}
             </p>
             <p className="text-[13px] text-grey-600 mt-1">
-              {new Date(next.matchDate).toLocaleString([], {
+              {formatMatchDate(next.matchDate, {
                 weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
               })}
               {next.venue && ` · ${next.venue}`}
