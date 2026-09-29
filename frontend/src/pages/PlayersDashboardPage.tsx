@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
+import { formatMatchDate } from '../lib/matchTime';
 import axios from 'axios';
 import { usePlayerAnalytics, useMatchAnalytics, useTeam, useHasPermission, usePlayerZones } from '../hooks';
 import { StatsCards } from '../components/analytics/StatsOverview';
@@ -81,7 +81,7 @@ export default function PlayerDashboardPage() {
           <div className="mt-3">
             <p className="text-xs font-semibold uppercase tracking-[0.06em] text-grey-600">Game Day Stats</p>
             <p className="text-sm text-grey-600 mt-0.5">
-              vs {matchData.match.opponent} · {format(new Date(matchData.match.matchDate), 'PPP')}
+              vs {matchData.match.opponent} · {formatMatchDate(matchData.match.matchDate, { dateStyle: 'long' })}
               {matchData.match.venue && ` · ${matchData.match.venue}`}
               {matchData.match.competition && ` · ${matchData.match.competition}`}
             </p>
