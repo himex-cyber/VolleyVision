@@ -175,7 +175,7 @@ The Netlify build, function and redirect config is `netlify.toml` at the repo ro
 Take a backup before every production migration and deploy (the Supabase free plan keeps no downloadable backups). With Docker Desktop running, from the repo root:
 
 ```powershell
-.ackup.ps1                  # -> $HOME\Backupsv-backup-<date>.sql
+.\backup.ps1                  # -> $HOME\Backups\vv-backup-<date>.sql
 ```
 
 It reads `DIRECT_URL` (else `DATABASE_URL`) from `backend/.env` without printing it, runs `pg_dump` from the `postgres:17` image, and uses Supabase's session pooler (port 5432) because `pg_dump` can't run through the transaction pooler. If Docker can't reach Supabase's direct host (it's IPv6-only), put the Session pooler URL from Supabase > Connect into `DIRECT_URL`. The file holds every user's and player's data: keep it private and out of the repo.
