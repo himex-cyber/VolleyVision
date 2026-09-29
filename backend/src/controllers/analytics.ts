@@ -2,12 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { calculatePlayerStats, calculateSetStats, calculateStats } from '../lib/analytics';
-import { ownEventsOnly } from '../lib/eventFilters';
+import { ownEventsOnly, teamEventsWithOpponent } from '../lib/eventFilters';
 import { generateMatchReport } from '../services/report.service';
 import { assertTeamVisible } from '../lib/teamVisibility';
 import { seesEveryPlayer } from '../services/permission.service';
 import { visiblePlayers } from '../lib/playerPrivacy';
 import { buildDetailedHeatmap } from '../lib/heatmap';
+import { buildAdvancedMetrics } from '../lib/advancedMetrics';
+import { calculateRotations } from '../services/rotation.service';
+import { calculateMomentum } from '../services/momentum.service';
 
 // ─── Shared query shapes ──────────────────────────────────────────────────────
 
@@ -111,16 +114,24 @@ export async function getTeamTrends(req: Request, res: Response, next: NextFunct
   } catch (err) { next(err); }
 }
 
+// Point-flow analytics (momentum, rotations, side-out) need the opponent's
+// events too, and never a player: team-level for every member.
+const pointEventSelect = {
+  eventType: true, isOpponentEvent: true, setNumber: true, rotationNumber: true, servingSide: true, recordedAt: true,
+} as const;
+
 export async function getMatchReport(req: Request, res: Response, next: NextFunction) {
   try {
     const { matchId } = req.params;
-    const [match, events, players, isStaff] = await Promise.all([
+    const [match, events, pointEvents, players, isStaff] = await Promise.all([
       prisma.match.findUnique({ where: { id: matchId }, include: { team: { select: { name: true } } } }),
       prisma.event.findMany({
         where: { matchId, ...ownEventsOnly },
         select: { eventType: true, setNumber: true, courtZone: true, rotationNumber: true, playerId: true, recordedAt: true },
         orderBy: { recordedAt: 'asc' },
       }),
+      // Momentum and best rotation only (7.10): the opponent's points count there.
+      prisma.event.findMany({ where: { matchId, ...teamEventsWithOpponent }, select: pointEventSelect }),
       prisma.player.findMany({
         where: { team: { matches: { some: { id: matchId } } } },
         select: { id: true, firstName: true, lastName: true, jerseyNumber: true, position: true },
@@ -134,6 +145,7 @@ export async function getMatchReport(req: Request, res: Response, next: NextFunc
         setScores: match.setScores },
       events,
       players,
+      pointEvents,
     );
     // The top performer names one player; the rest of the report is team-level.
     if (!isStaff) report.topPerformer = null;
@@ -218,4 +230,42 @@ export async function getPlayerZones(req: Request, res: Response, next: NextFunc
     });
     res.json(buildDetailedHeatmap(events));
   } catch (err) { next(err); }
+}
+
+// ─── Point flow: rotations, momentum, advanced metrics (7.8) ─────────────────
+// Team-level, no per-player rows, for every member (the visibility guard runs
+// first, in the router). Point flow reads the opponent's events too.
+
+type EventWhere = { matchId: string } | { match: { teamId: string } };
+
+async function pointEvents(where: EventWhere) {
+  return prisma.event.findMany({ where: { ...where, ...teamEventsWithOpponent }, select: pointEventSelect });
+}
+
+async function advancedFor(where: EventWhere) {
+  const [own, points] = await Promise.all([
+    prisma.event.findMany({ where: { ...where, ...ownEventsOnly }, select: { eventType: true, setNumber: true, matchId: true } }),
+    pointEvents(where),
+  ]);
+  return buildAdvancedMetrics(own, points);
+}
+
+export async function getMatchRotations(req: Request, res: Response, next: NextFunction) {
+  try { res.json(calculateRotations(await pointEvents({ matchId: req.params.matchId }))); } catch (err) { next(err); }
+}
+
+export async function getTeamRotations(req: Request, res: Response, next: NextFunction) {
+  try { res.json(calculateRotations(await pointEvents({ match: { teamId: req.params.teamId } }))); } catch (err) { next(err); }
+}
+
+export async function getMatchMomentum(req: Request, res: Response, next: NextFunction) {
+  try { res.json(calculateMomentum(await pointEvents({ matchId: req.params.matchId }))); } catch (err) { next(err); }
+}
+
+export async function getMatchAdvanced(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await advancedFor({ matchId: req.params.matchId })); } catch (err) { next(err); }
+}
+
+export async function getTeamAdvanced(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await advancedFor({ match: { teamId: req.params.teamId } })); } catch (err) { next(err); }
 }

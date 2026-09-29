@@ -402,9 +402,12 @@ export function useUndoEvent(matchId: string) {
     onSuccess: () => invalidateMatchData(qc, matchId),
   });
   const { mutateAsync } = online;
-  const undo = useCallback(async () => {
-    if (user && undoTap(user.id, matchId) === 'queue') return;
+  /** The tap taken back through the queue, or null after the server's undo-last. */
+  const undo = useCallback(async (): Promise<{ payload?: QueuedEventPayload; serverId?: string } | null> => {
+    const local = user ? undoTap(user.id, matchId) : null;
+    if (local) return local;
     await mutateAsync();
+    return null;
   }, [user, matchId, mutateAsync]);
   return { undo, isPending: online.isPending };
 }
@@ -454,6 +457,32 @@ export function useMatchZones(matchId: string) {
     queryKey: ['analytics', 'zones', 'match', matchId],
     queryFn: () => analyticsApi.matchZones(matchId),
     enabled: !!matchId,
+  });
+}
+
+// ─── Point flow (7.9) ─────────────────────────────────────────────────────────
+
+export function useRotations(scope: 'match' | 'team', id: string) {
+  return useQuery({
+    queryKey: ['analytics', 'rotations', scope, id],
+    queryFn: () => (scope === 'match' ? analyticsApi.matchRotations(id) : analyticsApi.teamRotations(id)),
+    enabled: !!id,
+  });
+}
+
+export function useMomentum(matchId: string) {
+  return useQuery({
+    queryKey: ['analytics', 'momentum', 'match', matchId],
+    queryFn: () => analyticsApi.matchMomentum(matchId),
+    enabled: !!matchId,
+  });
+}
+
+export function useAdvancedMetrics(scope: 'match' | 'team', id: string) {
+  return useQuery({
+    queryKey: ['analytics', 'advanced', scope, id],
+    queryFn: () => (scope === 'match' ? analyticsApi.matchAdvanced(id) : analyticsApi.teamAdvanced(id)),
+    enabled: !!id,
   });
 }
 

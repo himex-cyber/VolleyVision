@@ -3,7 +3,7 @@ import { getToken, clearToken } from './tokenStorage';
 import { clearOfflineCache } from './offlineCache';
 import { setLeaveGuard } from './leaveGuard';
 import { isNative } from './native';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, RotationData, MomentumData, AdvancedMetrics, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -253,6 +253,18 @@ export const analyticsApi = {
 
   teamZones: (teamId: string) =>
     api.get<ZoneMap>(`/analytics/teams/${teamId}/zones`).then((r) => r.data),
+
+  // Point flow (7.9): team-level, every member.
+  matchRotations: (matchId: string) =>
+    api.get<RotationData>(`/analytics/matches/${matchId}/rotations`).then((r) => r.data),
+  teamRotations: (teamId: string) =>
+    api.get<RotationData>(`/analytics/teams/${teamId}/rotations`).then((r) => r.data),
+  matchMomentum: (matchId: string) =>
+    api.get<MomentumData>(`/analytics/matches/${matchId}/momentum`).then((r) => r.data),
+  matchAdvanced: (matchId: string) =>
+    api.get<AdvancedMetrics>(`/analytics/matches/${matchId}/advanced`).then((r) => r.data),
+  teamAdvanced: (teamId: string) =>
+    api.get<AdvancedMetrics>(`/analytics/teams/${teamId}/advanced`).then((r) => r.data),
 
   // Staff, admin or the player themself; same team/match scoping as player().
   playerZones: (playerId: string, teamId?: string, matchId?: string) =>

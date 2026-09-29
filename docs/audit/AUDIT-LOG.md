@@ -839,3 +839,37 @@ the queue and it flushes after signing in again.
 **Verified:** backend `tsc` clean, 60 unit test files, build OK; frontend `tsc`, lint and build clean; integration 3/3
 (matrix 73 routes); `npm audit --omit=dev --audit-level=high` clean in both (one moderate nodemailer advisory, below
 the gate, needs a major upgrade: G3).
+
+### Phase 7 of the rebuild roadmap: analytics A (branch `rebuild/p7-analytics-a`, 2026-09-29)
+
+Why: the roadmap's analytics A, plus correcting rotation and momentum, which left out the opponent's points and
+never reset per set. Karlos decided (29 Sept) to record the serving side so side-out and break-point are real. Released
+as v9.12.0. One migration: `20260929034654_event_serving_side` (additive: enum `ServingSide`, nullable
+`events.serving_side`; creates no table).
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 7.1 (G1) | Migration above; applied to the local DB only | CI drift check |
+| 7.2 | Tracker Serving: Us / Them (asks at set start, follows the point winner, corrects, undo restores; set-jump taps carry none); `servingSide` accepted (optional, enum) and stored | `eventInput.test.ts`, browser + emulator |
+| 7.3 | `teamEventsWithOpponent` for point-flow analytics only | `pointFlowRoutes.test.ts` (filters asserted) |
+| 7.4 | Rotations scored with the opponent inversion; `pointWinPct`; side-out/break-point per rotation | `phase4.test.ts` |
+| 7.5 | Momentum with the opponent inversion, grouped per set, sorted by time; ties aren't lead changes | `phase4.test.ts` |
+| 7.6 | `lib/sideOut.ts` | `sideOut.test.ts` (hand-built set) |
+| 7.7 | `lib/advancedMetrics.ts` ported; `receptionQuality`; sets counted per match | `advancedMetrics.test.ts` |
+| 7.8 | Five read-only team-level routes behind the visibility guards | matrix 78 routes + no-player shape checks |
+| 7.9 | Rotation, momentum and advanced panels, lazy-loaded | browser check |
+| 7.10 | Report momentum and best rotation from an opponent-inclusive list; same shape | `matchReportZones.test.ts` |
+| 7.11 | Seed: the rally winner serves the next | scripts typecheck |
+
+**Checks:** browser (local stack, 360 and 1280): seed match m1 panels match a SQL hand count (side-out 9 of 13 = 69.2%,
+break-point 14 of 18 = 77.8%); set selector; empty and coverage states; no page overflow; 44px controls; a player sees
+the team panels and no individual data. Emulator (local build): six taps offline with serving on, synced: side-out
+66.7% (2 of 3) and break-point 33.3% (1 of 3), equal to the hand count.
+
+**Reviews:**
+- `/code-review high`: 6 findings, all fixed (momentum grouping, team blocks per set, tokens, contrast, run cap, tooltip).
+- Phase-end independent Opus audit: 2 medium (serving on set-jump taps; undo restoring serving) and 5 low, all fixed.
+- `/security-review`: no findings.
+
+**Verified:** backend `tsc` clean, 63 unit test files, build OK; frontend `tsc`, lint and build clean; integration 3/3
+(matrix 78 routes).

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import StatLeaderboardChart from '../components/charts/StatLeaderboardChart';
@@ -8,6 +9,12 @@ import { generateTeamInsights } from '../lib/insights';
 import PlayerInsights from '../components/analytics/PlayerInsights';
 import TeamSubNav from '../components/ui/TeamSubNav';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
+
+// Point-flow panels (7.9): their own chunks (recharts and all), so the
+// dashboard's first paint doesn't wait for them.
+const RotationAnalytics = lazy(() => import('../components/analytics/RotationAnalytics'));
+const AdvancedMetricsPanel = lazy(() => import('../components/analytics/AdvancedMetricsPanel'));
+const panelFallback = <div className="card p-6 h-40 animate-pulse bg-grey-50" aria-hidden="true" />;
 
 export default function TeamDashboardPage() {
   const { teamId } = useParams<{ teamId: string }>();
@@ -66,6 +73,16 @@ export default function TeamDashboardPage() {
           <CourtHeatMap data={zones.data} title="Court zones" canTrack={canTrack} />
         )}
       </section>
+
+      {/* Team-level point flow across the team's matches: every member. */}
+      <Suspense fallback={panelFallback}>
+        <section id="rotations">
+          <RotationAnalytics scope="team" id={teamId!} canTrack={canTrack} />
+        </section>
+        <section id="advanced">
+          <AdvancedMetricsPanel scope="team" id={teamId!} canTrack={canTrack} />
+        </section>
+      </Suspense>
 
         {trends.data && trends.data.length === 0 && (
         <div className="card p-6 text-center text-grey-600 text-sm">

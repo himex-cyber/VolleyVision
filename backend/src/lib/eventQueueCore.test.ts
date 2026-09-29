@@ -62,6 +62,7 @@ q = build(tap('a'), tap('b'));
 let u = undoNewest(q);
 assert.equal(u.result, 'removed');
 assert.deepEqual(u.items.map((i) => i.clientKey), ['a']);
+assert.equal(u.undone?.clientKey, 'b', 'says which tap it undid (the tracker restores its serving side)');
 
 // Undo: a tap in flight (or sent with no answer) is marked, not dropped...
 q = markSending(build(tap('a')), ['a']);

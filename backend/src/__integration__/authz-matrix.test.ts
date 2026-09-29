@@ -91,6 +91,11 @@ const ROWS: Row[] = [
   // Court-zone maps (Phase 4): team maps for every member; a player's map for staff and the player.
   { name: 'GET match zones', method: 'GET', path: (f) => `/api/v1/analytics/matches/${f.match.id}/zones`, expect: READ },
   { name: 'GET team zones', method: 'GET', path: (f) => `/api/v1/analytics/teams/${f.team.id}/zones`, expect: READ },
+  { name: 'GET match rotations', method: 'GET', path: (f) => `/api/v1/analytics/matches/${f.match.id}/rotations`, expect: READ },
+  { name: 'GET match momentum', method: 'GET', path: (f) => `/api/v1/analytics/matches/${f.match.id}/momentum`, expect: READ },
+  { name: 'GET match advanced', method: 'GET', path: (f) => `/api/v1/analytics/matches/${f.match.id}/advanced`, expect: READ },
+  { name: 'GET team rotations', method: 'GET', path: (f) => `/api/v1/analytics/teams/${f.team.id}/rotations`, expect: READ },
+  { name: 'GET team advanced', method: 'GET', path: (f) => `/api/v1/analytics/teams/${f.team.id}/advanced`, expect: READ },
   { name: 'GET player zones (someone else)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p1.id}/zones`, expect: STAFF },
   { name: 'GET player zones (own record)', method: 'GET', path: (f) => `/api/v1/analytics/players/${f.p2.id}/zones`, expect: { outsider: 404, viewer: 403, player: 200 } },
   { name: 'GET team channel', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/channel`, expect: READ },
@@ -220,6 +225,12 @@ async function main() {
       `/api/v1/analytics/teams/${f.team.id}`,
       `/api/v1/analytics/matches/${f.match.id}/report`,
       `/api/v1/events/by-match/${f.match.id}`,
+      // Point flow (7.8): team-level, so no player at all.
+      `/api/v1/analytics/matches/${f.match.id}/rotations`,
+      `/api/v1/analytics/matches/${f.match.id}/momentum`,
+      `/api/v1/analytics/matches/${f.match.id}/advanced`,
+      `/api/v1/analytics/teams/${f.team.id}/rotations`,
+      `/api/v1/analytics/teams/${f.team.id}/advanced`,
     ];
     const staffView = await call(base, 'GET', perPlayer[0], f.owner.token);
     assert.equal(staffView.body.playerStats.length, 3, 'staff see every player');

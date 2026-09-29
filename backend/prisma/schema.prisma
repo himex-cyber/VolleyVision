@@ -50,6 +50,14 @@ enum Position {
   DEFENSIVE_SPECIALIST
 }
 
+// Who served the rally an event belongs to (7.1), from the tracker's
+// Serving: Us / Them control. Makes side-out % and break-point % real: a point
+// we win on their serve is a side-out, on ours a break point.
+enum ServingSide {
+  US
+  THEM
+}
+
 enum EventType {
   // Attacking
   KILL
@@ -592,6 +600,10 @@ model Event {
   // A resend of the same key returns the existing row instead of scoring twice.
   // Null for the web and v9.10.0 apps, which send no key; nulls never collide.
   clientKey   String?   @map("client_key")
+
+  // Set by the tracker from v9.12.0 (7.1). Null for older apps, the web before
+  // it, and manual score taps; side-out analytics count those in coverage.
+  servingSide ServingSide? @map("serving_side")
 
   // Indexes support the most common Phase 2 query patterns:
   //   - "all events for player X in match Y"
