@@ -2,10 +2,15 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.12.0 — unreleased
+## v9.12.0 — 2026-09-29
 
 Phase 7 of the rebuild roadmap: analytics A. One migration
 (`20260929034654_event_serving_side`, additive).
+Released but not deployed yet (Netlify build credits are low): production stays
+on v9.10.0. Deploying needs both migrations (v9.11.0's and this one), and the
+v9.12.0 Android build needs this backend: don't share it before the deploy.
+KPI labels approved by Karlos: Point win %, Side-out %, Break-point %, Serve
+receive quality.
 
 **Serving: Us / Them**
 - **The tracker records who served each rally.** A Serving control by the
