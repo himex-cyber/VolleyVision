@@ -36,9 +36,10 @@ interface Props {
   matchId: string;
   homeName: string;
   awayName: string;
+  canTrack?: boolean;
 }
 
-export default function MomentumChart({ matchId, homeName, awayName }: Props) {
+export default function MomentumChart({ matchId, homeName, awayName, canTrack = false }: Props) {
   const { data, isLoading, isError } = useMomentum(matchId);
   const [picked, setPicked] = useState<number | null>(null);
 
@@ -55,9 +56,16 @@ export default function MomentumChart({ matchId, homeName, awayName }: Props) {
   }, [data, setNumber]);
 
   if (isLoading) return <div className="card p-4 h-72 bg-grey-50 animate-pulse" aria-busy="true" />;
-  if (isError) return <div className="card p-4 text-sm text-grey-600 text-center">Couldn't load momentum.</div>;
+  if (isError) return <div className="card p-4 text-sm text-error-strong text-center">Couldn't load momentum. Try refreshing the page.</div>;
   if (!data || data.timeline.length === 0) {
-    return <div className="card p-6 text-sm text-grey-600 text-center">No points tracked yet.</div>;
+    return (
+      <div className="card p-4">
+        <h3 className="font-display font-semibold text-grey-900">Momentum</h3>
+        <p className="text-sm text-grey-600 text-center py-6">
+          No points tracked yet.{canTrack && ' Each point you track shows here, set by set.'}
+        </p>
+      </div>
+    );
   }
 
   const set = data.sets.find((s) => s.setNumber === setNumber) ?? data.sets[0];
@@ -68,6 +76,7 @@ export default function MomentumChart({ matchId, homeName, awayName }: Props) {
 
   return (
     <div className="card p-4 space-y-4 min-w-0">
+      <h3 className="font-display font-semibold text-grey-900">Momentum</h3>
       <div role="group" aria-label="Select set" className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
         {data.sets.map((s) => (
           <button

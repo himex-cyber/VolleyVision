@@ -402,9 +402,12 @@ export function useUndoEvent(matchId: string) {
     onSuccess: () => invalidateMatchData(qc, matchId),
   });
   const { mutateAsync } = online;
-  const undo = useCallback(async () => {
-    if (user && undoTap(user.id, matchId) === 'queue') return;
+  /** The tap taken back through the queue, or null after the server's undo-last. */
+  const undo = useCallback(async (): Promise<{ payload?: QueuedEventPayload; serverId?: string } | null> => {
+    const local = user ? undoTap(user.id, matchId) : null;
+    if (local) return local;
     await mutateAsync();
+    return null;
   }, [user, matchId, mutateAsync]);
   return { undo, isPending: online.isPending };
 }

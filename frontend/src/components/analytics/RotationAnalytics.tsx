@@ -51,7 +51,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false }: {
   const { data, isLoading, isError } = useRotations(scope, id);
 
   if (isLoading) return <div className="card p-4 h-48 animate-pulse bg-grey-50" aria-label="Loading rotations" />;
-  if (isError || !data) return <p className="text-sm text-error-strong">Couldn't load rotations.</p>;
+  if (isError || !data) return <p className="text-sm text-error-strong">Couldn't load rotations. Try refreshing the page.</p>;
 
   const { rotations, insights, coverage } = data;
   const { withServingSide, totalPoints } = coverage;

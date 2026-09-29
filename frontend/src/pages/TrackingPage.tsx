@@ -132,7 +132,7 @@ export default function TrackingPage() {
   // The server said no (403/404): never keep showing the device's old copy.
   const refused = axios.isAxiosError(matchError) && [403, 404].includes(matchError.response?.status ?? 0);
   const match = refused ? undefined : cachedOrLive;
-  const { data: events } = useEvents(matchId!);
+  const { data: events, isFetchedAfterMount: eventsFresh } = useEvents(matchId!);
   const recordEvent = useRecordEvent(matchId!);
   const { undo, isPending: undoPending } = useUndoEvent(matchId!);
   const queue = useEventQueue(matchId!);
@@ -208,8 +208,11 @@ export default function TrackingPage() {
   // of this set serves (a point won is the serve won); with no point yet, ask.
   // Once decided for a set, taps and corrections own it.
   useEffect(() => {
-    // Not before the events arrive: an empty list would read as a fresh set.
-    if (!match || events === undefined || servingFor === playingSet) return;
+    // The first decision waits for a fresh event list (a stale or missing one
+    // would read as a fresh set) unless offline, where the queue is all there
+    // is. A later set change decides at once: a new set has no server points.
+    const firstDecision = servingFor === null;
+    if (!match || servingFor === playingSet || (firstDecision && !eventsFresh && !queue.offline)) return;
     const scored = [
       ...(events ?? []).map((e) => ({ eventType: e.eventType as string, isOpponentEvent: !!e.isOpponentEvent, setNumber: e.setNumber, at: e.recordedAt })),
       ...queue.items
@@ -221,7 +224,7 @@ export default function TrackingPage() {
     const last = scored[scored.length - 1];
     setServing(last ? (scoringTeam(last.eventType, last.isOpponentEvent) === 'home' ? 'US' : 'THEM') : null);
     setServingFor(playingSet);
-  }, [match, events, queue.items, playingSet, servingFor]);
+  }, [match, events, eventsFresh, queue.offline, queue.items, playingSet, servingFor]);
 
   const { waiting, rejected } = queueSummary(queue.items);
 
@@ -260,8 +263,11 @@ export default function TrackingPage() {
       const jerseyNum = opponentJerseyNumber.trim() !== '' ? parseInt(opponentJerseyNumber, 10) : null;
       // Queued on the device and sent in the background: the buttons never
       // wait for the network (6.7).
+      // Serving belongs to the set being played; a fix-up tap in an earlier
+      // set (after a set jump) carries none and doesn't move it.
+      const inPlayingSet = currentSet === playingSet;
       recordEvent({
-        servingSide: serving,
+        servingSide: inPlayingSet ? serving : null,
         ...(isOpponentMode
           ? { isOpponentEvent: true, opponentJerseyNumber: jerseyNum }
           : { playerId: selectedPlayer!.id }),
@@ -280,7 +286,7 @@ export default function TrackingPage() {
       }
       // The side that won the point serves next.
       const won = scoringTeam(eventType, isOpponentMode);
-      if (won) setServing(won === 'home' ? 'US' : 'THEM');
+      if (won && inPlayingSet) setServing(won === 'home' ? 'US' : 'THEM');
       setTimeout(() => setJustRecorded(null), 300);
       if (!keepZone) setSelectedZone(null);
     } catch (err) {
@@ -295,18 +301,16 @@ export default function TrackingPage() {
   }
 
   async function handleUndo() {
-    // The tap Undo takes back (the newest shown): if it scored, serving goes
-    // back to what it was when that tap was made.
-    const undone = recentRows.find((r) => !('op' in r) || r.state !== 'rejected');
-    const undoneServing = undone
-      ? ('op' in undone ? undone.payload?.servingSide : undone.servingSide) ?? null
-      : null;
-    const undoneScored = undone
-      ? scoringTeam('op' in undone ? undone.payload?.eventType ?? '' : undone.eventType, 'op' in undone ? !!undone.payload?.isOpponentEvent : !!undone.isOpponentEvent)
-      : null;
     try {
-      await undo();
-      if (undoneScored && undoneServing) setServing(undoneServing);
+      const undone = await undo();
+      // A tap of ours that scored in the set being played: serving goes back
+      // to what it was when that tap was made (null too: ask again). After
+      // the server's undo-last we can't know what it removed, so leave it.
+      const tap = undone?.payload
+        ?? (undone?.serverId ? (events ?? []).find((e) => e.id === undone.serverId) : undefined);
+      if (tap && tap.setNumber === playingSet && scoringTeam(tap.eventType, !!tap.isOpponentEvent)) {
+        setServing(tap.servingSide ?? null);
+      }
       showFlash('Undone', true);
     } catch (err) {
       const noConnection = queue.offline || (axios.isAxiosError(err) && !err.response);
@@ -336,11 +340,13 @@ export default function TrackingPage() {
   // The scoreboard reports a delta; the score API takes absolutes.
   function handleScore(side: ScoreSide, delta: number) {
     if (tapsStillSaving()) return;
-    // A point added by hand was won by that side, so they serve next.
-    if (delta > 0) setServing(side === 'home' ? 'US' : 'THEM');
     const current = (side === 'home' ? match?.homeScore : match?.awayScore) ?? 0;
     const next = Math.max(0, current + delta);
-    updateScore.mutate(side === 'home' ? { homeScore: next } : { awayScore: next });
+    updateScore.mutate(side === 'home' ? { homeScore: next } : { awayScore: next }, {
+      // A point added by hand was won by that side, so they serve next, once
+      // the server has taken it.
+      onSuccess: () => { if (delta > 0) setServing(side === 'home' ? 'US' : 'THEM'); },
+    });
   }
 
   // The most destructive action on this screen — wipes every set and the whole

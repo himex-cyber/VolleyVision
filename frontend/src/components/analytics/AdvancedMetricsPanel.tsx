@@ -54,7 +54,7 @@ export default function AdvancedMetricsPanel({ scope, id, canTrack = false }: {
 
   if (isLoading) return <div className="card h-40 bg-grey-50 animate-pulse" aria-busy="true" />;
   if (isError || !data) {
-    return <p className="card p-4 text-sm text-grey-600 text-center">Couldn't load advanced metrics.</p>;
+    return <p className="card p-4 text-sm text-error-strong text-center">Couldn't load advanced metrics. Try refreshing the page.</p>;
   }
 
   const { sideOut, serve, attack, blocking, receptionQuality: rq } = data;
@@ -63,11 +63,19 @@ export default function AdvancedMetricsPanel({ scope, id, canTrack = false }: {
   const empty = serve.attempts === 0 && attack.attempts === 0 && rq.attempts === 0
     && blocking.totalBlocks === 0 && totalPoints === 0;
   if (empty) {
-    return <p className="card p-4 text-sm text-grey-600 text-center py-6">Nothing tracked yet.</p>;
+    return (
+      <div className="card p-4">
+        <h3 className="font-display font-semibold text-grey-900">Advanced</h3>
+        <p className="text-sm text-grey-600 text-center py-6">
+          Nothing tracked yet.{canTrack && ' Track a match and serve, attack, block and pass figures show up here.'}
+        </p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
+      <h3 className="font-display font-semibold text-grey-900">Advanced</h3>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Headline label="Side-out %" value={pct(sideOut.sideOutPct)} detail={`of ${sideOut.receiveRallies} receive rallies`} />
         <Headline label="Break-point %" value={pct(sideOut.breakPointPct)} detail={`of ${sideOut.serveRallies} serve rallies`} />

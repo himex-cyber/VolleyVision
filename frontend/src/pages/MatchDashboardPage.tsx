@@ -119,7 +119,7 @@ export default function MatchDashboardPage() {
       {/* Team-level point flow: every member, no per-player rows. */}
       <Suspense fallback={panelFallback}>
         <section id="momentum">
-          <MomentumChart matchId={matchId!} homeName={data.match.teamName} awayName={data.match.opponent} />
+          <MomentumChart matchId={matchId!} homeName={data.match.teamName} awayName={data.match.opponent} canTrack={canTrack} />
         </section>
         <section id="rotations">
           <RotationAnalytics scope="match" id={matchId!} canTrack={canTrack} />
