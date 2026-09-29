@@ -11,10 +11,13 @@ import type { MatchScoreState } from '../lib/setOperations';
 import { logAudit } from '../lib/audit';
 import { maskOtherUserIds } from '../lib/playerPrivacy';
 import { parseDateWindow, matchDateWhere } from '../lib/dateWindow';
+import { parseMatchDate } from '../lib/matchDate';
 import { getAccessTier, seesEveryPlayer } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreateMatch, applyUpdateMatch, applyDeleteMatch } from '../services/teamActions.service';
 import { withMatchLock } from '../services/eventRecording.service';
+
+const INVALID_MATCH_DATE = "That match date isn't a real date and time.";
 
 // Response body when a non-head-coach action is queued for approval.
 const pending = (requestId: string) => ({ status: 'pending_approval' as const, requestId });
@@ -76,6 +79,8 @@ export async function createMatch(req: Request, res: Response, next: NextFunctio
     if (!teamId || !matchDate || !opponent) {
       throw new AppError(400, 'Team, date, and opponent are required.');
     }
+    // Checked here, before an approval request can queue it (8.0.7).
+    if (!parseMatchDate(matchDate)) throw new AppError(400, INVALID_MATCH_DATE);
     const userId = req.user!.userId;
 
     // Match-management access tier decides immediate vs queued (VIEW_ONLY/non-member
@@ -102,6 +107,7 @@ export async function updateMatch(req: Request, res: Response, next: NextFunctio
     if (status && !Object.values(MatchStatus).includes(status)) {
       throw new AppError(400, 'Invalid match status.');
     }
+    if (matchDate && !parseMatchDate(matchDate)) throw new AppError(400, INVALID_MATCH_DATE);
     const existing = await prisma.match.findUnique({ where: { id: req.params.id }, select: { teamId: true } });
     if (!existing) throw new AppError(404, 'Match not found.');
     const userId = req.user!.userId;
