@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const stored = getToken();
     if (!stored) { setIsLoading(false); return; }
     const restore = () => authApi.me().then((u) => { cacheUser(u); setUser(u); });
+    const retryOnline = () => { restore().catch(() => {}); };
     restore()
       .catch((err) => {
         if (axios.isAxiosError(err) && err.response?.status === 401) {
@@ -63,9 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // else must never pair with this token (their queue, their rosters).
         const cached = cachedUser();
         if (cached && cached.id === tokenUserId(stored)) setUser(cached);
-        window.addEventListener('online', () => { restore().catch(() => {}); }, { once: true });
+        window.addEventListener('online', retryOnline, { once: true });
       })
       .finally(() => setIsLoading(false));
+    return () => window.removeEventListener('online', retryOnline);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

@@ -338,13 +338,15 @@ export function useEvents(matchId: string, setNumber?: number) {
  * After a sync (not after each tap): the match, its events and every
  * analytics view of it. Keys like ['analytics','report',id] and
  * ['analytics','zones','match',id] don't start with ['analytics','match'],
- * so the whole prefix goes.
+ * so the whole prefix goes. Resolves once the score and events are fresh
+ * (the queue waits for that); analytics refetch in the background, or a
+ * backlog flush would wait on every dashboard query per batch.
  */
 export function invalidateMatchData(qc: QueryClient, matchId: string) {
+  void qc.invalidateQueries({ queryKey: ['analytics'] });
   return Promise.all([
     qc.invalidateQueries({ queryKey: ['events', matchId] }),
     qc.invalidateQueries({ queryKey: ['match', matchId] }),
-    qc.invalidateQueries({ queryKey: ['analytics'] }),
   ]);
 }
 

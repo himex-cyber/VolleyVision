@@ -151,14 +151,21 @@ onApiResponse(() => setReachable(true));
 
 const deviceKeysKey = (userId: string, matchId: string) => `${DEVICE_KEYS_PREFIX}${userId}:${matchId}`;
 const deviceKeysMemory = new Map<string, string[]>();
+// Parsed once per stored value: the tracker asks on every render, and late in
+// a match the list is thousands of keys.
+const deviceKeysParsed = new Map<string, { raw: string; keys: Set<string> }>();
 
 export function deviceKeys(userId: string, matchId: string): Set<string> {
   const k = deviceKeysKey(userId, matchId);
-  try {
-    return new Set(deviceKeysMemory.get(k) ?? (storageWorks() ? JSON.parse(storageGet(k) ?? '[]') : []));
-  } catch {
-    return new Set();
-  }
+  const mem = deviceKeysMemory.get(k);
+  if (mem || !storageWorks()) return new Set(mem ?? []);
+  const raw = storageGet(k) ?? '[]';
+  const hit = deviceKeysParsed.get(k);
+  if (hit?.raw === raw) return hit.keys;
+  let keys = new Set<string>();
+  try { keys = new Set(JSON.parse(raw)); } catch { /* unreadable: no keys */ }
+  deviceKeysParsed.set(k, { raw, keys });
+  return keys;
 }
 
 function rememberDeviceKey(userId: string, matchId: string, clientKey: string) {

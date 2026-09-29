@@ -11,13 +11,13 @@ import { parseEventInput } from '../lib/eventInput';
 const CREATED = new Date(Date.now() - 60 * 60_000); // an hour ago, so every at(n) is in the past
 const at = (min: number) => new Date(CREATED.getTime() + min * 60_000).toISOString();
 
-function world(opts: { manualScoreOverride?: boolean; latestAdjustmentAt?: string } = {}) {
+function world(opts: { manualScoreOverride?: boolean; latestAdjustmentAt?: string; status?: string } = {}) {
   resetDb();
   const rows: any[] = [];
   const match = { homeScore: 0, awayScore: 0 };
   db.match.findUnique = async () => ({
     teamId: 'T', createdAt: CREATED, manualScoreOverride: !!opts.manualScoreOverride,
-    status: 'IN_PROGRESS', homeScore: match.homeScore, awayScore: match.awayScore,
+    status: opts.status ?? 'IN_PROGRESS', homeScore: match.homeScore, awayScore: match.awayScore,
     homeSetsWon: 0, awaySetsWon: 0, setScores: [],
   });
   db.player.findFirst = async () => ({ id: 'p1' });
@@ -136,6 +136,15 @@ async function main() {
     assert.equal(again.duplicate, true);
     assert.equal(w.rows.length, 1);
     await assert.rejects(kill('k2', at(2)), /does not belong/, 'a new tap for an unlinked player is refused');
+  }
+
+  // A finished match keeps a late tap but not its point.
+  {
+    const w = world({ status: 'COMPLETED' });
+    await kill('late', at(1));
+    assert.equal(w.rows.length, 1, 'the stat is kept');
+    assert.equal(increments(), 0, 'no point after match point');
+    assert.equal(callsFor('event', 'findMany').length, 0, 'no replay either');
   }
 
   // Old apps: no key, no time. Server time, in order, as before.

@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { confirmLeave } from '../../lib/leaveGuard';
 
 // Match-level tab group (Match Stats | Events | Track/Watch), one level down
@@ -7,6 +7,7 @@ import { confirmLeave } from '../../lib/leaveGuard';
 // 'watch' for read-only spectators (players never get Track — Iteration 3
 // Task 6), or omitted entirely outside of IN_PROGRESS.
 export default function MatchSubNav({ matchId, mode }: { matchId: string; mode?: 'track' | 'watch' }) {
+  const { pathname } = useLocation();
   const tabs = [
     { to: `/matches/${matchId}/dashboard`, label: 'Stats' },
     { to: `/matches/${matchId}/events`, label: 'Events' },
@@ -22,7 +23,7 @@ export default function MatchSubNav({ matchId, mode }: { matchId: string; mode?:
             key={t.to}
             to={t.to}
             // The tracker asks first while taps are waiting to send (6.9).
-            onClick={(e) => { if (!confirmLeave()) e.preventDefault(); }}
+            onClick={(e) => { if (t.to !== pathname && !confirmLeave()) e.preventDefault(); }}
             className={({ isActive }) =>
               `inline-flex items-center min-h-[44px] px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 isActive

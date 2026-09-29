@@ -59,7 +59,7 @@ export async function recordOneEvent(
 
       const match = await tx.match.findUnique({
         where: { id: matchId },
-        select: { teamId: true, createdAt: true, manualScoreOverride: true },
+        select: { teamId: true, createdAt: true, manualScoreOverride: true, status: true },
       });
       if (!match) throw new AppError(404, 'Match not found.');
 
@@ -120,7 +120,10 @@ export async function recordOneEvent(
       });
 
       const team = scoringTeam(input.eventType, input.isOpponentEvent);
-      if (team === 'home' || team === 'away') {
+      // A finished match keeps the tap (the stat counts) but not the point: a
+      // queued tap can arrive after another device closed the match, and its
+      // running score must not grow past match point.
+      if ((team === 'home' || team === 'away') && match.status !== 'COMPLETED') {
         // Under manual override the set boundaries are authored, and no replay
         // can reproduce them (matchState.service), so points there only
         // increment, the documented behaviour before 6.3 too.

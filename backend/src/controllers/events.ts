@@ -23,9 +23,9 @@ export async function recordEvent(req: Request, res: Response, next: NextFunctio
 
 // A whole offline set can be several hundred taps; one POST each would hit the
 // per-user event limit, so a device flushes its queue in batches (6.4). Each
-// item is its own serializable transaction (6-8 round trips, plus a replay if
-// out of order): 50 took 2.3 s against a local database, which Supabase's
-// latency could push toward Netlify's 10 s function timeout, so 20.
+// item is its own transaction on the match's row lock (6-8 round trips, plus a
+// replay if out of order): 50 took 2.3 s against a local database, which
+// Supabase's latency could push toward Netlify's 10 s function timeout, so 20.
 export const MAX_EVENT_BATCH = 20;
 
 type BatchResult =
@@ -40,9 +40,11 @@ type BatchResult =
  * for that match; a mismatch refuses the whole request before any write.
  *
  * Items run in order. A refused item (a 4xx) is reported and the rest carry
- * on; a serialization conflict stops there and marks it and every later item
- * `retry`, because order matters; anything else fails the whole request with
- * a 500, which the device resends (idempotency makes that safe).
+ * on; a retryable conflict (none today: recording waits on a row lock rather
+ * than aborting, but the contract and the client keep it) stops there and
+ * marks it and every later item `retry`, because order matters; anything
+ * else fails the whole request with a 500, which the device resends
+ * (idempotency makes that safe).
  */
 export async function recordEventBatch(req: Request, res: Response, next: NextFunction) {
   try {
