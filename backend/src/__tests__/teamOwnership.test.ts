@@ -2,7 +2,8 @@
 // assistant; on success the old owner is demoted BEFORE the new owner is
 // promoted (the partial unique index allows only one HEAD_COACH per team, so
 // promoting first would violate it); self-transfer and non-owner callers are
-// rejected before any write.
+// rejected before any write. 6.0.4: a stale second transfer (the owner changed
+// after the first check) gets a clear 409 from inside the transaction.
 import assert from 'node:assert/strict';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 
@@ -67,11 +68,32 @@ async function nonOwnerIs403() {
   assert.equal(callsFor('teamMembership', 'findFirst').length, 0, 'must not even look up the target when the caller is not the owner');
 }
 
+async function staleTransferIs409() {
+  resetDb();
+  stubHappyPath();
+  db.teamMembership.count = async () => 0;
+  // First read (outside the transaction) sees owner1; the re-read inside it
+  // sees that a concurrent transfer already moved ownership.
+  let reads = 0;
+  db.team.findUnique = async () => ({ id: 'team1', ownerId: reads++ === 0 ? 'owner1' : 'someoneElse' });
+  try {
+    await transferOwnership('team1', 'owner1', 'new@owner.com');
+    assert.fail('expected a rejection');
+  } catch (err: any) {
+    assert.equal(err.statusCode, 409);
+    assert.equal(err.message, 'Ownership already changed. Refresh and try again.');
+  }
+  assert.equal(callsFor('teamMembership', 'updateMany').length, 0);
+  assert.equal(callsFor('teamMembership', 'update').length, 0);
+  assert.equal(callsFor('team', 'update').length, 0);
+}
+
 async function main() {
   await refusedWhenTwoOtherAssistantsAlreadyTaken();
   await demotesOldOwnerBeforePromotingNewOwner();
   await transferringToYourselfIs400();
   await nonOwnerIs403();
+  await staleTransferIs409();
   console.log('teamOwnership.test.ts passed');
 }
 
