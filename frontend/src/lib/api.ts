@@ -164,6 +164,12 @@ export const playersApi = {
 };
 
 // ─── Matches ──────────────────────────────────────────────────────────────────
+/** Absolutes are what installed apps send; the tracker sends deltas (8.0.1). */
+export type ScoreUpdate = Partial<Pick<Match, 'homeScore' | 'awayScore' | 'homeSetsWon' | 'awaySetsWon'>> & {
+  homeDelta?: number;
+  awayDelta?: number;
+};
+
 export const matchesApi = {
   listByTeam: (teamId: string, filters?: { opponent?: string; status?: string; from?: string; to?: string }) => {
     const params = new URLSearchParams();
@@ -182,7 +188,7 @@ export const matchesApi = {
     api.patch<Match | PendingApproval>(`/matches/${id}`, data).then((r) => r.data),
   delete: (id: string) =>
     api.delete<PendingApproval | ''>(`/matches/${id}`).then((r) => r.data),
-  updateScore: (id: string, data: Partial<Pick<Match, 'homeScore' | 'awayScore' | 'homeSetsWon' | 'awaySetsWon'>>) =>
+  updateScore: (id: string, data: ScoreUpdate) =>
     api.patch<Match>(`/matches/${id}/score`, data).then((r) => r.data),
   resetSetScore: (id: string) =>
     api.post<Match>(`/matches/${id}/score/reset`).then((r) => r.data),

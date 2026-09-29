@@ -1,9 +1,10 @@
-import { TeamRole } from '@prisma/client';
+import { Prisma, TeamRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { createInvitation } from './invitation.service';
 import { canInviteRole } from '../lib/rolePermissions';
 import { getUserTeamRole } from './permission.service';
 import { AppError } from '../middleware/errorHandler';
+import { withMatchLock } from './eventRecording.service';
 
 /**
  * Stabilization Pass 2 — single "apply the change" function per structural
@@ -53,7 +54,7 @@ export function applyCreateMatch(p: MatchCreatePayload) {
 }
 
 export function applyUpdateMatch(matchId: string, p: MatchUpdatePayload) {
-  return prisma.match.update({
+  const write = (db: Prisma.TransactionClient) => db.match.update({
     where: { id: matchId },
     data: {
       matchDate: p.matchDate ? new Date(p.matchDate) : undefined,
@@ -64,6 +65,9 @@ export function applyUpdateMatch(matchId: string, p: MatchUpdatePayload) {
       setScores: p.setScores as any,
     },
   });
+  // status and setScores are also written by the replay a tap can trigger;
+  // without the lock one of the two writes silently wins.
+  return p.status !== undefined || p.setScores !== undefined ? withMatchLock(matchId, write) : write(prisma);
 }
 
 export function applyDeleteMatch(matchId: string) {

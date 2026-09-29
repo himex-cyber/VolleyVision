@@ -8,7 +8,7 @@ import { clearUndoHistory, deviceKeys, discardRejected, discardTap, enqueueTap, 
 import type { QueuedEventPayload, QueueItem } from '../lib/eventQueueCore';
 import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, approvalApi, feedbackApi, authApi } from '../lib/api';
 import type { TeamJoinCodeKind } from '../lib/api';
-import type { CreateTeamInput } from '../lib/api';
+import type { CreateTeamInput, ScoreUpdate } from '../lib/api';
 import type { Player, Match, TeamRole, TeamMember, ApprovalStatus } from '../types';
 import type { FeedbackStatus } from '../types/feedback';
 
@@ -286,7 +286,7 @@ export function useUpdateMatch() {
 export function useUpdateScore(matchId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<Pick<Match, 'homeScore' | 'awayScore' | 'homeSetsWon' | 'awaySetsWon'>>) =>
+    mutationFn: (data: ScoreUpdate) =>
       matchesApi.updateScore(matchId, data),
     onSuccess: () => {
       // Undo must now reach this adjustment first: only the server's

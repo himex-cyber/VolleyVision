@@ -321,9 +321,9 @@ export default function TrackingPage() {
   // Destructive — zeroes the current set's score and clears its manual
   // adjustment history, so confirm before doing it (consistent with the
   // Delete confirm in MatchesPage.tsx).
-  // Manual score changes and resets wait for queued taps: a score change is
-  // sent as an absolute from the server's last-known score, which the queue
-  // is still moving. (Undo goes through the queue, so it never waits.)
+  // Manual score changes and resets wait for queued taps, so they land after
+  // this device's own points rather than between them. (Undo goes through the
+  // queue, so it never waits.)
   function tapsStillSaving(): boolean {
     if (waiting === 0) return false;
     showFlash('Wait for your taps to finish saving', false);
@@ -337,12 +337,11 @@ export default function TrackingPage() {
     }
   }
 
-  // The scoreboard reports a delta; the score API takes absolutes.
+  // Sent as a delta: the server applies it to the score it holds, so points
+  // another device added since this one last fetched aren't overwritten.
   function handleScore(side: ScoreSide, delta: number) {
     if (tapsStillSaving()) return;
-    const current = (side === 'home' ? match?.homeScore : match?.awayScore) ?? 0;
-    const next = Math.max(0, current + delta);
-    updateScore.mutate(side === 'home' ? { homeScore: next } : { awayScore: next }, {
+    updateScore.mutate(side === 'home' ? { homeDelta: delta } : { awayDelta: delta }, {
       // A point added by hand was won by that side, so they serve next, once
       // the server has taken it.
       onSuccess: () => { if (delta > 0) setServing(side === 'home' ? 'US' : 'THEM'); },
