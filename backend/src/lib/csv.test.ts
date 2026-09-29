@@ -24,6 +24,10 @@ assert.equal(one({ name: 'Jo "Spike" Smith', n: 1 }), '"Jo ""Spike"" Smith",1');
 assert.equal(toCsv(cols, [{ name: 'two\nlines', n: 1 }]).slice(BOM.length).split('\r\n')[1], '"two\nlines",1');
 assert.equal(one({ name: 'cr\rhere', n: 1 }), '"cr\rhere",1');
 
+// Semicolons are quoted too: Excel in a ;-separated locale would otherwise
+// split 'Smith;=cmd' and start a cell with '='.
+assert.equal(one({ name: 'Smith;=cmd', n: 1 }), '"Smith;=cmd",1');
+
 // Formula injection: every dangerous first character gets a leading '.
 for (const lead of ['=', '+', '-', '@', '\t', '\r']) {
   const cell = one({ name: `${lead}1+1`, n: 1 }).split(',')[0];

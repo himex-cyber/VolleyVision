@@ -2,7 +2,7 @@
 // (frontend/src/lib/csv.ts carries a copy with the download helpers); it lives
 // here because this is where the repo can run a test.
 //
-// RFC 4180 (quote a field holding , " CR or LF; double its quotes; CRLF rows),
+// RFC 4180 (quote a field holding , " CR or LF, and ; too; double its quotes; CRLF rows),
 // a UTF-8 BOM first so Excel reads macrons and accents, and formula-injection
 // escaping on text cells. Pass numbers as numbers and put the unit in the
 // header: a formatted "-12.5%" string would be escaped into text.
@@ -24,5 +24,7 @@ function field(cell: CsvCell): string {
   if (cell === null) return '';
   if (typeof cell === 'number') return Number.isFinite(cell) ? String(cell) : '';
   const text = FORMULA_START.test(cell) ? `'${cell}` : cell;
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  // `;` too: Excel in a locale that separates on semicolons would split
+  // 'Smith;=cmd' and start a cell with '='. A quoted field is one cell.
+  return /[",;\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }

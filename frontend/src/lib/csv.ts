@@ -51,5 +51,7 @@ function field(cell: CsvCell): string {
   if (cell === null) return '';
   if (typeof cell === 'number') return Number.isFinite(cell) ? String(cell) : '';
   const text = FORMULA_START.test(cell) ? `'${cell}` : cell;
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  // `;` too: Excel in a locale that separates on semicolons would split
+  // 'Smith;=cmd' and start a cell with '='. A quoted field is one cell.
+  return /[",;\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
