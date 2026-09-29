@@ -2,10 +2,12 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.13.0 — unreleased
+## v9.13.0 — 2026-09-30
 
-Phase 8.0 (fixes carried over from the Phases 6–7 review) and Phase 8 of the
-rebuild roadmap (analytics B). No migration.
+Phase 8.0 of the rebuild roadmap: fixes carried over from the Phases 6–7
+review. No migration. Not deployed yet. Share the v9.13.0 Android build only
+after the backend is deployed: it sends score changes the v9.12.0 server
+doesn't know (it still falls back to whole scores there, as before).
 
 **Scoring with more than one device**
 - **Manual +1 / −1 no longer wipes out another device's points.** The tracker

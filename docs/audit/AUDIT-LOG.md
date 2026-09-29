@@ -897,3 +897,36 @@ Karlos applied both migrations and asked Claude to deploy the same day. v9.11.0 
 - The production bundle contains the offline queue (`vv_queue:`) and the tracker's "Who serves first?", "All saved"
   and "Offline —" text.
 - `/health`: `{"status":"ok","db":"ok"}`. Sentry: no unresolved issues in the hour after the deploy.
+
+### Phase 8.0 of the rebuild roadmap: carry-over fixes (branch `rebuild/p8-0-carryover`, 2026-09-30)
+
+Why: the independent review of v9.11.0–v9.12.0 found score writers outside the match lock, an absolute manual score
+that erased another device's points, stale set-closing marks after a replay, other players' account ids in roster
+responses, a silently stuck offline queue, and gaps in `backup.ps1`. Released as v9.13.0 on its own (Karlos, 30 Sept);
+Phase 8 (analytics B) follows as v9.14.0. No migration.
+
+**Lock design (recorded):** every writer of a match's score state runs in a Read Committed transaction holding the match
+row lock (`withMatchLock` → `lockMatch`, `SELECT … FOR UPDATE`), not `runSerializable`: under SERIALIZABLE a flushing
+device made live taps from older clients fail with a 409 they show as an error (Phase 6.3). Writers on one match wait
+their turn instead.
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 8.0.1 | `updateScore`, `resetSetScore`, `resetMatch`, both undo branches, delete-by-id and `PATCH /matches/:id` status/setScores take the lock and read through it; `removeEventLocked` re-reads the event under it. `PATCH /matches/:id/score` takes optional `homeDelta`/`awayDelta` (whole numbers, ±100) applied to the locked score; the tracker sends the delta and the absolute (an older server uses the absolute, a current one the delta) | `scoreWriterLocks.test.ts`; integration `scoreConcurrency.test.ts` (20 rounds, 20-tap batch vs +1) |
+| 8.0.2 | Reset confirms say taps from other devices are added as they arrive for the rest of the match; the override is never cleared (a replay can't reproduce manual resets) | browser |
+| 8.0.3 | `replayTimeline` returns `closers`; `recalculateMatchState` sets and clears `completedSet` on events and adjustments to match; both `scoreReplay` copies | `scoreReplay.test.ts`; integration `setMarks.test.ts` |
+| 8.0.4 (G2) | Non-staff get `userId: null` on other players' rows from `GET /matches/:id`, `/teams/:id`, `/players/by-team/:teamId`, `/players/:id` (`maskOtherUserIds`); the offline match cache keeps the tracker's fields only, trimmed on write, on read and once at startup | `rosterUserIdMask.test.ts`, `matchCacheShape.test.ts` |
+| 8.0.5 | 5 server errors in a row: the badge says so and Sentry gets one message per match per session (id, count, status) | browser (API stopped: 6 taps, badge, recovery) |
+| 8.0.6 (G7) | `backup.ps1`: URL off docker's command line, no URL in parse errors, `-OutDir` resolved and refused inside the repo, Storage not covered; `.gitignore` `vv-backup-*.sql`; `deploy.ps1` prod needs today's backup unless `-NoBackup` | run on the local DB only |
+| 8.0.7 | Match time: investigated (web forms send wall-clock time, the UTC function stores it as UTC, the UI shows local time); fix waits on Karlos's SQL, moved to v9.14.0 | — |
+
+**Reviews:**
+- `/code-review high`: 6 findings; 4 fixed (in-repo check against .NET's directory; pre-completion response; one lock
+  helper; mark-rewrite unit test), 2 skipped (permission lookup cost on the live poll; badge width checked in the browser
+  instead).
+- Phase-end independent Opus audit: PASS with 1 medium (a v9.13 tracker against a v9.12 server scored nothing) and 3 low
+  (old cache copies not rewritten; the in-repo check; a `docker inspect` comment), all fixed.
+- `/security-review`: no findings.
+
+**Verified:** backend `tsc` clean, 66 unit test files, build OK; frontend `tsc`, lint and build clean; integration 5/5
+(matrix 78 routes); `npm audit --omit=dev --audit-level=high` clean (nodemailer moderate only, G3).
