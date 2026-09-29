@@ -5,8 +5,7 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 ## v9.10.0 — 2026-09-29
 
 Phase 5 of the rebuild roadmap: the Android app. No migration.
-Released but not deployed yet (Netlify build credits ran out); the website and
-API stay on v9.9.0 until then, and the app needs this deploy to sign in.
+Deployed to production on 2026-09-29.
 
 The app is built and tested
 but not in the Play Store yet (there's no Play Store account). An iPhone app
