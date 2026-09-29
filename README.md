@@ -178,7 +178,9 @@ Take a backup before every production migration and deploy (the Supabase free pl
 .\backup.ps1                  # -> $HOME\Backups\vv-backup-<date>.sql
 ```
 
-It reads `DIRECT_URL`, then `DATABASE_URL`, from `backend/.env` without printing them (the first that works is used), runs `pg_dump` from the `postgres:17` image, and uses Supabase's session pooler (port 5432) because `pg_dump` can't run through the transaction pooler. If Docker can't reach Supabase's direct host (it's IPv6-only), put the Session pooler URL from Supabase > Connect into `DIRECT_URL`. The file holds every user's and player's data: keep it private and out of the repo.
+It reads `DIRECT_URL`, then `DATABASE_URL`, from `backend/.env` without printing them (the first that works is used), runs `pg_dump` from the `postgres:17` image, and uses Supabase's session pooler (port 5432) because `pg_dump` can't run through the transaction pooler. If Docker can't reach Supabase's direct host (it's IPv6-only), put the Session pooler URL from Supabase > Connect into `DIRECT_URL`. The URL reaches the container through the environment, never on its command line. The file holds every user's and player's data in plain text (emails, password hashes, players who can be minors): keep it private. The script refuses an `-OutDir` inside the repo, and `.gitignore` excludes `vv-backup-*.sql`. **Chat attachments aren't included**: they live in Supabase Storage.
+
+A production `deploy.ps1` refuses to run unless today's backup exists in `$HOME\Backups` (`-NoBackup` overrides it).
 
 ## Building the Android app
 
