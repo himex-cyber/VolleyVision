@@ -26,6 +26,16 @@ rebuild roadmap (analytics B). No migration.
   arrive, and momentum follows the order they synced. This has been the case
   since v9.11.0 for both resets; it just wasn't said.
 
+**Privacy**
+- **Other players' account ids are no longer sent to players and viewers.**
+  The match, team and roster responses included each player's internal
+  account id for every member. Staff still get them; everyone else gets only
+  their own. Nothing on screen changes.
+- **The tracker's offline copy of a match keeps less.** Only what the tracker
+  shows offline (the match, its score and the roster's names, numbers and
+  positions) stays on the device. Copies saved by v9.12.0 are trimmed the
+  next time they're read.
+
 **A stuck sync is shown**
 - If the server keeps failing to save queued taps (five errors in a row), the
   tracker's badge says "Can't save right now — N waiting. Keep tracking;

@@ -6,7 +6,8 @@ import { logAudit } from '../lib/audit';
 import { syncOwnerMembership } from '../services/teamMembership.service';
 import { generateTeamJoinCode } from '../services/teamJoinCode.service';
 import { assertRoomForAnotherTeam } from '../services/teamOwnership.service';
-import { isGlobalAdmin } from '../services/permission.service';
+import { isGlobalAdmin, seesEveryPlayer } from '../services/permission.service';
+import { maskOtherUserIds } from '../lib/playerPrivacy';
 
 const ownerSelect = {
   id: true,
@@ -59,7 +60,8 @@ export async function getTeam(req: Request, res: Response, next: NextFunction) {
       },
     });
     if (!team) throw new AppError(404, 'Team not found.');
-    res.json(team);
+    const callerId = req.user?.userId ?? null;
+    res.json({ ...team, players: maskOtherUserIds(team.players, await seesEveryPlayer(callerId, team.id), callerId) });
   } catch (err) {
     next(err);
   }

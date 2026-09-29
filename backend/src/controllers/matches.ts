@@ -9,7 +9,8 @@ import { checkSetCompletion, loadScoreState } from '../lib/scoring';
 import { resetMatchScore } from '../lib/setOperations';
 import type { MatchScoreState } from '../lib/setOperations';
 import { logAudit } from '../lib/audit';
-import { getAccessTier } from '../services/permission.service';
+import { maskOtherUserIds } from '../lib/playerPrivacy';
+import { getAccessTier, seesEveryPlayer } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreateMatch, applyUpdateMatch, applyDeleteMatch } from '../services/teamActions.service';
 import { withMatchLock } from '../services/eventRecording.service';
@@ -54,7 +55,9 @@ export async function getMatch(req: Request, res: Response, next: NextFunction) 
       },
     });
     if (!match) throw new AppError(404, 'Match not found.');
-    res.json(match);
+    const callerId = req.user?.userId ?? null;
+    const players = maskOtherUserIds(match.team.players, await seesEveryPlayer(callerId, match.teamId), callerId);
+    res.json({ ...match, team: { ...match.team, players } });
   } catch (err) {
     next(err);
   }
