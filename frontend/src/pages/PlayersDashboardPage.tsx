@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import axios from 'axios';
@@ -24,12 +24,7 @@ export default function PlayerDashboardPage() {
   const teamId = searchParams.get('teamId') ?? undefined;
   // The date filter only exists outside match context: a match is its own window.
   const range = useDateRangeParams();
-  const query = usePlayerAnalytics(playerId!, teamId, matchId ? undefined : range);
-  // Same reason as the team page: keep the last result while a new range loads.
-  const lastData = useRef(query.data);
-  if (query.data) lastData.current = query.data;
-  const data = query.data ?? lastData.current;
-  const { isLoading, isError, error } = query;
+  const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId, matchId ? undefined : range);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
   // Waits for the stats: a caller refused those (403) is refused the map too.
   const zones = usePlayerZones(data ? playerId! : '', teamId, matchId, range);
@@ -48,7 +43,7 @@ export default function PlayerDashboardPage() {
     return () => { document.title = previous; };
   }, [matchId, matchData]);
 
-  if (isLoading && !data) return <p className="text-navy-300">Loading analytics…</p>;
+  if (isLoading) return <p className="text-navy-300">Loading analytics…</p>;
   if (axios.isAxiosError(error) && error.response?.status === 403) {
     return (
       <p className="text-error">

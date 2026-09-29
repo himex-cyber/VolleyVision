@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef } from 'react';
+import { lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { PlayerStatsTable, StatsCards } from '../components/analytics/StatsOverview';
 import StatLeaderboardChart from '../components/charts/StatLeaderboardChart';
@@ -21,14 +21,8 @@ const panelFallback = <div className="card p-6 h-40 animate-pulse bg-grey-50" ar
 export default function TeamDashboardPage() {
   const { teamId } = useParams<{ teamId: string }>();
   const range = useDateRangeParams();
-  const query = useTeamAnalytics(teamId!, range);
-  // A new range is a new query key, so `data` goes undefined while it loads.
-  // Keeping the last result stops the whole page (and the date input being
-  // typed into) from unmounting on every change.
-  const lastData = useRef(query.data);
-  if (query.data) lastData.current = query.data;
-  const data = query.data ?? lastData.current;
-  const { isLoading, isError } = query;
+  // The hook keeps the last result while a new range loads (rangedQuery).
+  const { data, isLoading, isError } = useTeamAnalytics(teamId!, range);
   const trends = useTeamTrends(teamId!, range);
   const zones = useTeamZones(teamId!, range);
   // Individual player analytics are for this team's staff and the player
@@ -50,7 +44,7 @@ export default function TeamDashboardPage() {
     : [];
 
 
-  if (isLoading && !data) return <p className="text-grey-600">Loading analytics...</p>;
+  if (isLoading) return <p className="text-grey-600">Loading analytics...</p>;
   if (isError || !data) return <p className="text-error">Couldn't load team analytics.</p>;
 
   // Scheduled and cancelled matches have no events, so they don't count as shown.

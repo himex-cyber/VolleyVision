@@ -428,28 +428,35 @@ export function useMatchAnalytics(matchId: string) {
 // ['analytics']).
 const rangeKey = (range?: DateRange) => ({ from: range?.from ?? null, to: range?.to ?? null });
 
+/**
+ * A ranged query with the last result kept on screen while a new range loads:
+ * the range is in the key, so `data` would go undefined and the dashboard
+ * (with the date input being typed into) unmount on every change. Kept only
+ * when nothing but the range changed: never another team's or player's data.
+ */
+function rangedQuery<T>(queryKey: unknown[], queryFn: () => Promise<T>, enabled: boolean) {
+  const sameButRange = (key: readonly unknown[]) => JSON.stringify(key.slice(0, -1)) === JSON.stringify(queryKey.slice(0, -1));
+  return {
+    queryKey,
+    queryFn,
+    enabled,
+    placeholderData: (prev: T | undefined, prevQuery?: { queryKey: readonly unknown[] }) =>
+      (prevQuery && sameButRange(prevQuery.queryKey) ? prev : undefined),
+  };
+}
+
 export function useTeamAnalytics(teamId: string, range?: DateRange) {
-  return useQuery({
-    queryKey: ['analytics', 'team', teamId, rangeKey(range)],
-    queryFn: () => analyticsApi.team(teamId, range),
-    enabled: !!teamId,
-  });
+  return useQuery(rangedQuery(['analytics', 'team', teamId, rangeKey(range)], () => analyticsApi.team(teamId, range), !!teamId));
 }
 
 export function usePlayerAnalytics(playerId: string, teamId?: string, range?: DateRange) {
-  return useQuery({
-    queryKey: ['analytics', 'player', playerId, teamId ?? null, rangeKey(range)],
-    queryFn: () => analyticsApi.player(playerId, teamId, range),
-    enabled: !!playerId,
-  });
+  return useQuery(rangedQuery(
+    ['analytics', 'player', playerId, teamId ?? null, rangeKey(range)], () => analyticsApi.player(playerId, teamId, range), !!playerId,
+  ));
 }
 
 export function useTeamTrends(teamId: string, range?: DateRange) {
-  return useQuery({
-    queryKey: ['analytics', 'trends', teamId, rangeKey(range)],
-    queryFn: () => analyticsApi.trends(teamId, range),
-    enabled: !!teamId,
-  });
+  return useQuery(rangedQuery(['analytics', 'trends', teamId, rangeKey(range)], () => analyticsApi.trends(teamId, range), !!teamId));
 }
 
 export function useMatchReport(matchId: string) {
@@ -472,11 +479,11 @@ export function useMatchZones(matchId: string) {
 
 // The range applies to the team scope only: a match has its one date.
 export function useRotations(scope: 'match' | 'team', id: string, range?: DateRange) {
-  return useQuery({
-    queryKey: ['analytics', 'rotations', scope, id, scope === 'team' ? rangeKey(range) : null],
-    queryFn: () => (scope === 'match' ? analyticsApi.matchRotations(id) : analyticsApi.teamRotations(id, range)),
-    enabled: !!id,
-  });
+  return useQuery(rangedQuery(
+    ['analytics', 'rotations', scope, id, scope === 'team' ? rangeKey(range) : null],
+    () => (scope === 'match' ? analyticsApi.matchRotations(id) : analyticsApi.teamRotations(id, range)),
+    !!id,
+  ));
 }
 
 export function useMomentum(matchId: string) {
@@ -488,28 +495,24 @@ export function useMomentum(matchId: string) {
 }
 
 export function useAdvancedMetrics(scope: 'match' | 'team', id: string, range?: DateRange) {
-  return useQuery({
-    queryKey: ['analytics', 'advanced', scope, id, scope === 'team' ? rangeKey(range) : null],
-    queryFn: () => (scope === 'match' ? analyticsApi.matchAdvanced(id) : analyticsApi.teamAdvanced(id, range)),
-    enabled: !!id,
-  });
+  return useQuery(rangedQuery(
+    ['analytics', 'advanced', scope, id, scope === 'team' ? rangeKey(range) : null],
+    () => (scope === 'match' ? analyticsApi.matchAdvanced(id) : analyticsApi.teamAdvanced(id, range)),
+    !!id,
+  ));
 }
 
 export function useTeamZones(teamId: string, range?: DateRange) {
-  return useQuery({
-    queryKey: ['analytics', 'zones', 'team', teamId, rangeKey(range)],
-    queryFn: () => analyticsApi.teamZones(teamId, range),
-    enabled: !!teamId,
-  });
+  return useQuery(rangedQuery(['analytics', 'zones', 'team', teamId, rangeKey(range)], () => analyticsApi.teamZones(teamId, range), !!teamId));
 }
 
 // A matchId wins over the range, here as on the server.
 export function usePlayerZones(playerId: string, teamId?: string, matchId?: string, range?: DateRange) {
-  return useQuery({
-    queryKey: ['analytics', 'zones', 'player', playerId, teamId ?? null, matchId ?? null, matchId ? null : rangeKey(range)],
-    queryFn: () => analyticsApi.playerZones(playerId, teamId, matchId, range),
-    enabled: !!playerId,
-  });
+  return useQuery(rangedQuery(
+    ['analytics', 'zones', 'player', playerId, teamId ?? null, matchId ?? null, matchId ? null : rangeKey(range)],
+    () => analyticsApi.playerZones(playerId, teamId, matchId, range),
+    !!playerId,
+  ));
 }
 
 // ─── Memberships (Phase 5 Sprint 3) ──────────────────────────────────────────
