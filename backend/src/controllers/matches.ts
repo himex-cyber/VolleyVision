@@ -10,29 +10,39 @@ import { resetMatchScore } from '../lib/setOperations';
 import type { MatchScoreState } from '../lib/setOperations';
 import { logAudit } from '../lib/audit';
 import { maskOtherUserIds } from '../lib/playerPrivacy';
+import { parseDateWindow, matchDateWhere } from '../lib/dateWindow';
+import { parseMatchDate } from '../lib/matchDate';
 import { getAccessTier, seesEveryPlayer } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreateMatch, applyUpdateMatch, applyDeleteMatch } from '../services/teamActions.service';
 import { withMatchLock } from '../services/eventRecording.service';
+
+const INVALID_MATCH_DATE = "That match date isn't a real date and time.";
 
 // Response body when a non-head-coach action is queued for approval.
 const pending = (requestId: string) => ({ status: 'pending_approval' as const, requestId });
 
 export async function getMatchesByTeam(req: Request, res: Response, next: NextFunction) {
   try {
-    const { opponent, status, from, to } = req.query as Record<string, string | undefined>;
+    const { opponent, status } = req.query as Record<string, string | undefined>;
+    // Bad input is a 400 here, not a Prisma error (a 500, in Sentry). `to`
+    // now takes in its whole day; it used to stop at that day's midnight.
+    const range = parseDateWindow(req.query);
+    if (!range.ok) throw new AppError(400, range.message);
+    if (status !== undefined && !Object.values(MatchStatus).includes(status as MatchStatus)) {
+      throw new AppError(400, 'Invalid match status.');
+    }
+    // ?opponent=a&opponent=b arrives as an array, which Prisma's `contains` refuses.
+    if (opponent !== undefined && typeof opponent !== 'string') {
+      throw new AppError(400, 'Search for one opponent at a time.');
+    }
 
     const matches = await prisma.match.findMany({
       where: {
         teamId: req.params.teamId,
         ...(opponent ? { opponent: { contains: opponent, mode: 'insensitive' } } : {}),
-        ...(status   ? { status: status as any } : {}),
-        ...(from || to ? {
-          matchDate: {
-            ...(from ? { gte: new Date(from) } : {}),
-            ...(to   ? { lte: new Date(to)   } : {}),
-          },
-        } : {}),
+        ...(status   ? { status: status as MatchStatus } : {}),
+        ...matchDateWhere(range.window),
       },
       include: { _count: { select: { events: true } } },
       orderBy: { matchDate: 'desc' },
@@ -69,6 +79,8 @@ export async function createMatch(req: Request, res: Response, next: NextFunctio
     if (!teamId || !matchDate || !opponent) {
       throw new AppError(400, 'Team, date, and opponent are required.');
     }
+    // Checked here, before an approval request can queue it (8.0.7).
+    if (!parseMatchDate(matchDate)) throw new AppError(400, INVALID_MATCH_DATE);
     const userId = req.user!.userId;
 
     // Match-management access tier decides immediate vs queued (VIEW_ONLY/non-member
@@ -95,6 +107,7 @@ export async function updateMatch(req: Request, res: Response, next: NextFunctio
     if (status && !Object.values(MatchStatus).includes(status)) {
       throw new AppError(400, 'Invalid match status.');
     }
+    if (matchDate && !parseMatchDate(matchDate)) throw new AppError(400, INVALID_MATCH_DATE);
     const existing = await prisma.match.findUnique({ where: { id: req.params.id }, select: { teamId: true } });
     if (!existing) throw new AppError(404, 'Match not found.');
     const userId = req.user!.userId;

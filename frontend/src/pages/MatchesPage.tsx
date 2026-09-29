@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { format } from 'date-fns';
+import { formatMatchDate, toDateTimeLocal } from '../lib/matchTime';
 import { useTeam, useMatches, useCreateMatch, useUpdateMatch, useDeleteMatch, useHasPermission } from '../hooks';
 import { isPendingApproval, type Match, type MatchStatus } from '../types';
 import TeamSubNav from '../components/ui/TeamSubNav';
@@ -76,7 +76,7 @@ export default function MatchesPage() {
   function openEdit(match: Match) {
     setEditingId(match.id);
     setEditForm({
-      matchDate: format(new Date(match.matchDate), "yyyy-MM-dd'T'HH:mm"),
+      matchDate: toDateTimeLocal(match.matchDate),
       opponent: match.opponent,
       competition: match.competition ?? '',
       venue: match.venue ?? '',
@@ -215,7 +215,7 @@ export default function MatchesPage() {
                   <span className={`badge ${STATUS_STYLES[match.status]}`}>{match.status.replace('_', ' ')}</span>
                 </div>
                 <p className="text-grey-600 text-xs mt-0.5">
-                  {format(new Date(match.matchDate), 'PPP p')}
+                  {formatMatchDate(match.matchDate, { dateStyle: 'long', timeStyle: 'short' })}
                   {match.venue && ` · ${match.venue}`}
                   {match.competition && ` · ${match.competition}`}
                 </p>

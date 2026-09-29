@@ -208,7 +208,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-grey-50">
       {/* Top nav — single row, sticky */}
-      <header className="sticky top-[var(--vv-safe-top)] z-30 bg-white border-b border-grey-200">
+      <header className="sticky top-[var(--vv-safe-top)] z-30 bg-white border-b border-grey-200 print:hidden">
         <div className="h-[60px] px-4 sm:px-6 flex items-center justify-between gap-4">
           {/* Left: brand + nav */}
           <div className="flex items-center gap-5 min-w-0">
@@ -250,9 +250,11 @@ export default function Layout() {
         </div>
       </header>
 
-      <EmailVerificationBanner />
+      <div className="print:hidden">
+        <EmailVerificationBanner />
+      </div>
 
-      <main className="flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6">
+      <main className="flex-1 w-full max-w-[1280px] mx-auto px-4 sm:px-6 py-6 print:p-0 print:max-w-none">
         <SuspendedOutlet />
       </main>
     </div>

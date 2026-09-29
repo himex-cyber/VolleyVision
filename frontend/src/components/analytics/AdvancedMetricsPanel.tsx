@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useAdvancedMetrics } from '../../hooks';
+import type { DateRange } from '../../types';
 
 // Volleyball-style hitting percentage from a fraction: ".214", "-.100".
 function formatHitting(v: number | null): string {
@@ -45,12 +46,14 @@ function Rows({ rows }: { rows: [string, string][] }) {
   );
 }
 
-export default function AdvancedMetricsPanel({ scope, id, canTrack = false }: {
+export default function AdvancedMetricsPanel({ scope, id, canTrack = false, range }: {
   scope: 'match' | 'team';
   id: string;
   canTrack?: boolean;
+  // Team scope only: the match dashboard never filters by date.
+  range?: DateRange;
 }) {
-  const { data, isLoading, isError } = useAdvancedMetrics(scope, id);
+  const { data, isLoading, isError } = useAdvancedMetrics(scope, id, range);
 
   if (isLoading) return <div className="card h-40 bg-grey-50 animate-pulse" aria-busy="true" />;
   if (isError || !data) {

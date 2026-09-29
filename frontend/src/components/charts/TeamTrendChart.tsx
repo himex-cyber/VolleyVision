@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { CHART_SERIES, CHART_GRID, CHART_TICK, CHART_TOOLTIP_BG, CHART_TOOLTIP_TEXT } from '../../lib/chartColors';
+import { useChartWidth } from '../../lib/printing';
 
 interface Props {
   title: string;
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export default function TeamTrendChart({ title, data, dataKey }: Props) {
+  const chartWidth = useChartWidth(); // fixed while printing (8.7)
   // One gradient per chart — ids must be unique or the last one on the page wins.
   const gradientId = `trend-fill-${dataKey}`;
 
@@ -29,7 +31,7 @@ export default function TeamTrendChart({ title, data, dataKey }: Props) {
       <h3 className="font-display font-semibold text-grey-900 mb-3">{title}</h3>
 
       <div className="h-72 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={chartWidth} height="100%">
           <AreaChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">

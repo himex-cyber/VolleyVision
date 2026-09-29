@@ -5,6 +5,7 @@ import { canInviteRole } from '../lib/rolePermissions';
 import { getUserTeamRole } from './permission.service';
 import { AppError } from '../middleware/errorHandler';
 import { withMatchLock } from './eventRecording.service';
+import { parseMatchDate } from '../lib/matchDate';
 
 /**
  * Stabilization Pass 2 — single "apply the change" function per structural
@@ -44,7 +45,9 @@ export function applyCreateMatch(p: MatchCreatePayload) {
   return prisma.match.create({
     data: {
       teamId: p.teamId,
-      matchDate: new Date(p.matchDate),
+      // Wall-clock fixture time, stored as written (8.0.7). Checked by the
+      // controller; a request queued before that check parses the same way.
+      matchDate: parseMatchDate(p.matchDate) ?? new Date(p.matchDate),
       opponent: p.opponent,
       competition: p.competition ?? null,
       venue: p.venue ?? null,
@@ -57,7 +60,7 @@ export function applyUpdateMatch(matchId: string, p: MatchUpdatePayload) {
   const write = (db: Prisma.TransactionClient) => db.match.update({
     where: { id: matchId },
     data: {
-      matchDate: p.matchDate ? new Date(p.matchDate) : undefined,
+      matchDate: p.matchDate ? parseMatchDate(p.matchDate) ?? new Date(p.matchDate) : undefined,
       opponent: p.opponent,
       competition: p.competition,
       venue: p.venue,

@@ -3,7 +3,7 @@ import { getToken, clearToken } from './tokenStorage';
 import { clearOfflineCache } from './offlineCache';
 import { setLeaveGuard } from './leaveGuard';
 import { isNative } from './native';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, RotationData, MomentumData, AdvancedMetrics, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, RotationData, MomentumData, AdvancedMetrics, DateRange, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -234,22 +234,28 @@ export const eventsApi = {
       .then((r) => r.data.results),
 };
 
+// Only the sides that are set: no params at all means today's behaviour.
+const rangeParams = (range?: DateRange) => ({
+  ...(range?.from ? { from: range.from } : {}),
+  ...(range?.to ? { to: range.to } : {}),
+});
+
 export const analyticsApi = {
   match: (matchId: string) =>
     api.get<MatchAnalytics>(`/analytics/matches/${matchId}`).then((r) => r.data),
 
-  team: (teamId: string) =>
-    api.get<TeamAnalytics>(`/analytics/teams/${teamId}`).then((r) => r.data),
+  team: (teamId: string, range?: DateRange) =>
+    api.get<TeamAnalytics>(`/analytics/teams/${teamId}`, { params: rangeParams(range) }).then((r) => r.data),
 
   // teamId scopes stats to that team's matches; defaults server-side to the
   // player's home team when omitted.
-  player: (playerId: string, teamId?: string) =>
+  player: (playerId: string, teamId?: string, range?: DateRange) =>
   api
-    .get<PlayerAnalytics>(`/analytics/players/${playerId}`, { params: teamId ? { teamId } : {} })
+    .get<PlayerAnalytics>(`/analytics/players/${playerId}`, { params: { ...(teamId ? { teamId } : {}), ...rangeParams(range) } })
     .then((r) => r.data),
     
-  trends: (teamId: string) =>
-    api.get<TeamTrend[]>(`/analytics/teams/${teamId}/trends`).then((r) => r.data),
+  trends: (teamId: string, range?: DateRange) =>
+    api.get<TeamTrend[]>(`/analytics/teams/${teamId}/trends`, { params: rangeParams(range) }).then((r) => r.data),
 
   matchReport: (matchId: string) =>
     api.get<MatchReport>(`/analytics/matches/${matchId}/report`).then((r) => r.data),
@@ -257,25 +263,25 @@ export const analyticsApi = {
   matchZones: (matchId: string) =>
     api.get<ZoneMap>(`/analytics/matches/${matchId}/zones`).then((r) => r.data),
 
-  teamZones: (teamId: string) =>
-    api.get<ZoneMap>(`/analytics/teams/${teamId}/zones`).then((r) => r.data),
+  teamZones: (teamId: string, range?: DateRange) =>
+    api.get<ZoneMap>(`/analytics/teams/${teamId}/zones`, { params: rangeParams(range) }).then((r) => r.data),
 
   // Point flow (7.9): team-level, every member.
   matchRotations: (matchId: string) =>
     api.get<RotationData>(`/analytics/matches/${matchId}/rotations`).then((r) => r.data),
-  teamRotations: (teamId: string) =>
-    api.get<RotationData>(`/analytics/teams/${teamId}/rotations`).then((r) => r.data),
+  teamRotations: (teamId: string, range?: DateRange) =>
+    api.get<RotationData>(`/analytics/teams/${teamId}/rotations`, { params: rangeParams(range) }).then((r) => r.data),
   matchMomentum: (matchId: string) =>
     api.get<MomentumData>(`/analytics/matches/${matchId}/momentum`).then((r) => r.data),
   matchAdvanced: (matchId: string) =>
     api.get<AdvancedMetrics>(`/analytics/matches/${matchId}/advanced`).then((r) => r.data),
-  teamAdvanced: (teamId: string) =>
-    api.get<AdvancedMetrics>(`/analytics/teams/${teamId}/advanced`).then((r) => r.data),
+  teamAdvanced: (teamId: string, range?: DateRange) =>
+    api.get<AdvancedMetrics>(`/analytics/teams/${teamId}/advanced`, { params: rangeParams(range) }).then((r) => r.data),
 
   // Staff, admin or the player themself; same team/match scoping as player().
-  playerZones: (playerId: string, teamId?: string, matchId?: string) =>
+  playerZones: (playerId: string, teamId?: string, matchId?: string, range?: DateRange) =>
     api
-      .get<ZoneMap>(`/analytics/players/${playerId}/zones`, { params: { ...(teamId ? { teamId } : {}), ...(matchId ? { matchId } : {}) } })
+      .get<ZoneMap>(`/analytics/players/${playerId}/zones`, { params: { ...(teamId ? { teamId } : {}), ...(matchId ? { matchId } : { ...rangeParams(range) }) } })
       .then((r) => r.data),
 };
 

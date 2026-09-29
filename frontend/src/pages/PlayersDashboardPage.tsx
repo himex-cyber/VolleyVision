@@ -1,12 +1,16 @@
 import { useEffect } from 'react';
 import { Link, NavLink, useParams, useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
+import { formatMatchDate } from '../lib/matchTime';
 import axios from 'axios';
 import { usePlayerAnalytics, useMatchAnalytics, useTeam, useHasPermission, usePlayerZones } from '../hooks';
 import { StatsCards } from '../components/analytics/StatsOverview';
 import { POSITION_FULL_LABELS } from '../types';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
 import CourtHeatMap from '../components/analytics/CourtHeatMap';
+import DateRangeFilter from '../components/analytics/DateRangeFilter';
+import PrintButton from '../components/ui/PrintButton';
+import PrintHeader from '../components/ui/PrintHeader';
+import { rangeQuery, rangeText, useDateRangeParams } from '../lib/dateRange';
 import type { StatLine } from '../types';
 import { ArrowLeftIcon } from '../components/ui/icons';
 
@@ -20,10 +24,12 @@ export default function PlayerDashboardPage() {
   // The team these stats are scoped to — defaults server-side to the player's
   // home team when absent (e.g. a bookmarked link from before this param existed).
   const teamId = searchParams.get('teamId') ?? undefined;
-  const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId);
+  // The date filter only exists outside match context: a match is its own window.
+  const range = useDateRangeParams();
+  const { data, isLoading, isError, error, isPlaceholderData } = usePlayerAnalytics(playerId!, teamId, matchId ? undefined : range);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
   // Waits for the stats: a caller refused those (403) is refused the map too.
-  const zones = usePlayerZones(data ? playerId! : '', teamId, matchId);
+  const zones = usePlayerZones(data ? playerId! : '', teamId, matchId, range);
   // Roster context (no matchId) gets a full-team tab bar. Guarded by the hook's
   // own `enabled: !!id`, so this stays above the early returns below.
   const { data: team } = useTeam(data?.teamId ?? '');
@@ -75,26 +81,55 @@ export default function PlayerDashboardPage() {
           <div className="mt-3">
             <p className="text-xs font-semibold uppercase tracking-[0.06em] text-grey-600">Game Day Stats</p>
             <p className="text-sm text-grey-600 mt-0.5">
-              vs {matchData.match.opponent} · {format(new Date(matchData.match.matchDate), 'PPP')}
+              vs {matchData.match.opponent} · {formatMatchDate(matchData.match.matchDate, { dateStyle: 'long' })}
               {matchData.match.venue && ` · ${matchData.match.venue}`}
               {matchData.match.competition && ` · ${matchData.match.competition}`}
             </p>
           </div>
         )}
 
-        <h1 className="text-2xl font-bold text-grey-900 mt-2">
-          #{data.player.jerseyNumber} {data.player.firstName} {data.player.lastName}
-        </h1>
+        {/* Only staff and the player themself reach this page (the server
+            403s everyone else), so their name on the printout is theirs to see. */}
+        <PrintHeader lines={[
+          `#${data.player.jerseyNumber} ${data.player.firstName} ${data.player.lastName}${team ? `, ${team.name}` : ''}`,
+          matchId && matchData ? `vs ${matchData.match.opponent}` : (range.from || range.to) ? `Matches ${rangeText(range)}` : 'All matches',
+        ]} />
+        <div className="flex flex-wrap items-start justify-between gap-3 mt-2">
+          <h1 className="text-2xl font-bold text-grey-900">
+            #{data.player.jerseyNumber} {data.player.firstName} {data.player.lastName}
+          </h1>
+          <PrintButton
+            title={['VolleyVision', `${data.player.firstName} ${data.player.lastName}`,
+              matchId && matchData ? `vs ${matchData.match.opponent}` : (range.from || range.to) ? rangeText(range) : 'All matches'].join(' – ')}
+          />
+        </div>
         <p className="text-sm text-navy-300 mt-1">
           {POSITION_FULL_LABELS[data.player.position]}
         </p>
       </div>
 
+      {!matchId && (
+        <div className="space-y-3">
+          <DateRangeFilter season={team?.season} />
+          {(range.from || range.to) && (
+            <p className="text-sm text-grey-600">
+              {/* The previous range's numbers stay up while these load. */}
+              {isPlaceholderData ? 'Loading these dates…' : `Showing stats ${rangeText(range)}`}
+            </p>
+          )}
+          {(range.from || range.to) && !isPlaceholderData && data.stats.totalEvents === 0 && (
+            <div className="card p-6 text-center text-grey-600 text-sm">
+              No matches in these dates. Try a wider range.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Player tab bar — only in match context, listing every player with
           stats in that match (not the full roster), so the coach can compare
           players while staying inside the same match. */}
       {canTrack && matchId && matchData && matchData.playerStats.length > 0 && (
-        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto print:hidden">
           {matchData.playerStats.map((row) => (
             <NavLink
               key={row.player.id}
@@ -116,13 +151,13 @@ export default function PlayerDashboardPage() {
           can move between players without going back. Mutually exclusive with
           the match-scoped bar above. */}
       {canTrack && !matchId && team?.players && team.players.length > 0 && (
-        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-grey-200 pb-px overflow-x-auto print:hidden">
           {[...team.players]
             .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
             .map((p) => (
               <NavLink
                 key={p.id}
-                to={`/players/${p.id}/dashboard?teamId=${data.teamId}`}
+                to={`/players/${p.id}/dashboard?teamId=${data.teamId}${rangeQuery(range)}`}
                 className={({ isActive }) =>
                   `px-3.5 py-2 -mb-px text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     isActive

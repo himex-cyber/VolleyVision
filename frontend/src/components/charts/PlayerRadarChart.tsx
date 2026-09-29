@@ -6,6 +6,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { CHART_SERIES, CHART_GRID, CHART_TICK, CHART_TOOLTIP_TEXT } from '../../lib/chartColors';
+import { useChartWidth } from '../../lib/printing';
 
 interface Props {
   stats: {
@@ -49,6 +50,7 @@ function makeAxisTick(values: Record<string, number>) {
 }
 
 export default function PlayerRadarChart({ stats }: Props) {
+  const chartWidth = useChartWidth(); // fixed while printing (8.7)
   const data = [
     { metric: 'Kills', value: stats.kills },
     { metric: 'Aces', value: stats.aces },
@@ -66,7 +68,7 @@ export default function PlayerRadarChart({ stats }: Props) {
       </h2>
 
       <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={chartWidth} height="100%">
           <RadarChart data={data} margin={{ top: 12, right: 40, bottom: 12, left: 40 }}>
             <PolarGrid stroke={CHART_GRID} />
             <PolarAngleAxis dataKey="metric" tick={makeAxisTick(values)} />

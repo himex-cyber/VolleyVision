@@ -930,3 +930,38 @@ their turn instead.
 
 **Verified:** backend `tsc` clean, 66 unit test files, build OK; frontend `tsc`, lint and build clean; integration 5/5
 (matrix 78 routes); `npm audit --omit=dev --audit-level=high` clean (nodemailer moderate only, G3).
+
+### Phase 8 of the rebuild roadmap: analytics B, and the match-time fix (branch `rebuild/p8-analytics-b`, 2026-09-30)
+
+Why: the roadmap's analytics B (date filters, CSV, print/PDF), plus 8.0.7 carried from Phase 8.0: match times were
+stored in the server's time zone and shown in the device's, so production showed a 6 pm game as 6 am the next day.
+Released as v9.14.0. No migration.
+
+**8.0.7 investigation (read-only, Karlos in the Supabase SQL editor, 30 Sept):** no `UPDATE_MATCH` audit rows and no
+approved `MATCH_UPDATE` requests, so no production match was ever edited (edits re-applied the offset); the 7
+production matches (team Tester, created by a script in July) are stored at 18:00 UTC. With wall-clock display they
+read as 6 pm on their dates; no row needed changing. Approved by Karlos (G7).
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 8.0.7 | `lib/matchDate`: a naive datetime-local value is stored as written (UTC wall-clock); an explicit zone parses as before; impossible dates and years outside 1900–9998 are a 400 on create and edit (before anything is queued). Frontend `lib/matchTime`: every match-date display and the edit pre-fill render in UTC | `matchDate.test.ts`, `matchDateInput.test.ts`; browser |
+| 8.1 | `lib/dateWindow`: YYYY-MM-DD only, real UTC days, `to` through its whole day, from ≤ to, years 1900–9998 | `dateWindow.test.ts` |
+| 8.2 | Matches list: the window, whole end day; bad date, status or repeated opponent is a 400 (was a 500) | `matchesListFilters.test.ts` |
+| 8.3 | Five team routes + two player routes take `from`/`to`, parsed after the visibility guard; `matchSummary` filtered; trends stays a bare array; `dateRange` added to object responses; `matchId` wins on player routes | `analyticsDateRange.test.ts`, `http.routing` outsiderBadDateIs404 (8 URLs), integration `analyticsDateRange.test.ts` |
+| 8.4 | Date filter (presets, custom, URL state, drill-downs carry it), range last in query keys, previous result kept only when just the range changed | browser, emulator |
+| 8.5 | `lib/csv` (RFC 4180, `;` quoted too, formula-injection prefix on text only, BOM, CRLF), mirrored with a drift check | `csv.test.ts` |
+| 8.6 | Download CSV on player stats, team totals, rotations, sets; built only from the page's data; web only | browser (bytes, escaping, a player's own row only) |
+| 8.7 | Print / Save PDF: print stylesheet, print header, charts at a fixed width while printing, button waits for the dashboard's data and chunks; web only | headless Chrome PDFs (A4, no overflow), browser |
+
+**Reviews:**
+- `/code-review high`: 5 findings, all fixed (bad URL range stranded the page; print gated on unrelated fetches;
+  print mode stuck without afterprint; stale "Showing" line; CSV name order).
+- `/security-review`: no findings; its below-the-bar note (semicolon locales) closed anyway.
+- Phase-end independent Opus audit: 1 medium (a half-typed year like 0002 passed the client and 400'd the page)
+  and 4 low (9999-12-31 was a 500; repeated `opponent` was a 500; stale CSV and labels while a range loads; the player
+  page's empty state), all fixed.
+
+**Verified:** backend `tsc` clean, 72 unit test files, build OK; frontend `tsc`, lint and build clean; integration
+6/6; `npm audit --omit=dev --audit-level=high` clean (nodemailer moderate only, G3). Emulator (VV_Light, local
+debug build): the filter works, CSV and Print hidden, Copy Report works, 5 offline taps synced once.
+

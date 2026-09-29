@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Line, LineChart, ResponsiveContainer } from 'recharts';
-import type { PlayerStatLine, StatLine } from '../../types';
+import type { DateRange, PlayerStatLine, StatLine } from '../../types';
+import { rangeQuery } from '../../lib/dateRange';
 import { POSITION_FULL_LABELS } from '../../types';
 import { CHART_SERIES, CHART_NEGATIVE } from '../../lib/chartColors';
 
@@ -134,10 +135,13 @@ export function PlayerStatsTable({
   matchId,
   teamId,
   canOpen,
+  range,
 }: {
   rows: PlayerStatLine[];
   matchId?: string;
   teamId: string;
+  // Carried to the player page so it shows the same dates; ignored for a match.
+  range?: DateRange;
   // Whether the viewer may drill into this player's individual dashboard —
   // the analytics endpoint 403s for anyone but staff and the player, so a row
   // that can't be opened is rendered without click affordances instead.
@@ -146,7 +150,7 @@ export function PlayerStatsTable({
   const navigate = useNavigate();
 
   function goToPlayer(playerId: string) {
-    const params = matchId ? `matchId=${matchId}&teamId=${teamId}` : `teamId=${teamId}`;
+    const params = matchId ? `matchId=${matchId}&teamId=${teamId}` : `teamId=${teamId}${rangeQuery(range)}`;
     navigate(`/players/${playerId}/dashboard?${params}`);
   }
 

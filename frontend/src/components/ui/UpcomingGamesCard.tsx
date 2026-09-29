@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { format } from 'date-fns';
+import { formatMatchDate } from '../../lib/matchTime';
 import type { UpcomingMatchItem } from '../../types';
 
 interface Props {
@@ -33,10 +33,10 @@ export default function UpcomingGamesCard({ matches }: Props) {
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-xs font-medium text-navy-700">
-                    {format(new Date(m.matchDate), 'EEE, MMM d')}
+                    {formatMatchDate(m.matchDate, { weekday: 'short', month: 'short', day: 'numeric' })}
                   </div>
                   <div className="text-xs text-chalk-600">
-                    {format(new Date(m.matchDate), 'HH:mm')}
+                    {formatMatchDate(m.matchDate, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}
                   </div>
                 </div>
               </div>

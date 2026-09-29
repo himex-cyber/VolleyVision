@@ -16,7 +16,7 @@ export default function MatchSubNav({ matchId, mode }: { matchId: string; mode?:
   ];
 
   return (
-    <div className="flex items-end border-b border-grey-200 pb-px overflow-x-auto">
+    <div className="flex items-end border-b border-grey-200 pb-px overflow-x-auto print:hidden">
       <div className="flex items-center gap-1">
         {tabs.map((t) => (
           <NavLink

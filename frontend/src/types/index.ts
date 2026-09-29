@@ -393,7 +393,17 @@ export interface ZoneAttack  { kills: number; errors: number; attempts: number; 
 export interface ZoneServe   { aces: number; errors: number; serveIn: number; attempts: number; efficiency: number | null }
 export interface ZonePass    { pass3: number; pass2: number; pass1: number; pass0: number; attempts: number; rating: number | null }
 export interface ZoneDefence { digs: number; soloBlocks: number; blockAssists: number; total: number }
+/** The from/to range a dashboard asks for (8.4): YYYY-MM-DD, either side optional. */
+export interface DateRange {
+  from?: string;
+  to?: string;
+}
+
+/** What the server says it applied (8.3); null = all matches. */
+export type AppliedDateRange = { from: string | null; to: string | null } | null;
+
 export interface ZoneMap {
+  dateRange?: AppliedDateRange; // absent from servers before v9.14.0
   attack: Record<string, ZoneAttack>;
   serve: Record<string, ZoneServe>;
   pass: Record<string, ZonePass>;
@@ -515,6 +525,7 @@ export interface MatchAnalytics {
 }
 
 export interface TeamAnalytics {
+  dateRange?: AppliedDateRange; // absent from servers before v9.14.0
   team: Pick<Team, 'id' | 'name' | 'division' | 'season'>;
   matchSummary: {
     total: number;
@@ -527,6 +538,7 @@ export interface TeamAnalytics {
 }
 
 export interface PlayerAnalytics {
+  dateRange?: AppliedDateRange; // absent from servers before v9.14.0
   player: Pick<
     Player,
     'id' | 'firstName' | 'lastName' | 'jerseyNumber' | 'position' | 'teamId'
@@ -705,6 +717,7 @@ export interface RotationStat {
 }
 
 export interface RotationData {
+  dateRange?: AppliedDateRange; // absent from servers before v9.14.0
   rotations: RotationStat[];
   insights: {
     best: RotationStat | null;
@@ -744,6 +757,7 @@ export interface MomentumData {
 }
 
 export interface AdvancedMetrics {
+  dateRange?: AppliedDateRange; // absent from servers before v9.14.0
   receptionQuality: {
     attempts: number; qualityPasses: number; qualityPct: number | null; perfectPassRate: number | null;
     pass3: number; pass2: number; pass1: number; pass0: number;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { confirmLeave } from '../../lib/leaveGuard';
-import { format } from 'date-fns';
+import { formatMatchDate } from '../../lib/matchTime';
 import MatchSubNav from './MatchSubNav';
 import { ArrowLeftIcon, ChevronIcon } from './icons';
 import { isPendingApproval, type MatchStatus } from '../../types';
@@ -90,7 +90,7 @@ export default function MatchPageHeader({
               {teamName ? `${teamName} vs ${opponent}` : `vs ${opponent}`}
             </h1>
             <p className="text-sm text-grey-600 mt-1">
-              {format(new Date(matchDate), 'PPP')}
+              {formatMatchDate(matchDate, { dateStyle: 'long' })}
               {venue && ` · ${venue}`}
               {competition && ` · ${competition}`}
             </p>

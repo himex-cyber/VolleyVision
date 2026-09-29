@@ -13,6 +13,10 @@ import type { TooltipContentProps } from 'recharts';
 import type { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import clsx from 'clsx';
 import { useRotations } from '../../hooks';
+import { useChartWidth } from '../../lib/printing';
+import CsvButton from './CsvButton';
+import { toCsv } from '../../lib/csv';
+import type { DateRange } from '../../types';
 import type { RotationStat } from '../../types';
 import {
   CHART_POSITIVE,
@@ -43,12 +47,17 @@ function RotationTooltip({ active, payload }: TooltipContentProps<ValueType, Nam
   );
 }
 
-export default function RotationAnalytics({ scope, id, canTrack = false }: {
+export default function RotationAnalytics({ scope, id, canTrack = false, range, csvName }: {
   scope: 'match' | 'team';
   id: string;
   canTrack?: boolean;
+  // Team scope only: the match dashboard never filters by date.
+  range?: DateRange;
+  // The page's CSV file namer, so this table's name matches its siblings'.
+  csvName: (table: string) => string;
 }) {
-  const { data, isLoading, isError } = useRotations(scope, id);
+  const { data, isLoading, isError, isPlaceholderData } = useRotations(scope, id, range);
+  const chartWidth = useChartWidth(); // fixed while printing (8.7)
 
   if (isLoading) return <div className="card p-4 h-48 animate-pulse bg-grey-50" aria-label="Loading rotations" />;
   if (isError || !data) return <p className="text-sm text-error-strong">Couldn't load rotations. Try refreshing the page.</p>;
@@ -72,7 +81,28 @@ export default function RotationAnalytics({ scope, id, canTrack = false }: {
 
   return (
     <div className="card p-4 space-y-4 min-w-0">
-      <h3 className="font-display font-semibold text-grey-900">Rotations</h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-display font-semibold text-grey-900">Rotations</h3>
+        {/* Rows are exactly what's on screen; the server already scoped them. */}
+        <CsvButton
+          stale={isPlaceholderData}
+          filename={csvName('rotations')}
+          build={() =>
+            toCsv(
+              [
+                { header: 'Rotation', value: (r) => `R${r.rotation}` },
+                { header: 'Won', value: (r) => r.won },
+                { header: 'Lost', value: (r) => r.lost },
+                { header: 'Net', value: (r) => r.net },
+                { header: 'Point win %', value: (r) => r.pointWinPct },
+                { header: 'Side-out %', value: (r) => r.sideOutPct },
+                { header: 'Break-point %', value: (r) => r.breakPointPct },
+              ],
+              rotations
+            )
+          }
+        />
+      </div>
 
       {insights.best && insights.worst && (
         <p className="text-sm text-grey-600">
@@ -82,7 +112,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false }: {
       )}
 
       <div className="h-48 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={chartWidth} height="100%">
           <BarChart data={rotations} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 6" vertical={false} />
             <XAxis
