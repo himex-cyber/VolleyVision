@@ -491,7 +491,7 @@ export default function TrackingPage() {
 
       {/* ── Sync status (6.9) ── */}
       <div className="flex items-center gap-3 flex-wrap">
-        <SyncBadge waiting={waiting} rejected={rejected} offline={queue.offline} />
+        <SyncBadge waiting={waiting} rejected={rejected} offline={queue.offline} stuck={queue.stuck} />
         {board.provisional && <span className="text-xs text-grey-600">Score shown includes taps still syncing.</span>}
       </div>
       {rejected > 1 && (

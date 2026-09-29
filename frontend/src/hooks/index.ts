@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { cacheMatch, cachedMatch, forgetMatch } from '../lib/offlineCache';
-import { clearUndoHistory, deviceKeys, discardRejected, discardTap, enqueueTap, getQueue, hasLocalUndo, isOffline, queueCanPersist, retryTap, subscribeQueue, undoTap } from '../lib/eventQueue';
+import { clearUndoHistory, deviceKeys, discardRejected, discardTap, enqueueTap, getQueue, hasLocalUndo, isOffline, queueCanPersist, retryTap, serverFailureCount, STUCK_AFTER, subscribeQueue, undoTap } from '../lib/eventQueue';
 import type { QueuedEventPayload, QueueItem } from '../lib/eventQueueCore';
 import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, approvalApi, feedbackApi, authApi } from '../lib/api';
 import type { TeamJoinCodeKind } from '../lib/api';
@@ -357,12 +357,15 @@ export function useEventQueue(matchId: string) {
   const { user } = useAuth();
   const items = useSyncExternalStore(subscribeQueue, () => (user ? getQueue(user.id, matchId) : NO_ITEMS));
   const offline = useSyncExternalStore(subscribeQueue, isOffline);
+  const stuck = useSyncExternalStore(subscribeQueue, () => serverFailureCount(matchId)) >= STUCK_AFTER;
   const retry = useCallback((clientKey: string) => { if (user) retryTap(user.id, matchId, clientKey); }, [user, matchId]);
   const discard = useCallback((clientKey: string) => { if (user) discardTap(user.id, matchId, clientKey); }, [user, matchId]);
   const discardAll = useCallback(() => { if (user) discardRejected(user.id, matchId); }, [user, matchId]);
   return {
     items,
     offline,
+    /** Five or more server errors in a row: the queue is retrying but not getting through. */
+    stuck,
     canPersist: queueCanPersist(),
     /** Undo has a tap of ours to take back without the network. */
     canUndoLocally: user ? hasLocalUndo(user.id, matchId) : false,

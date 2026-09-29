@@ -6,6 +6,7 @@
 // Keyed by user and match (vv_queue:<userId>:<matchId>), so one account never
 // sends another's taps. A 401 keeps the queue: the interceptor sends the user
 // to sign in, and the queue flushes when that same user is back.
+import * as Sentry from '@sentry/react';
 import axios from 'axios';
 import { eventsApi, getApiErrorMessage, onApiResponse } from './api';
 import {
@@ -284,23 +285,53 @@ export function setOnSynced(fn: ((matchId: string) => Promise<unknown>) | null):
   onSynced = fn;
 }
 
-function classify(err: unknown): { kind: FailureKind; message: string } {
+// Consecutive 5xx answers per match, this session only. A batch that keeps
+// failing is resent forever and stalls the queue behind it, so past the limit
+// the tracker says so (SyncBadge) and we tell Sentry once.
+export const STUCK_AFTER = 5;
+const serverFailures = new Map<string, number>();
+const reportedStuck = new Set<string>();
+
+export function serverFailureCount(matchId: string): number {
+  return serverFailures.get(matchId) ?? 0;
+}
+
+function noteSynced(matchId: string) {
+  if (serverFailures.delete(matchId)) emit();
+}
+
+function classify(err: unknown): { kind: FailureKind; message: string; status: number | null } {
   const res = axios.isAxiosError(err) ? err.response : undefined;
   const retryable = !!(res?.data as { retryable?: boolean } | undefined)?.retryable;
   return {
+    status: res ? res.status : null,
     kind: failureKind(res ? res.status : null, retryable),
     message: getApiErrorMessage(err, "The server didn't accept this."),
   };
 }
 
 /** True when the loop should stop (items kept; a later trigger retries). */
-function handleFailure(userId: string, matchId: string, keys: string[], failure: { kind: FailureKind; message: string }): boolean {
+function handleFailure(userId: string, matchId: string, keys: string[], failure: { kind: FailureKind; message: string; status: number | null }): boolean {
   const items = read(userId, matchId);
   if (failure.kind === 'reject') {
     write(userId, matchId, rejectItems(resetSending(items), keys, failure.message));
     return false;
   }
   write(userId, matchId, resetSending(items));
+  if (failure.kind === 'server') {
+    const count = serverFailureCount(matchId) + 1;
+    serverFailures.set(matchId, count);
+    // Ids, the count and the status only: never a tap's payload or a player.
+    if (count >= STUCK_AFTER && !reportedStuck.has(matchId)) {
+      reportedStuck.add(matchId);
+      Sentry.captureMessage('Offline queue stuck on server errors', {
+        level: 'warning',
+        tags: { matchId, status: String(failure.status) },
+        extra: { matchId, failures: count, status: failure.status },
+      });
+    }
+    emit();
+  }
   if (failure.kind === 'network') setReachable(false);
   if (failure.kind === 'rate') backoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
   return true;
@@ -334,6 +365,7 @@ async function flushLoop(userId: string, matchId: string): Promise<void> {
         if (handleFailure(userId, matchId, keys, classify(err))) return;
         continue;
       }
+      noteSynced(matchId);
       await onSynced?.(matchId);
       const applied = applyBatchResults(
         read(userId, matchId),
@@ -359,6 +391,7 @@ async function flushLoop(userId: string, matchId: string): Promise<void> {
           continue;
         }
       }
+      noteSynced(matchId);
       await onSynced?.(matchId);
       write(userId, matchId, removeItem(read(userId, matchId), clientKey));
     }
