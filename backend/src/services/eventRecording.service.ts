@@ -180,8 +180,6 @@ export async function recordOneEvent(
             event = await tx.event.update({ where: { id: event.id }, data: { completedSet: true }, include: eventInclude });
           }
         } else {
-          // ponytail: the replay doesn't rewrite other events' completedSet
-          // marks; they only matter once a match goes to manual override.
           await recalculateMatchState(matchId, tx);
         }
       }

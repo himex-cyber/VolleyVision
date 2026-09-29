@@ -42,6 +42,8 @@ function world(score: Partial<{ homeScore: number; awayScore: number; manualScor
   db.event.delete = async () => ({});
   db.event.findMany = async () => [];
   db.scoreAdjustment.findMany = async () => [];
+  db.event.updateMany = async () => ({ count: 0 });
+  db.scoreAdjustment.updateMany = async () => ({ count: 0 });
   return match;
 }
 
