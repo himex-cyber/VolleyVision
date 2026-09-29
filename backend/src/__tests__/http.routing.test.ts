@@ -39,11 +39,34 @@ async function forgotPasswordLimiterOrder(base: string) {
   assert.equal(await send('198.51.100.7', 'victim@example.test'), 200, 'one IP drained the global reset limiter');
 }
 
+// 8.3: a bad from/to is parsed only after the visibility guard, so an
+// outsider gets the same 404 as for a team that doesn't exist, never a 400
+// that confirms the team is real (the Phase 2 ordering rule).
+async function outsiderBadDateIs404(base: string) {
+  resetDb();
+  db.team.findUnique = async () => ({ id: 'T', ownerId: 'someone-else', teamId: 'T' });
+  db.player.findUnique = async () => ({ id: 'p1', firstName: 'A', lastName: 'B', jerseyNumber: 1, position: 'SETTER', teamId: 'T', userId: 'u' });
+  for (const path of [
+    '/api/v1/analytics/teams/T?from=bad',
+    '/api/v1/analytics/teams/T/trends?from=bad',
+    '/api/v1/analytics/teams/T/zones?to=2026-02-30',
+    '/api/v1/analytics/teams/T/rotations?from=bad',
+    '/api/v1/analytics/teams/T/advanced?from=bad',
+    '/api/v1/analytics/players/p1?from=bad',
+    '/api/v1/analytics/players/p1/zones?from=bad',
+    '/api/v1/matches/by-team/T?from=bad',
+  ]) {
+    const res = await fetch(`${base}${path}`);
+    assert.equal(res.status, 404, path);
+  }
+}
+
 async function main() {
   await withServer(async (base) => {
     await unauthenticatedIs401(base);
     await unknownTeamIs404(base);
     await forgotPasswordLimiterOrder(base);
+    await outsiderBadDateIs404(base);
   });
   console.log('http.routing.test.ts passed');
 }

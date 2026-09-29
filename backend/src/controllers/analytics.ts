@@ -11,6 +11,8 @@ import { buildDetailedHeatmap } from '../lib/heatmap';
 import { buildAdvancedMetrics } from '../lib/advancedMetrics';
 import { calculateRotations } from '../services/rotation.service';
 import { calculateMomentum } from '../services/momentum.service';
+import { parseDateWindow, matchDateWhere } from '../lib/dateWindow';
+import type { DateWindow } from '../lib/dateWindow';
 
 // ─── Shared query shapes ──────────────────────────────────────────────────────
 
@@ -67,19 +69,37 @@ export async function getMatchAnalytics(req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 }
 
+/**
+ * The optional ?from=&to= range of the cross-match routes (8.3). Called only
+ * after the visibility guard (the router's, or resolvePlayerScope), so an
+ * outsider's bad date is still a 404, never a 400 that confirms the team.
+ * `dateRange` echoes the applied range on object responses; null = all matches.
+ */
+function dateRangeOf(req: Request): { window: DateWindow | null; dateRange: { from: string | null; to: string | null } | null } {
+  const parsed = parseDateWindow(req.query);
+  if (!parsed.ok) throw new AppError(400, parsed.message);
+  if (!parsed.window) return { window: null, dateRange: null };
+  const q = req.query as { from?: string; to?: string };
+  return { window: parsed.window, dateRange: { from: q.from ?? null, to: q.to ?? null } };
+}
+
+const ALL_MATCHES = { window: null, dateRange: null } as const;
+
 export async function getTeamAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = req.user?.userId ?? null;
     const { teamId } = req.params;
+    const { window, dateRange } = dateRangeOf(req);
     const [team, events, isStaff] = await Promise.all([
       prisma.team.findUnique({
         where: { id: teamId },
         include: {
           players: { select: playerWithUser, orderBy: { jerseyNumber: 'asc' } },
-          matches: { select: { id: true, status: true, setScores: true } },
+          // Same window as the events, so the match counts match the stats.
+          matches: { where: matchDateWhere(window), select: { id: true, status: true, setScores: true } },
         },
       }),
-      prisma.event.findMany({ where: { match: { teamId }, ...ownEventsOnly }, select: eventSelect }),
+      prisma.event.findMany({ where: { match: { teamId, ...matchDateWhere(window) }, ...ownEventsOnly }, select: eventSelect }),
       seesEveryPlayer(userId, teamId),
     ]);
     if (!team) throw new AppError(404, 'Team not found.');
@@ -94,14 +114,19 @@ export async function getTeamAnalytics(req: Request, res: Response, next: NextFu
       },
       teamStats:   calculateStats(events),
       playerStats: calculatePlayerStats(players, events),
+      dateRange,
     });
   } catch (err) { next(err); }
 }
 
 export async function getTeamTrends(req: Request, res: Response, next: NextFunction) {
   try {
+    // Completed matches only, while the team stats above include matches in
+    // progress: a trend point is a finished match. A bare array, so no
+    // dateRange here (installed apps read it as an array).
+    const { window } = dateRangeOf(req);
     const matches = await prisma.match.findMany({
-      where: { teamId: req.params.teamId, status: 'COMPLETED' },
+      where: { teamId: req.params.teamId, status: 'COMPLETED', ...matchDateWhere(window) },
       orderBy: { matchDate: 'asc' },
       include: { events: { where: ownEventsOnly, select: eventSelect } },
     });
@@ -185,20 +210,23 @@ async function resolvePlayerScope(req: Request) {
     const match = await prisma.match.findUnique({ where: { id: matchId }, select: { teamId: true } });
     if (match?.teamId !== teamId) throw new AppError(404, 'Match not found.');
   }
-  return { player, teamId, matchId };
+  // One match is already narrower than any date range: matchId wins, and
+  // from/to aren't parsed at all then.
+  const range = matchId ? ALL_MATCHES : dateRangeOf(req);
+  return { player, teamId, matchId, ...range };
 }
 
 /** One player's individual stats for the team in scope (see resolvePlayerScope). */
 export async function getPlayerAnalytics(req: Request, res: Response, next: NextFunction) {
   try {
-    const { player, teamId, matchId } = await resolvePlayerScope(req);
+    const { player, teamId, matchId, window, dateRange } = await resolvePlayerScope(req);
     const events = await prisma.event.findMany({
-      where: { playerId: player.id, match: { teamId }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
+      where: { playerId: player.id, match: { teamId, ...matchDateWhere(window) }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
       select: eventSelect,
     });
     // player.teamId is the team in scope: the home team may be one this caller
     // can't see (a linked team's staff), and its id must not leak.
-    res.json({ player: { ...player, teamId }, teamId, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events) });
+    res.json({ player: { ...player, teamId }, teamId, matchId: matchId ?? null, stats: calculateStats(events), setStats: calculateSetStats(events), dateRange });
   } catch (err) { next(err); }
 }
 
@@ -215,20 +243,21 @@ export async function getMatchZones(req: Request, res: Response, next: NextFunct
 /** Team-level, across the team's matches: every member (tVis runs first). */
 export async function getTeamZones(req: Request, res: Response, next: NextFunction) {
   try {
-    const events = await prisma.event.findMany({ where: { match: { teamId: req.params.teamId }, ...ownEventsOnly }, select: zoneSelect });
-    res.json(buildDetailedHeatmap(events));
+    const { window, dateRange } = dateRangeOf(req);
+    const events = await prisma.event.findMany({ where: { match: { teamId: req.params.teamId, ...matchDateWhere(window) }, ...ownEventsOnly }, select: zoneSelect });
+    res.json({ ...buildDetailedHeatmap(events), dateRange });
   } catch (err) { next(err); }
 }
 
 /** One player's map on the team in scope: staff, admin or the player (resolvePlayerScope). */
 export async function getPlayerZones(req: Request, res: Response, next: NextFunction) {
   try {
-    const { player, teamId, matchId } = await resolvePlayerScope(req);
+    const { player, teamId, matchId, window, dateRange } = await resolvePlayerScope(req);
     const events = await prisma.event.findMany({
-      where: { playerId: player.id, match: { teamId }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
+      where: { playerId: player.id, match: { teamId, ...matchDateWhere(window) }, ...(matchId ? { matchId } : {}), ...ownEventsOnly },
       select: zoneSelect,
     });
-    res.json(buildDetailedHeatmap(events));
+    res.json({ ...buildDetailedHeatmap(events), dateRange });
   } catch (err) { next(err); }
 }
 
@@ -236,7 +265,7 @@ export async function getPlayerZones(req: Request, res: Response, next: NextFunc
 // Team-level, no per-player rows, for every member (the visibility guard runs
 // first, in the router). Point flow reads the opponent's events too.
 
-type EventWhere = { matchId: string } | { match: { teamId: string } };
+type EventWhere = { matchId: string } | { match: { teamId: string; matchDate?: DateWindow } };
 
 async function pointEvents(where: EventWhere) {
   return prisma.event.findMany({ where: { ...where, ...teamEventsWithOpponent }, select: pointEventSelect });
@@ -255,7 +284,10 @@ export async function getMatchRotations(req: Request, res: Response, next: NextF
 }
 
 export async function getTeamRotations(req: Request, res: Response, next: NextFunction) {
-  try { res.json(calculateRotations(await pointEvents({ match: { teamId: req.params.teamId } }))); } catch (err) { next(err); }
+  try {
+    const { window, dateRange } = dateRangeOf(req);
+    res.json({ ...calculateRotations(await pointEvents({ match: { teamId: req.params.teamId, ...matchDateWhere(window) } })), dateRange });
+  } catch (err) { next(err); }
 }
 
 export async function getMatchMomentum(req: Request, res: Response, next: NextFunction) {
@@ -267,5 +299,8 @@ export async function getMatchAdvanced(req: Request, res: Response, next: NextFu
 }
 
 export async function getTeamAdvanced(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await advancedFor({ match: { teamId: req.params.teamId } })); } catch (err) { next(err); }
+  try {
+    const { window, dateRange } = dateRangeOf(req);
+    res.json({ ...(await advancedFor({ match: { teamId: req.params.teamId, ...matchDateWhere(window) } })), dateRange });
+  } catch (err) { next(err); }
 }
