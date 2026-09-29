@@ -50,8 +50,8 @@ export default function RotationAnalytics({ scope, id, canTrack = false }: {
 }) {
   const { data, isLoading, isError } = useRotations(scope, id);
 
-  if (isLoading) return <div className="card p-4 h-48 animate-pulse bg-grey-100" aria-label="Loading rotations" />;
-  if (isError || !data) return <p className="text-sm text-error">Couldn't load rotations.</p>;
+  if (isLoading) return <div className="card p-4 h-48 animate-pulse bg-grey-50" aria-label="Loading rotations" />;
+  if (isError || !data) return <p className="text-sm text-error-strong">Couldn't load rotations.</p>;
 
   const { rotations, insights, coverage } = data;
   const { withServingSide, totalPoints } = coverage;
@@ -124,7 +124,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false }: {
               <th className="text-right py-2 pl-3 font-medium">Break-point %</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-grey-100">
+          <tbody className="divide-y divide-grey-200">
             {rotations.map((r) => (
               <tr key={r.rotation} className={clsx(r.total === 0 && 'text-grey-400')}>
                 <td className="py-2 pr-3 font-semibold text-grey-900">R{r.rotation}</td>
@@ -133,8 +133,8 @@ export default function RotationAnalytics({ scope, id, canTrack = false }: {
                 <td
                   className={clsx(
                     'py-2 px-3 text-right tabular-nums font-semibold',
-                    r.net > 0 && 'text-success',
-                    r.net < 0 && 'text-error'
+                    r.net > 0 && 'text-success-strong',
+                    r.net < 0 && 'text-error-strong'
                   )}
                 >
                   {signed(r.net)}

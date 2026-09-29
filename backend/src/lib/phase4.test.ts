@@ -391,6 +391,12 @@ assert.ok(twoSets.significantRuns.every((r) => r.length <= 4));
 assert.deepEqual(twoSets.significantRuns.map((r) => [r.setNumber, r.team, r.length]), [[1, 'home', 3], [2, 'away', 4]]);
 assert.deepEqual(twoSets.sets.map((x) => [x.setNumber, x.homeScore, x.awayScore, x.totalPoints]), [[1, 3, 0, 3], [2, 2, 4, 6]]);
 
+// A set's taps interleaving with another's in time (the tracker jumped back to
+// fix set 1 during set 2) still make one entry per set.
+const jumped = calculateMomentum([ev('KILL', 2, 10), ev('KILL', 1, 11), ev('KILL', 2, 12), ev('KILL', 2, 13)]);
+assert.deepEqual(jumped.sets.map((x) => [x.setNumber, x.homeScore]), [[1, 1], [2, 3]]);
+assert.equal(jumped.stats.longestHomeRun, 3, 'set 2 is one run of 3, not split by the set-1 fix');
+
 // Sorted by time inside the function: arrival order doesn't matter.
 const shuffled = calculateMomentum([ev('ATTACK_ERROR', 1, 3), ev('KILL', 1, 1), ev('KILL', 1, 2)]);
 assert.deepEqual(shuffled.timeline.map((p) => p.scorer), ['home', 'home', 'away']);

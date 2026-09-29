@@ -56,12 +56,14 @@ export interface MomentumResult {
 }
 
 export function calculateMomentum(events: MomentumEvent[]): MomentumResult {
-  // Sort here, not by the caller: the momentum is the order points happened.
-  // Stable, so equal timestamps keep their given order.
+  // Sort here, not by the caller: by set, then the order points happened. A
+  // set's taps can interleave with another's in time (the tracker jumped back
+  // to fix a set), and each set must still be one run of points. Stable, so
+  // equal timestamps keep their given order.
   const points = events
     .map((e) => ({ e, scorer: scoringTeam(e.eventType, e.isOpponentEvent ?? false) }))
     .filter((p): p is { e: MomentumEvent; scorer: 'home' | 'away' } => p.scorer !== null)
-    .sort((a, b) => a.e.recordedAt.getTime() - b.e.recordedAt.getTime());
+    .sort((a, b) => a.e.setNumber - b.e.setNumber || a.e.recordedAt.getTime() - b.e.recordedAt.getTime());
 
   const timeline: MomentumPoint[] = [];
   const sets: SetMomentum[] = [];
@@ -132,6 +134,7 @@ export function calculateMomentum(events: MomentumEvent[]): MomentumResult {
       largestAwayLead: max((s) => s.largestAwayLead),
     },
     sets,
-    significantRuns: runs.slice(0, 10),
+    // Uncapped: at most five sets, and the chart lists each set's own runs.
+    significantRuns: runs,
   };
 }

@@ -244,7 +244,7 @@ async function pointEvents(where: EventWhere) {
 
 async function advancedFor(where: EventWhere) {
   const [own, points] = await Promise.all([
-    prisma.event.findMany({ where: { ...where, ...ownEventsOnly }, select: { eventType: true, setNumber: true } }),
+    prisma.event.findMany({ where: { ...where, ...ownEventsOnly }, select: { eventType: true, setNumber: true, matchId: true } }),
     pointEvents(where),
   ]);
   return buildAdvancedMetrics(own, points);

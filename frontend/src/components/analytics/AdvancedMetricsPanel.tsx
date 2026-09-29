@@ -52,7 +52,7 @@ export default function AdvancedMetricsPanel({ scope, id, canTrack = false }: {
 }) {
   const { data, isLoading, isError } = useAdvancedMetrics(scope, id);
 
-  if (isLoading) return <div className="card h-40 bg-grey-100 animate-pulse" aria-busy="true" />;
+  if (isLoading) return <div className="card h-40 bg-grey-50 animate-pulse" aria-busy="true" />;
   if (isError || !data) {
     return <p className="card p-4 text-sm text-grey-600 text-center">Couldn't load advanced metrics.</p>;
   }

@@ -54,7 +54,7 @@ export default function MomentumChart({ matchId, homeName, awayName }: Props) {
       .map((p) => ({ ...p, up: Math.max(p.lead, 0), down: Math.min(p.lead, 0) }));
   }, [data, setNumber]);
 
-  if (isLoading) return <div className="card p-4 h-72 bg-grey-100 animate-pulse" aria-busy="true" />;
+  if (isLoading) return <div className="card p-4 h-72 bg-grey-50 animate-pulse" aria-busy="true" />;
   if (isError) return <div className="card p-4 text-sm text-grey-600 text-center">Couldn't load momentum.</div>;
   if (!data || data.timeline.length === 0) {
     return <div className="card p-6 text-sm text-grey-600 text-center">No points tracked yet.</div>;
@@ -65,22 +65,6 @@ export default function MomentumChart({ matchId, homeName, awayName }: Props) {
   const runs = data.significantRuns.filter((r) => r.setNumber === setNumber);
   const setPoints = data.timeline.filter((p) => p.setNumber === setNumber);
   const name = (team: 'home' | 'away') => (team === 'home' ? homeName : awayName);
-
-  function Tip({ active, payload }: TooltipContentProps<ValueType, NameType>) {
-    if (!active || !payload?.length) return null;
-    const d = payload[0].payload as Row;
-    return (
-      <div
-        className="rounded-lg px-3 py-2 text-xs shadow-md"
-        style={{ backgroundColor: CHART_TOOLTIP_BG, border: `1px solid ${CHART_GRID}`, color: CHART_TOOLTIP_TEXT }}
-      >
-        <div style={{ color: CHART_TICK }}>Point {d.pointInSet}</div>
-        <div className="font-semibold">{name(d.scorer)} scored</div>
-        <div className="font-mono">{homeName} {d.homeScore} – {d.awayScore} {awayName}</div>
-        {d.runLength >= 3 && <div>{d.runLength}-point run</div>}
-      </div>
-    );
-  }
 
   return (
     <div className="card p-4 space-y-4 min-w-0">
@@ -121,7 +105,7 @@ export default function MomentumChart({ matchId, homeName, awayName }: Props) {
             <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 6" vertical={false} />
             <XAxis dataKey="pointInSet" tick={{ fill: CHART_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_GRID }} tickLine={false} />
             <YAxis domain={[-maxLead - 1, maxLead + 1]} allowDecimals={false} tick={{ fill: CHART_TICK, fontSize: 11 }} axisLine={false} tickLine={false} width={34} />
-            <Tooltip content={Tip} />
+            <Tooltip content={(p) => <MomentumTip {...p} homeName={homeName} awayName={awayName} />} />
             <ReferenceLine y={0} stroke={CHART_REFERENCE} strokeDasharray="4 2" />
             <Area type="stepAfter" dataKey="up" stroke={US} strokeWidth={2} fill={US} fillOpacity={0.3} dot={false} isAnimationActive={false} />
             <Area type="stepAfter" dataKey="down" stroke={THEM} strokeWidth={2} fill={THEM} fillOpacity={0.3} dot={false} isAnimationActive={false} />
@@ -149,6 +133,22 @@ export default function MomentumChart({ matchId, homeName, awayName }: Props) {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function MomentumTip({ active, payload, homeName, awayName }: TooltipContentProps<ValueType, NameType> & { homeName: string; awayName: string }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as Row;
+  return (
+    <div
+      className="rounded-lg px-3 py-2 text-xs shadow-md"
+      style={{ backgroundColor: CHART_TOOLTIP_BG, border: `1px solid ${CHART_GRID}`, color: CHART_TOOLTIP_TEXT }}
+    >
+      <div style={{ color: CHART_TICK }}>Point {d.pointInSet}</div>
+      <div className="font-semibold">{d.scorer === 'home' ? homeName : awayName} scored</div>
+      <div className="font-mono">{homeName} {d.homeScore} – {d.awayScore} {awayName}</div>
+      {d.runLength >= 3 && <div>{d.runLength}-point run</div>}
     </div>
   );
 }

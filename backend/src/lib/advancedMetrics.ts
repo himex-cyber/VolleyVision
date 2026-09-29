@@ -11,7 +11,7 @@ import type { PointEvent } from './sideOut';
 const pct1 = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 1000) / 10 : null);
 
 export function buildAdvancedMetrics(
-  ownEvents: { eventType: string; setNumber: number }[],
+  ownEvents: { eventType: string; setNumber: number; matchId?: string | null }[],
   pointEvents: PointEvent[],
 ) {
   const counts: Record<string, number> = {};
@@ -30,7 +30,8 @@ export function buildAdvancedMetrics(
   const soloBlocks = c('SOLO_BLOCK');
   const blockAssists = c('BLOCK_ASSIST');
   const totalBlocks = soloBlocks + blockAssists * 0.5;
-  const setsPlayed = new Set(ownEvents.map((e) => e.setNumber)).size;
+  // A set is a set of one match: across a team's matches, set 1 of each counts.
+  const setsPlayed = new Set(ownEvents.map((e) => `${e.matchId ?? ''}:${e.setNumber}`)).size;
 
   const so = calculateSideOut(pointEvents);
 

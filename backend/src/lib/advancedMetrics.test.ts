@@ -31,4 +31,11 @@ assert.ok(!('sideOutEfficiency' in m), 'the misleading old label is gone');
 const empty = buildAdvancedMetrics([], []);
 assert.deepEqual([empty.receptionQuality.qualityPct, empty.serve.aceRate, empty.attack.hittingPct, empty.blocking.blocksPerSet, empty.sideOut.sideOutPct], [null, null, null, null, null]);
 
+// Team scope: set 1 of two matches is two sets, not one.
+const team = buildAdvancedMetrics(
+  [{ eventType: 'SOLO_BLOCK', setNumber: 1, matchId: 'a' }, { eventType: 'SOLO_BLOCK', setNumber: 1, matchId: 'b' }],
+  [],
+);
+assert.deepEqual([team.setsPlayed, team.blocking.blocksPerSet], [2, 1]);
+
 console.log('advancedMetrics.test.ts passed');
