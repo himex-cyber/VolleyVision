@@ -103,7 +103,7 @@ export default function TeamDashboardPage() {
 
       {/* Exactly the team totals on screen, from the same response. */}
       <div className="flex justify-end">
-        <CsvButton filename={csvName('team totals')} build={() => teamTotalsCsv(data.teamStats)} />
+        <CsvButton stale={isPlaceholderData} filename={csvName('team totals')} build={() => teamTotalsCsv(data.teamStats)} />
       </div>
       <StatsCards stats={data.teamStats} />
 
@@ -224,7 +224,7 @@ export default function TeamDashboardPage() {
                 Names are free text and can name minors. */}
             <div className="flex items-center justify-between gap-3 mb-3">
               <h2 className="text-lg font-semibold text-grey-900">Season Player Statistics</h2>
-              <CsvButton filename={csvName('player stats')} build={() => playerStatsCsv(data.playerStats)} />
+              <CsvButton stale={isPlaceholderData} filename={csvName('player stats')} build={() => playerStatsCsv(data.playerStats)} />
             </div>
             <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
           </section>
@@ -234,7 +234,7 @@ export default function TeamDashboardPage() {
             <section>
               <div className="flex items-center justify-between gap-3 mb-3">
                 <h2 className="text-lg font-semibold text-grey-900">My Stats</h2>
-                <CsvButton filename={csvName('my stats')} build={() => playerStatsCsv(myOwnStats)} />
+                <CsvButton stale={isPlaceholderData} filename={csvName('my stats')} build={() => playerStatsCsv(myOwnStats)} />
               </div>
               <PlayerStatsTable rows={myOwnStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
             </section>
@@ -245,7 +245,7 @@ export default function TeamDashboardPage() {
           {/* Only the player's own row: the server left the others out. */}
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="text-lg font-semibold text-grey-900">Your Stats</h2>
-            <CsvButton filename={csvName('my stats')} build={() => playerStatsCsv(data.playerStats)} />
+            <CsvButton stale={isPlaceholderData} filename={csvName('my stats')} build={() => playerStatsCsv(data.playerStats)} />
           </div>
           <PlayerStatsTable rows={data.playerStats} teamId={teamId!} canOpen={canOpenPlayer} range={range} />
         </section>

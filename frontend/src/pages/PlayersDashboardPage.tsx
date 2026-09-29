@@ -26,7 +26,7 @@ export default function PlayerDashboardPage() {
   const teamId = searchParams.get('teamId') ?? undefined;
   // The date filter only exists outside match context: a match is its own window.
   const range = useDateRangeParams();
-  const { data, isLoading, isError, error } = usePlayerAnalytics(playerId!, teamId, matchId ? undefined : range);
+  const { data, isLoading, isError, error, isPlaceholderData } = usePlayerAnalytics(playerId!, teamId, matchId ? undefined : range);
   const { data: matchData } = useMatchAnalytics(matchId ?? '');
   // Waits for the stats: a caller refused those (403) is refused the map too.
   const zones = usePlayerZones(data ? playerId! : '', teamId, matchId, range);
@@ -113,8 +113,14 @@ export default function PlayerDashboardPage() {
           <DateRangeFilter season={team?.season} />
           {(range.from || range.to) && (
             <p className="text-sm text-grey-600">
-              Showing stats {rangeText(range)}
+              {/* The previous range's numbers stay up while these load. */}
+              {isPlaceholderData ? 'Loading these dates…' : `Showing stats ${rangeText(range)}`}
             </p>
+          )}
+          {(range.from || range.to) && !isPlaceholderData && data.stats.totalEvents === 0 && (
+            <div className="card p-6 text-center text-grey-600 text-sm">
+              No matches in these dates. Try a wider range.
+            </div>
           )}
         </div>
       )}

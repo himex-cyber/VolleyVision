@@ -28,7 +28,7 @@ async function main() {
   assert.equal((await call({ status: 'COMPLETED' })).where.status, 'COMPLETED');
 
   // Bad input is a 400, never a Prisma error.
-  for (const query of [{ from: 'x' }, { to: '2026-02-30' }, { from: '2026-09-30', to: '2026-09-01' }, { status: 'NOPE' }, { status: ['COMPLETED', 'SCHEDULED'] }]) {
+  for (const query of [{ from: 'x' }, { to: '2026-02-30' }, { from: '2026-09-30', to: '2026-09-01' }, { status: 'NOPE' }, { status: ['COMPLETED', 'SCHEDULED'] }, { opponent: ['a', 'b'] }]) {
     const r = await call(query);
     assert.equal(r.error?.statusCode, 400, JSON.stringify(query));
     assert.equal(r.where, undefined, 'nothing reached the database');

@@ -14,6 +14,8 @@ export type DateWindowResult =
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const FORMAT = 'Dates must look like 2026-09-30.';
+const MIN_YEAR = 1900; // lib/dateRange.ts on the client holds the same bounds
+const MAX_YEAR = 9998;
 
 /** Midnight UTC of a YYYY-MM-DD day, or null if it isn't one (2026-02-30 included). */
 function utcDay(value: unknown): Date | null {
@@ -21,6 +23,9 @@ function utcDay(value: unknown): Date | null {
   const m = DAY.exec(value);
   if (!m) return null;
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  // Date.UTC reads years 0-99 as 1900-1999, and 9999-12-31's end (year
+  // 10000) is past what Postgres stores: a 500. No match lives out there.
+  if (y < MIN_YEAR || y > MAX_YEAR) return null;
   const date = new Date(Date.UTC(y, mo - 1, d));
   // Date.UTC rolls 2026-02-30 over to 2 March; a real day round-trips.
   return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d ? date : null;

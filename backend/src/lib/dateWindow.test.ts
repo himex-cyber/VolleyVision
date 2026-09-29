@@ -53,6 +53,14 @@ for (const bad of ['2026-02-30', '2026-13-01', '2026-00-10', '2026-04-31', '2027
 }
 assert.ok(ok({ from: '2028-02-29' }), 'a real leap day is fine');
 
+// Years outside 1900-9998: Date.UTC reads 0002 as 1902 (the client's date
+// library disagrees, so it would send a date the server refuses), and
+// 9999-12-31's end is year 10000, which Postgres can't store (a 500).
+for (const bad of ['0002-09-01', '0099-01-01', '1899-12-31', '9999-12-31']) {
+  assert.equal(err({ to: bad }), FORMAT, bad);
+}
+assert.ok(ok({ from: '1900-01-01', to: '9998-12-31' }), 'the edges are fine');
+
 // from after to.
 assert.equal(err({ from: '2026-09-30', to: '2026-09-01' }), 'The start date is after the end date.');
 

@@ -29,6 +29,10 @@ export async function getMatchesByTeam(req: Request, res: Response, next: NextFu
     if (status !== undefined && !Object.values(MatchStatus).includes(status as MatchStatus)) {
       throw new AppError(400, 'Invalid match status.');
     }
+    // ?opponent=a&opponent=b arrives as an array, which Prisma's `contains` refuses.
+    if (opponent !== undefined && typeof opponent !== 'string') {
+      throw new AppError(400, 'Search for one opponent at a time.');
+    }
 
     const matches = await prisma.match.findMany({
       where: {

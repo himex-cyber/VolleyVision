@@ -6,7 +6,10 @@ import type { DateRange } from '../types';
 // filter to recover with, so a hand-edited URL is dropped, not sent: only real
 // days (not 2026-02-30), and never a start after the end.
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const realDay = (s: string | null): s is string => !!s && YMD.test(s) && isValid(parseISO(s)) && format(parseISO(s), 'yyyy-MM-dd') === s;
+// Years 1900-9998, as the server allows: a year still being typed (0002) or
+// 9999 would otherwise go out and come back a 400.
+const realDay = (s: string | null): s is string =>
+  !!s && YMD.test(s) && +s.slice(0, 4) >= 1900 && +s.slice(0, 4) <= 9998 && isValid(parseISO(s)) && format(parseISO(s), 'yyyy-MM-dd') === s;
 
 /** One source for pages and drill-down links: the range held in the URL. */
 export function useDateRangeParams(): DateRange {

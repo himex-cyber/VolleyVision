@@ -56,7 +56,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false, range, 
   // The page's CSV file namer, so this table's name matches its siblings'.
   csvName: (table: string) => string;
 }) {
-  const { data, isLoading, isError } = useRotations(scope, id, range);
+  const { data, isLoading, isError, isPlaceholderData } = useRotations(scope, id, range);
   const chartWidth = useChartWidth(); // fixed while printing (8.7)
 
   if (isLoading) return <div className="card p-4 h-48 animate-pulse bg-grey-50" aria-label="Loading rotations" />;
@@ -85,6 +85,7 @@ export default function RotationAnalytics({ scope, id, canTrack = false, range, 
         <h3 className="font-display font-semibold text-grey-900">Rotations</h3>
         {/* Rows are exactly what's on screen; the server already scoped them. */}
         <CsvButton
+          stale={isPlaceholderData}
           filename={csvName('rotations')}
           build={() =>
             toCsv(
