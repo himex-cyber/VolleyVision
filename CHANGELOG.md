@@ -2,10 +2,13 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.11.0 — unreleased
+## v9.11.0 — 2026-09-29
 
 Phases 6.0 and 6 of the rebuild roadmap: carry-over fixes, then tracking that
 keeps working with no signal. One migration (`20260929010857_event_client_key`).
+Released but not deployed yet (Netlify build credits are low): production stays
+on v9.10.0, and the migration must be applied before this version is deployed.
+The v9.11.0 Android build needs this backend: don't share it before the deploy.
 
 **Tracking offline**
 - **Tracking keeps working with no signal.** Every tap is saved on the device
