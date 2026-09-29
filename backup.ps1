@@ -11,8 +11,9 @@
 # them; the first that works is used. (Docker on Windows often can't reach
 # Supabase's direct host, which is IPv6-only; the pooler URL then works.) The
 # URL reaches the container through this script's environment (`-e DBURL`
-# with no value), so it never appears on docker.exe's command line, where the
-# process list and `docker inspect` would show the password.
+# with no value), so it never appears on docker.exe's command line or in the
+# process list. `docker inspect` still shows it while the (--rm, seconds-long)
+# container runs; that's the local Docker daemon only.
 # Prisma's query options (pgbouncer=true, connection_limit, schema, ...) aren't
 # valid libpq options, so they're dropped. Supabase's transaction pooler (port
 # 6543) can't run pg_dump, so the session pooler on 5432 is used instead.

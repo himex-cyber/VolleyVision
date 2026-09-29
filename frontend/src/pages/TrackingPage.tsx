@@ -343,10 +343,14 @@ export default function TrackingPage() {
   }
 
   // Sent as a delta: the server applies it to the score it holds, so points
-  // another device added since this one last fetched aren't overwritten.
+  // another device added since this one last fetched aren't overwritten. The
+  // absolute rides along for a server that predates deltas (it ignores them);
+  // a current server ignores the absolute when a delta comes with it.
   function handleScore(side: ScoreSide, delta: number) {
     if (tapsStillSaving()) return;
-    updateScore.mutate(side === 'home' ? { homeDelta: delta } : { awayDelta: delta }, {
+    const current = (side === 'home' ? match?.homeScore : match?.awayScore) ?? 0;
+    const next = Math.max(0, current + delta);
+    updateScore.mutate(side === 'home' ? { homeDelta: delta, homeScore: next } : { awayDelta: delta, awayScore: next }, {
       // A point added by hand was won by that side, so they serve next, once
       // the server has taken it.
       onSuccess: () => { if (delta > 0) setServing(side === 'home' ? 'US' : 'THEM'); },

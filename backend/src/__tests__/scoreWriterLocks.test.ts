@@ -89,7 +89,16 @@ async function main() {
     assert.equal(m.awayScore, 0, 'a -1 at 0 stays 0');
     assert.equal(callsFor('scoreAdjustment', 'create').length, 0, 'nothing changed, so nothing to record');
   }
-  for (const body of [{ homeDelta: 1.5 }, { homeDelta: '1' }, { awayDelta: 101 }, { homeScore: 3, homeDelta: 1 }]) {
+  // The tracker sends the delta AND the absolute it expects, so a v9.13 app
+  // still scores against a v9.12 server (which ignores deltas); here the
+  // delta wins, applied to the locked score.
+  {
+    const m = world({ homeScore: 9 });
+    const r = await call(updateScore, { params: { id: 'M' }, body: { homeDelta: 1, homeScore: 5 } });
+    assert.equal(r.error, undefined);
+    assert.equal(m.homeScore, 10, 'the stale absolute is ignored when a delta comes with it');
+  }
+  for (const body of [{ homeDelta: 1.5 }, { homeDelta: '1' }, { awayDelta: 101 }]) {
     world();
     const r = await call(updateScore, { params: { id: 'M' }, body });
     assert.equal(r.error?.statusCode, 400, `400 for ${JSON.stringify(body)}`);

@@ -148,13 +148,12 @@ export async function updateScore(req: Request, res: Response, next: NextFunctio
     // 8.0.1: a delta is applied to the score read under the lock. An absolute
     // score built from a copy fetched earlier erases whatever another device
     // added since; installed apps still send absolutes, so both are accepted.
+    // When both come for a side the delta wins: the tracker sends the absolute
+    // too, only so it still scores against a server that predates deltas.
     for (const [name, change] of [['homeDelta', homeChange], ['awayDelta', awayChange]] as const) {
       if (change != null && (!Number.isInteger(change) || Math.abs(change) > 100)) {
         throw new AppError(400, `${name} must be a whole number from -100 to 100.`);
       }
-    }
-    if ((homeScore != null && homeChange != null) || (awayScore != null && awayChange != null)) {
-      throw new AppError(400, 'Send a score or a change for each side, not both.');
     }
 
     const match = await withMatchLock(req.params.id, async (tx) => {

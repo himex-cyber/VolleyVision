@@ -60,6 +60,22 @@ export function cachedMatch(id: string): Match | undefined {
 }
 
 /**
+ * Trims every stored match to the tracker's shape: v9.12.0 kept the whole
+ * response, other players' account ids included. Run once at startup, so an
+ * old copy the user never reopens doesn't wait for sign-out.
+ */
+export function trimCachedMatches(): void {
+  for (const k of storageKeys(MATCH_PREFIX)) {
+    try {
+      const raw = storageGet(k);
+      if (raw) storageSet(k, JSON.stringify(trimCachedMatch(JSON.parse(raw))));
+    } catch {
+      storageRemove(k);
+    }
+  }
+}
+
+/**
  * Sign-out, a 401, or a different account signing in: the cached user and
  * every cached match go. Queued taps and this device's own event keys stay
  * (per user, random ids, no names): the taps send once that user is back, and

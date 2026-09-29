@@ -33,8 +33,8 @@ rebuild roadmap (analytics B). No migration.
   their own. Nothing on screen changes.
 - **The tracker's offline copy of a match keeps less.** Only what the tracker
   shows offline (the match, its score and the roster's names, numbers and
-  positions) stays on the device. Copies saved by v9.12.0 are trimmed the
-  next time they're read.
+  positions) stays on the device. Copies saved by v9.12.0 are trimmed when
+  the app next starts.
 
 **A stuck sync is shown**
 - If the server keeps failing to save queued taps (five errors in a row), the
