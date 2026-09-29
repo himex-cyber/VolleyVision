@@ -25,16 +25,20 @@ type EventWithPlayer = {
   notes: string | null;
   isOpponentEvent: boolean;
   player: (WithUser & Record<string, unknown>) | null;
+  clientKey?: string | null;
 };
 
 /**
  * The match event log for this caller. Staff see it whole. For anyone else an
  * own-team event by someone other than the caller keeps its type, set, zone,
  * rotation and time but loses who did it and the coach's note; the caller's own
- * events and opponent events are unchanged. player.userId is always stripped.
+ * events and opponent events are unchanged. player.userId is always stripped,
+ * and so is the offline queue's clientKey for non-staff (it identifies the
+ * tracking device's taps; only staff track).
  */
 export function redactEvents<T extends EventWithPlayer>(events: T[], isStaff: boolean, callerId: string | null) {
-  return events.map((e) => {
+  return events.map((raw) => {
+    const e = !isStaff && 'clientKey' in raw ? { ...raw, clientKey: null } : raw;
     const player = e.player ? (({ userId: _userId, ...rest }) => rest)(e.player) : null;
     if (isStaff || e.isOpponentEvent || isCaller(e.player?.userId, callerId)) return { ...e, player };
     return { ...e, playerId: null, player: null, notes: null };

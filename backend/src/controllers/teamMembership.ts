@@ -11,6 +11,7 @@ import {
 } from '../services/teamMembership.service';
 import { linkPlayerRecord, unlinkPlayerRecord } from '../services/playerPortal.service';
 import { canManageMembers } from '../services/permission.service';
+import { logAudit } from '../lib/audit';
 
 // HEAD_COACH is deliberately absent: it only changes via ownership transfer.
 const VALID_ROLES = new Set<string>([
@@ -102,13 +103,17 @@ export async function linkPlayerRecordHandler(req: Request, res: Response, next:
   try {
     const { userId } = req.body ?? {};
     if (typeof userId !== 'string' || !userId) throw new AppError(400, 'userId is required.');
-    res.json(await linkPlayerRecord(req.params.id, req.params.playerId, userId));
+    const player = await linkPlayerRecord(req.params.id, req.params.playerId, userId);
+    logAudit(req.user!.userId, 'LINK_PLAYER', 'player', player.id, { teamId: req.params.id, userId });
+    res.json(player);
   } catch (err) { next(err); }
 }
 
 /** DELETE /api/v1/teams/:id/players/:playerId/link — staff only (MANAGE_MEMBERS). */
 export async function unlinkPlayerRecordHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await unlinkPlayerRecord(req.params.id, req.params.playerId));
+    const { player, previousUserId } = await unlinkPlayerRecord(req.params.id, req.params.playerId);
+    logAudit(req.user!.userId, 'UNLINK_PLAYER', 'player', player.id, { teamId: req.params.id, userId: previousUserId });
+    res.json(player);
   } catch (err) { next(err); }
 }

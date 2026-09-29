@@ -200,9 +200,13 @@ export async function resetSetScore(req: Request, res: Response, next: NextFunct
       where: { matchId: req.params.id, setNumber: currentSet },
     });
 
+    // The reset is authored, like Reset Match: no replay of the events can
+    // reproduce it, and an out-of-order offline tap (6.3) or an undo would
+    // replay the set straight back to its old score. Override makes both
+    // adjust the running score instead.
     const match = await prisma.match.update({
       where: { id: req.params.id },
-      data: { homeScore: 0, awayScore: 0 },
+      data: { homeScore: 0, awayScore: 0, manualScoreOverride: true },
     });
     res.json(match);
   } catch (err) {

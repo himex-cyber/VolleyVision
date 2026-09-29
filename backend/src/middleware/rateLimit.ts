@@ -297,3 +297,17 @@ export const eventWriteRateLimit = createRateLimit({
   keyFn: (req) => (req.user?.userId ? [`event-write:user:${req.user.userId}`] : null), // requireAuth handles the 401
   message: "You're recording events faster than we can keep up with. Wait a moment and try again.",
 });
+
+/**
+ * Event batches (6.4) - per user. The app sends every tap through the queue,
+ * online too, so a batch is often one live tap: this is sized like
+ * eventWriteRateLimit (about one a second sustained), not for occasional bulk
+ * flushes. MAX_EVENT_BATCH bounds the work per request. Separate from
+ * eventWriteRateLimit, which the queue's deletes and older apps use.
+ */
+export const eventBatchRateLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 600,
+  keyFn: (req) => (req.user?.userId ? [`event-batch:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: "You're syncing events faster than we can keep up with. Wait a moment and try again.",
+});

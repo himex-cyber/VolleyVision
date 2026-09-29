@@ -41,14 +41,21 @@ function hasWonSet(score: number, opponentScore: number, setNumber: number): boo
   return score >= target && score - opponentScore >= 2;
 }
 
-/** Replays a chronologically sorted timeline into the derived score state. */
-export function replayTimeline(items: ReplayItem[]): ReplayResult {
-  let homeScore = 0;
-  let awayScore = 0;
-  let homeSetsWon = 0;
-  let awaySetsWon = 0;
-  const setScores: { set: number; home: number; away: number }[] = [];
-  let completed = false;
+export type ReplayStart = Omit<ReplayResult, 'completed'>;
+
+const ZERO: ReplayStart = { homeScore: 0, awayScore: 0, homeSetsWon: 0, awaySetsWon: 0, setScores: [] };
+
+/**
+ * Replays a chronologically sorted timeline into the derived score state.
+ * `start` continues from a known state instead of 0–0: the tracker's
+ * provisional score is the server's state plus the taps still queued on the
+ * device (6.8).
+ */
+export function replayTimeline(items: ReplayItem[], start: ReplayStart = ZERO): ReplayResult {
+  let { homeScore, awayScore, homeSetsWon, awaySetsWon } = start;
+  const setScores = [...start.setScores];
+  let completed = homeSetsWon >= 3 || awaySetsWon >= 3;
+  if (completed) return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed };
 
   for (const item of items) {
     if (item.kind === 'event') {

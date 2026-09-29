@@ -11,6 +11,12 @@ type AnyFn = (...args: any[]) => any;
 const modelHandlers = new Map<string, Record<string, AnyFn>>();
 const modelCalls = new Map<string, Record<string, any[][]>>();
 const models = new Map<string, Record<string, AnyFn>>();
+const rawCalls: any[][] = [];
+
+/** Every $queryRaw/$executeRaw call's arguments, in order. */
+export function rawCallsMade(): any[][] {
+  return rawCalls;
+}
 
 function createModel(name: string): Record<string, AnyFn> {
   const handlers: Record<string, AnyFn> = {};
@@ -44,6 +50,7 @@ export function resetDb(): void {
   models.clear();
   modelHandlers.clear();
   modelCalls.clear();
+  rawCalls.length = 0;
 }
 
 /**
@@ -58,6 +65,11 @@ export const db: any = new Proxy(
     get(_target, prop) {
       if (prop === '$transaction') {
         return async (fn: (tx: any) => any) => fn(db);
+      }
+      // Raw SQL (e.g. recordOneEvent's row lock) is a recorded no-op here;
+      // only the integration tests prove what it does.
+      if (prop === '$queryRaw' || prop === '$executeRaw') {
+        return async (...args: any[]) => { rawCalls.push(args); return []; };
       }
       if (typeof prop !== 'string') return undefined;
       if (!models.has(prop)) models.set(prop, createModel(prop));

@@ -1,4 +1,4 @@
-import { MatchStatus } from '@prisma/client';
+import { MatchStatus, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { buildTimeline, replayTimeline } from '../lib/scoreReplay';
 import { reverseEventScore } from '../lib/setOperations';
@@ -19,21 +19,25 @@ import { reverseCompletingAction, scoringSideDelta } from '../lib/undo';
  * NOTE: this is only valid while score state is fully DERIVED from the
  * timeline. A match under manual override (see applyEventRemoval) has set
  * boundaries no replay can reproduce, so callers must not use this on one.
+ *
+ * Inside a transaction pass its client (see loadScoreState).
  */
-export async function recalculateMatchState(matchId: string): Promise<void> {
-  const match = await prisma.match.findUnique({
+export async function recalculateMatchState(matchId: string, db: Prisma.TransactionClient = prisma): Promise<void> {
+  const match = await db.match.findUnique({
     where: { id: matchId },
     select: { status: true },
   });
   if (!match) return;
 
   const [events, adjustments] = await Promise.all([
-    prisma.event.findMany({
+    db.event.findMany({
       where: { matchId },
       select: { eventType: true, isOpponentEvent: true, recordedAt: true },
-      orderBy: { recordedAt: 'asc' },
+      // id breaks ties: taps sharing a timestamp must replay the same way every
+      // time (cuids roughly follow insert order, like the increment path).
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
     }),
-    prisma.scoreAdjustment.findMany({
+    db.scoreAdjustment.findMany({
       where: { matchId },
       select: { homeDelta: true, awayDelta: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
@@ -50,7 +54,7 @@ export async function recalculateMatchState(matchId: string): Promise<void> {
     : match.status === 'COMPLETED' ? 'IN_PROGRESS'
     : match.status;
 
-  await prisma.match.update({
+  await db.match.update({
     where: { id: matchId },
     data: {
       homeScore,
@@ -84,8 +88,9 @@ export async function recalculateMatchState(matchId: string): Promise<void> {
 export async function applyEventRemoval(
   matchId: string,
   event: { eventType: string; isOpponentEvent: boolean; completedSet?: boolean },
+  db: Prisma.TransactionClient = prisma,
 ): Promise<void> {
-  const match = await prisma.match.findUnique({
+  const match = await db.match.findUnique({
     where: { id: matchId },
     select: {
       manualScoreOverride: true,
@@ -102,7 +107,7 @@ export async function applyEventRemoval(
   if (!match.manualScoreOverride) {
     // A replay rebuilds set boundaries from scratch, so it already handles a
     // set-completing event correctly — completedSet is not needed here.
-    await recalculateMatchState(matchId);
+    await recalculateMatchState(matchId, db);
     return;
   }
 
@@ -119,7 +124,7 @@ export async function applyEventRemoval(
     const delta = scoringSideDelta(scoringTeam(event.eventType, event.isOpponentEvent));
     const uncompleted = reverseCompletingAction(state, delta);
     if (uncompleted) {
-      await prisma.match.update({
+      await db.match.update({
         where: { id: matchId },
         data: {
           homeScore: uncompleted.homeScore,
@@ -139,7 +144,7 @@ export async function applyEventRemoval(
   // Set state is deliberately left alone here: this event didn't move it.
   const next = reverseEventScore(state, event.eventType, event.isOpponentEvent);
 
-  await prisma.match.update({
+  await db.match.update({
     where: { id: matchId },
     data: { homeScore: next.homeScore, awayScore: next.awayScore },
   });

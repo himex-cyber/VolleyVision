@@ -43,4 +43,15 @@ const v = redactEvents(events, false, 'viewer');
 assert.ok(v.filter((e) => !e.isOpponentEvent).every((e) => e.playerId === null && e.player === null && e.notes === null));
 assert.ok(!JSON.stringify(v).includes('Ann') && !JSON.stringify(v).includes('p1'));
 
+// 6.3: the offline queue's clientKey is for staff only. Non-staff lose it on
+// every event, their own and opponent events included.
+const keyed = events.map((e, i) => ({ ...e, clientKey: `k${i}` }));
+assert.ok(redactEvents(keyed, true, 'coach').every((e) => e.clientKey?.startsWith('k')), 'staff keep clientKey');
+const keyedMine = redactEvents(keyed, false, 'u2');
+assert.ok(keyedMine.every((e) => e.clientKey === null), 'non-staff never get a clientKey');
+assert.equal(keyedMine[1].notes, 'mine', 'own events otherwise unchanged');
+assert.equal(keyedMine[2].notes, 'opp', 'opponent events otherwise unchanged');
+// Rows without the field (older selects) don't gain one.
+assert.equal('clientKey' in redactEvents(events, false, 'u2')[2], false);
+
 console.log('playerPrivacy.test.ts passed');

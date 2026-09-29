@@ -739,9 +739,7 @@ Karlos approved the release, the deploy and the G1 comment edit on 29 Sept.
 
 Why: the roadmap's native shell, so coaches can track from a phone app. Karlos has only an iPhone, so he chose
 "Android first": Android is finished and checked on the emulator; iOS is a later phase (Apple Developer account and a
-cloud Mac build). Released as v9.10.0. No migration. **Not deployed:** Netlify build credits ran out on 29 Sept, and
-Karlos's rule is to release to `main` and tag without deploying until he has more. The app can't sign in to
-production until this deploy lands (it needs the CORS change).
+cloud Mac build). Released as v9.10.0 and deployed the same day (below). No migration.
 
 | Item | Change | Test (fails before) |
 |---|---|---|
@@ -770,5 +768,74 @@ closed the app from every screen, and copying failed in the app.
 **Released:** PR #38 (CI 4/4) merged to `develop`; release PR to `main`; tag `v9.10.0`. Karlos set
 `CORS_EXTRA_ORIGINS=https://localhost` in Netlify's production context (confirmed).
 
-**Still to do:** deploy when credits return, then the signed release build against production on the emulator
-(including a chat image upload). The signed build waits for Karlos's upload keystore.
+**Signed build:** Karlos created the upload keystore (the password was generated on his PC by a script, written into
+the gitignored `keystore.properties` and never shown in chat). After `npm run android:prod`, `gradlew assembleRelease
+bundleRelease` passed the prod-config check; `apksigner` and `jarsigner` verified both files against his certificate.
+
+### Production deploy: v9.10.0 (2026-09-29)
+
+Netlify credits ran out earlier on 29 Sept, so v9.10.0 was released and tagged (`a0052c0`, PR #40) without deploying.
+Karlos then asked for one deploy attempt.
+
+1. Before deploying: working tree clean, `main` = `origin/main` = the tag, `develop` and `main` have the same content,
+   no new migration.
+2. `deploy.ps1`: migrations up to date; the deploy went live; the smoke check passed (health and db ok, CSP header,
+   unknown team 404).
+
+**Live checks:**
+- CORS: a preflight from `https://localhost` gets `Access-Control-Allow-Origin: https://localhost` and allows the
+  `authorization` and `x-client` headers; one from another origin gets no allow-origin.
+- The signed release APK on the emulator (VV_Light), running against production: native CSP present with the prod
+  `connect-src`; `/health` returns ok with the database up; `/api/v1/auth/me` with a bogus token and `X-Client`
+  returns the API's JSON 401, so the app's origin, headers and route all work.
+- Not done: a signed-in session and a chat image upload. They need a production password, which Claude doesn't
+  enter, and the emulator draws no screen, so Karlos can't type one there either. Sign-in itself was proven against
+  the local API with the same build path. The first real sign-in happens on a tester's Android phone or on iOS later.
+- The emulator image is `userdebug`, which opens WebView debugging for every app. Capacitor leaves it off for release
+  builds (`webContentsDebuggingEnabled` defaults to the app's debuggable flag, which is off), so real phones don't
+  expose it.
+- Sentry: no issues in the two hours after the deploy.
+
+### Phases 6.0 and 6 of the rebuild roadmap: carry-over fixes and the offline event queue (branches `rebuild/p6-0-carryover`, `rebuild/p6-offline-queue`, 2026-09-29)
+
+Why: the independent review of v9.8.0–v9.10.0 found three carry-over gaps in player-record linking and ownership
+transfer; Phase 6 is the roadmap's offline event queue, so a statistician can track with no signal. Released together
+as v9.11.0. One migration: `20260929010857_event_client_key` (additive: `events.client_key`, unique
+`(match_id, client_key)`, index `(match_id, recorded_at)`; creates no table).
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 6.0.1 (G2) | Only a PLAYER-role member can be linked to a player record; role read inside the transaction; picker lists players | `http.playerRecordLink.test.ts` (viewer/staff target 400) |
+| 6.0.2 (G2) | `LINK_PLAYER` / `UNLINK_PLAYER` audit entries; unlink records the previous holder | same file (audit rows) |
+| 6.0.3 | `scripts/audit-player-links.ts`, read-only, CHECK flag (names differ or role isn't PLAYER) | run on local DB: 3 links, 1 CHECK |
+| 6.0.4 (G2) | Ownership transfer re-reads the owner inside its transaction (clear 409) | `teamOwnership.test.ts` |
+| 6.1 (G1) | Migration above; applied to the local DB only | CI drift check |
+| 6.2 | `lib/idempotencyKey`, `lib/clientTime` (2-min window, clamped to now), `lib/offlineOrder`, `lib/eventInput` | unit tests for each |
+| 6.3 | `recordOneEvent`: one Read Committed transaction on the match row lock; key lookup (duplicate 200), player check, create; in order increments + set completion on the transaction, out of order replays | `eventRecording.test.ts`, `offlineReplay.test.ts` |
+| 6.4 (G2) | `POST /events/batch`: TRACK_MATCH on the top-level matchId, items pinned, 1–20, own limiter (600/10 min) | `http.eventBatch.test.ts`, matrix (73 routes) |
+| 6.5 | `SERIALIZATION_CONFLICT` code and `retryable: true` | `mapError.test.ts` |
+| 6.6–6.11 | Client queue (tested pure core mirrored to the frontend with a drift check), offline cold start (G2: session ends only on a 401), provisional score, sync badge, refused-tap Retry/Discard, leave guards, two-device warning | `eventQueueCore.test.ts`, `scoreReplay.test.ts` drift checks, browser + emulator |
+
+Deviations from the handoff:
+- Recording uses a match row lock under Read Committed, not `runSerializable`: under SERIALIZABLE a device flushing a
+  batch made live taps from the website or v9.10.0 apps fail with a 409 those apps show as "Couldn't save that event".
+- The batch cap is 20, not 50 (a 50-item batch took 2.3 s locally; Netlify functions time out at 10 s).
+- The batch limiter is 600 per 10 minutes, not 60: the app sends every live tap through the queue (debounced 0.8 s).
+- Reset Set now sets manual override (a replay could otherwise undo the reset). Karlos approved.
+- Deletes and undo-last of an event take the same match lock.
+
+**Checks:** a 50-item batch 2.3 s and a 20-item batch 0.5–0.8 s on the local stack. Browser (local stack, 360 and 1280):
+online sync, simulated offline, reconnect, API down and reload, refused tap, two-device banner, leave guard. Emulator
+(VV_Light, local build): 30 taps and an Undo in airplane mode, app force-stopped and relaunched offline (still signed in,
+roster shown, 29 queued), reconnect: event count and score match what was tapped, no duplicates; a 401 mid-flush keeps
+the queue and it flushes after signing in again.
+
+**Reviews:**
+- Independent Opus design review of the server (4 medium, 7 low) and of the client (4 medium, 6 low): all fixed.
+- `/code-review high`: 6 findings, all fixed.
+- Phase-end independent Opus audit: 1 medium (batch limiter sized for bulk, not per-tap use) and 5 low, all fixed.
+- `/security-review`: no findings.
+
+**Verified:** backend `tsc` clean, 60 unit test files, build OK; frontend `tsc`, lint and build clean; integration 3/3
+(matrix 73 routes); `npm audit --omit=dev --audit-level=high` clean in both (one moderate nodemailer advisory, below
+the gate, needs a major upgrade: G3).

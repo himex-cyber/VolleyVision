@@ -1,5 +1,11 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
+import { cacheMatch, cachedMatch, forgetMatch } from '../lib/offlineCache';
+import { clearUndoHistory, deviceKeys, discardRejected, discardTap, enqueueTap, getQueue, hasLocalUndo, isOffline, queueCanPersist, retryTap, subscribeQueue, undoTap } from '../lib/eventQueue';
+import type { QueuedEventPayload, QueueItem } from '../lib/eventQueueCore';
 import { teamsApi, playersApi, matchesApi, eventsApi, analyticsApi, membershipsApi, invitationsApi, joinCodesApi, profileApi, playerPortalApi, coachPortalApi, permissionsApi, approvalApi, feedbackApi, authApi } from '../lib/api';
 import type { TeamJoinCodeKind } from '../lib/api';
 import type { CreateTeamInput } from '../lib/api';
@@ -214,12 +220,29 @@ export function useMatches(teamId: string, filters?: { opponent?: string; status
   });
 }
 
-export function useMatch(id: string, options?: { live?: boolean }) {
+/**
+ * `offline` (the tracker): keep the last copy of this match on the device and
+ * start from it, so a cold start with no signal still shows the roster
+ * (6.6a). initialData, not placeholderData: it survives a failed refetch.
+ */
+export function useMatch(id: string, options?: { live?: boolean; offline?: boolean }) {
   return useQuery({
     queryKey: ['match', id],
-    queryFn: () => matchesApi.get(id),
+    queryFn: options?.offline
+      ? () => matchesApi.get(id).then(
+          (m) => { cacheMatch(m); return m; },
+          (err) => {
+            // The server says no (removed from the team, match deleted): the
+            // device's copy, roster included, goes too. The page treats the
+            // error as not found rather than keep showing the old copy.
+            if (axios.isAxiosError(err) && [403, 404].includes(err.response?.status ?? 0)) forgetMatch(id);
+            throw err;
+          },
+        )
+      : () => matchesApi.get(id),
     enabled: !!id,
     ...(options?.live ? { refetchInterval: 5000 } : {}),
+    ...(options?.offline ? { initialData: () => cachedMatch(id), initialDataUpdatedAt: 0 } : {}),
   });
 }
 
@@ -265,7 +288,12 @@ export function useUpdateScore(matchId: string) {
   return useMutation({
     mutationFn: (data: Partial<Pick<Match, 'homeScore' | 'awayScore' | 'homeSetsWon' | 'awaySetsWon'>>) =>
       matchesApi.updateScore(matchId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['match', matchId] }),
+    onSuccess: () => {
+      // Undo must now reach this adjustment first: only the server's
+      // undo-last knows about it (see clearUndoHistory).
+      clearUndoHistory(matchId);
+      qc.invalidateQueries({ queryKey: ['match', matchId] });
+    },
   });
 }
 
@@ -273,7 +301,10 @@ export function useResetSetScore(matchId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => matchesApi.resetSetScore(matchId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['match', matchId] }),
+    onSuccess: () => {
+      clearUndoHistory(matchId);
+      qc.invalidateQueries({ queryKey: ['match', matchId] });
+    },
   });
 }
 
@@ -285,6 +316,7 @@ export function useResetMatch(matchId: string) {
   return useMutation({
     mutationFn: () => matchesApi.resetMatch(matchId),
     onSuccess: () => {
+      clearUndoHistory(matchId);
       qc.invalidateQueries({ queryKey: ['match', matchId] });
       qc.invalidateQueries({ queryKey: ['analytics', 'match', matchId] });
       qc.invalidateQueries({ queryKey: ['matches'] });
@@ -302,31 +334,79 @@ export function useEvents(matchId: string, setNumber?: number) {
   });
 }
 
-export function useRecordEvent(matchId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: eventsApi.record,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events', matchId] });
-      qc.invalidateQueries({ queryKey: ['analytics', 'match', matchId] });
-      // Scoring events increment homeScore/awayScore server-side; without this,
-      // the live scoreboard (which reads useMatch) shows a stale score until
-      // something else happens to trigger a refetch.
-      qc.invalidateQueries({ queryKey: ['match', matchId] });
-    },
-  });
+/**
+ * After a sync (not after each tap): the match, its events and every
+ * analytics view of it. Keys like ['analytics','report',id] and
+ * ['analytics','zones','match',id] don't start with ['analytics','match'],
+ * so the whole prefix goes. Resolves once the score and events are fresh
+ * (the queue waits for that); analytics refetch in the background, or a
+ * backlog flush would wait on every dashboard query per batch.
+ */
+export function invalidateMatchData(qc: QueryClient, matchId: string) {
+  void qc.invalidateQueries({ queryKey: ['analytics'] });
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: ['events', matchId] }),
+    qc.invalidateQueries({ queryKey: ['match', matchId] }),
+  ]);
 }
 
-export function useUndoEvent(matchId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => eventsApi.undoLast(matchId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['events', matchId] });
-      qc.invalidateQueries({ queryKey: ['analytics', 'match', matchId] });
-      qc.invalidateQueries({ queryKey: ['match', matchId] });
+const NO_ITEMS: QueueItem[] = [];
+
+/** This user's queued taps for a match, and whether the device is offline. */
+export function useEventQueue(matchId: string) {
+  const { user } = useAuth();
+  const items = useSyncExternalStore(subscribeQueue, () => (user ? getQueue(user.id, matchId) : NO_ITEMS));
+  const offline = useSyncExternalStore(subscribeQueue, isOffline);
+  const retry = useCallback((clientKey: string) => { if (user) retryTap(user.id, matchId, clientKey); }, [user, matchId]);
+  const discard = useCallback((clientKey: string) => { if (user) discardTap(user.id, matchId, clientKey); }, [user, matchId]);
+  const discardAll = useCallback(() => { if (user) discardRejected(user.id, matchId); }, [user, matchId]);
+  return {
+    items,
+    offline,
+    canPersist: queueCanPersist(),
+    /** Undo has a tap of ours to take back without the network. */
+    canUndoLocally: user ? hasLocalUndo(user.id, matchId) : false,
+    /** This device's keys on this match, for the two-device warning (6.11). */
+    myKeys: user ? deviceKeys(user.id, matchId) : new Set<string>(),
+    retry,
+    discard,
+    discardAll,
+  };
+}
+
+/**
+ * Record a tap. Always through the queue, online or offline (one code path);
+ * it returns at once and the flush sends it. Throws QueueFullError at the cap.
+ */
+export function useRecordEvent(matchId: string) {
+  const { user } = useAuth();
+  return useCallback(
+    (payload: QueuedEventPayload) => {
+      if (!user) throw new Error('Sign in to record events.');
+      enqueueTap(user.id, matchId, payload);
     },
+    [user, matchId],
+  );
+}
+
+/**
+ * Undo this device's last tap through the queue (6.7). Only when this device
+ * has nothing of its own to undo does it fall back to the server's undo-last,
+ * which needs a connection.
+ */
+export function useUndoEvent(matchId: string) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const online = useMutation({
+    mutationFn: () => eventsApi.undoLast(matchId),
+    onSuccess: () => invalidateMatchData(qc, matchId),
   });
+  const { mutateAsync } = online;
+  const undo = useCallback(async () => {
+    if (user && undoTap(user.id, matchId) === 'queue') return;
+    await mutateAsync();
+  }, [user, matchId, mutateAsync]);
+  return { undo, isPending: online.isPending };
 }
 
 export function useMatchAnalytics(matchId: string) {
@@ -635,12 +715,6 @@ export function useTeamRole(teamId: string) {
   });
 }
 
-/**
- * Ids of the roster entries linked to the signed-in user - their own player
- * records, whose individual stats they may open. Shares the player-portal
- * dashboard query (and its cache); `enabled` lets staff, who can open every
- * player anyway, skip the request.
- */
 /** The caller's linked player records only (GET /player/teams), without the portal's stats. */
 export function useMyPlayerRecords(enabled = true) {
   return useQuery({ queryKey: ['player', 'records'], queryFn: playerPortalApi.teams, enabled });

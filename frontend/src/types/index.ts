@@ -464,6 +464,8 @@ export interface Event {
   isOpponentEvent?: boolean;
   opponentJerseyNumber?: number | null;
   recordedAt: string;
+  /** The recording device's offline-queue key (staff only; null for older taps). */
+  clientKey?: string | null;
 }
 
 export interface StatLine {

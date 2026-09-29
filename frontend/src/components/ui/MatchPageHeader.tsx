@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { confirmLeave } from '../../lib/leaveGuard';
 import { format } from 'date-fns';
 import MatchSubNav from './MatchSubNav';
 import { ArrowLeftIcon, ChevronIcon } from './icons';
@@ -76,6 +77,8 @@ export default function MatchPageHeader({
       <div>
         <Link
           to={`/teams/${teamId}/matches`}
+          // The tracker asks first while taps are waiting to send (6.9).
+          onClick={(e) => { if (!confirmLeave()) e.preventDefault(); }}
           className="btn-secondary inline-flex items-center gap-1.5 text-sm py-1.5 px-3 min-h-[44px]"
         >
           <ArrowLeftIcon className="w-4 h-4" />

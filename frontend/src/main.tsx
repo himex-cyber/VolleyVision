@@ -10,6 +10,7 @@ import { features } from './config/features';
 import { isNative, initNative } from './lib/native';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
+import QueueFlusher from './components/tracking/QueueFlusher';
 import PageLoadingFallback from './components/ui/PageLoadingFallback';
 
 // Fail-soft: unset VITE_SENTRY_DSN is normal in local dev (see
@@ -140,6 +141,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <QueueFlusher />
         {/* Outer boundary covers the standalone routes (auth, onboarding) that
             render outside Layout. Routes nested under Layout suspend against
             Layout's own inner boundary instead, so the nav chrome stays put

@@ -21,14 +21,8 @@ import {
   hasTeamPermission,
 } from '../services/permission.service';
 import { logAudit } from '../lib/audit';
+import { idempotencyKey } from '../lib/idempotencyKey';
 
-/** Optional duplicate-send protection: sanitized Idempotency-Key header or null. */
-function idempotencyKey(req: Request): string | null {
-  const raw = req.get('Idempotency-Key');
-  if (!raw) return null;
-  const key = raw.trim();
-  return key.length > 0 && key.length <= 128 ? key : null;
-}
 
 export async function getTeamChannel(req: Request, res: Response, next: NextFunction) {
   try {
