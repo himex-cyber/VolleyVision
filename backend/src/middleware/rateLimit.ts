@@ -297,3 +297,16 @@ export const eventWriteRateLimit = createRateLimit({
   keyFn: (req) => (req.user?.userId ? [`event-write:user:${req.user.userId}`] : null), // requireAuth handles the 401
   message: "You're recording events faster than we can keep up with. Wait a moment and try again.",
 });
+
+/**
+ * Offline event batches (6.4) - per user. A batch is up to MAX_EVENT_BATCH taps,
+ * so 60 per 10 minutes covers far more than a whole match flushed at once; it
+ * is separate from eventWriteRateLimit so a device catching up on a set can't
+ * lock its statistician out of live tracking.
+ */
+export const eventBatchRateLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 60,
+  keyFn: (req) => (req.user?.userId ? [`event-batch:user:${req.user.userId}`] : null), // requireAuth handles the 401
+  message: "You're syncing events faster than we can keep up with. Wait a moment and try again.",
+});

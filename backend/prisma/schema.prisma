@@ -606,6 +606,9 @@ model Event {
   @@index([trainingSessionId])
   @@index([recordedAt])
   @@unique([matchId, clientKey])
+  // recordOneEvent's latest-event lookup and the replay (6.3): without it a
+  // match syncing late can walk the global recordedAt index.
+  @@index([matchId, recordedAt])
 
   @@map("events")
 }

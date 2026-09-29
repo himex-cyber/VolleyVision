@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { completeSet, currentSetNumber } from './setOperations';
 import type { MatchScoreState, SetScoreEntry } from './setOperations';
@@ -15,9 +16,13 @@ export function hasWonSet(score: number, opponentScore: number, setNumber: numbe
   return score >= target && score - opponentScore >= 2;
 }
 
-/** Reads a match into the plain state shape the pure set helpers operate on. */
-export async function loadScoreState(matchId: string): Promise<MatchScoreState | null> {
-  const match = await prisma.match.findUnique({
+/**
+ * Reads a match into the plain state shape the pure set helpers operate on.
+ * Inside a transaction pass its client: the module-level one is a separate
+ * connection and wouldn't see the transaction's own uncommitted writes.
+ */
+export async function loadScoreState(matchId: string, db: Prisma.TransactionClient = prisma): Promise<MatchScoreState | null> {
+  const match = await db.match.findUnique({
     where: { id: matchId },
     select: {
       homeScore: true,
@@ -55,8 +60,8 @@ export async function loadScoreState(matchId: string): Promise<MatchScoreState |
  * (`completedSet`) because it can't be worked out afterwards: completion zeroes
  * the running score that undo would otherwise reverse against. See lib/undo.ts.
  */
-export async function checkSetCompletion(matchId: string): Promise<boolean> {
-  const state = await loadScoreState(matchId);
+export async function checkSetCompletion(matchId: string, db: Prisma.TransactionClient = prisma): Promise<boolean> {
+  const state = await loadScoreState(matchId, db);
   if (!state || state.status === 'COMPLETED') return false;
 
   const setNumber = currentSetNumber(state);
@@ -67,7 +72,7 @@ export async function checkSetCompletion(matchId: string): Promise<boolean> {
 
   const next = completeSet(state, homeWinsSet ? 'home' : 'away');
 
-  await prisma.match.update({
+  await db.match.update({
     where: { id: matchId },
     data: {
       homeScore: next.homeScore,

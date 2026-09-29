@@ -37,7 +37,7 @@ export async function runSerializable<T>(fn: (tx: Prisma.TransactionClient) => P
     return await retryOnConflict(() => prisma.$transaction(fn, { isolationLevel: 'Serializable' }));
   } catch (err) {
     if (isSerializationConflict(err)) {
-      throw new AppError(409, 'Someone else changed this at the same moment. Please try again.');
+      throw new AppError(409, 'Someone else changed this at the same moment. Please try again.', 'SERIALIZATION_CONFLICT');
     }
     throw err;
   }

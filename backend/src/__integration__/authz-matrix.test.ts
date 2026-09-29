@@ -140,6 +140,7 @@ const ROWS: Row[] = [
   { name: 'POST player team link', method: 'POST', path: (f) => `/api/v1/players/${f.p1.id}/team-links`, body: (f) => ({ teamId: f.team.id }), expect: STAFF },
   { name: 'DELETE player team link', method: 'DELETE', path: (f) => `/api/v1/players/${f.p1.id}/team-links/${f.team.id}`, expect: STAFF },
   { name: 'POST event', method: 'POST', path: () => '/api/v1/events', body: (f) => ({ matchId: f.match.id, playerId: f.p1.id, eventType: 'KILL', setNumber: 1 }), expect: STAFF },
+  { name: 'POST event batch', method: 'POST', path: () => '/api/v1/events/batch', body: (f) => ({ matchId: f.match.id, events: [{ matchId: f.match.id, playerId: f.p1.id, eventType: 'KILL', setNumber: 1, clientKey: 'authz' }] }), expect: STAFF },
   { name: 'POST chat message', method: 'POST', path: (f) => `/api/v1/channels/${f.channel.id}/messages`, body: () => ({ body: 'hi' }), expect: { outsider: 404, viewer: 403, player: 201 } },
   // No files attached: the permission guard runs before multer, so a caller who
   // passes it gets 400 for the empty upload, and one who doesn't never gets there.
@@ -210,6 +211,7 @@ async function main() {
       assert.equal((await call(base, 'GET', path)).status, expected, `anonymous GET ${path}`);
     }
     assert.equal((await call(base, 'POST', '/api/v1/events', undefined, { matchId: f.match.id })).status, 401, 'anonymous POST event');
+    assert.equal((await call(base, 'POST', '/api/v1/events/batch', undefined, { matchId: f.match.id, events: [] })).status, 401, 'anonymous POST event batch');
 
     // 4.0.1 per-player rule: non-staff get team totals plus only their own row.
     // p2 is the test player's record; p1 (who has the event) and pDel are other players.
