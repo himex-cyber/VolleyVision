@@ -873,3 +873,27 @@ the team panels and no individual data. Emulator (local build): six taps offline
 
 **Verified:** backend `tsc` clean, 63 unit test files, build OK; frontend `tsc`, lint and build clean; integration 3/3
 (matrix 78 routes).
+
+### Production deploy: v9.11.0 and v9.12.0 (2026-09-29)
+
+Karlos applied both migrations and asked Claude to deploy the same day. v9.11.0 was never deployed on its own.
+
+1. **Migrations (Karlos):** `npx prisma migrate deploy` from `backend/` applied `20260929010857_event_client_key` and
+   `20260929034654_event_serving_side` (both additive). No separate backup was taken first; both changes only add a
+   column, an enum type and indexes.
+2. **Link audit C1 (Karlos, read-only):** 1 linked record in production, 1 CHECK: Karlos's own test accounts on team
+   "Tester" (record #99 linked to an account that is Head Coach there). Left for Karlos to keep or unlink.
+3. **Signed Android build:** `npm run android:prod`, then `.\gradlew.bat assembleRelease bundleRelease` (JDK 21): the
+   prod-config guard passed; `apksigner` verified the APK against the upload key (SHA-256 `2E:07:6D:61…8E:43:04`),
+   versionName 9.12.0, versionCode 3; `jarsigner` verified the AAB.
+4. **Deploy:** from a clean `main` = `v9.12.0` (`9b38a8b`), `deploy.ps1`: migrations up to date, deploy live
+   (`6abb7f2153606c0adfda47fc`), smoke check passed (health and db ok, CSP header, unknown team 404). The first attempt
+   failed in the build, before publishing, because a local API left running locked Prisma's engine file; it passed
+   once that was stopped.
+
+**Live checks:**
+- `POST /api/v1/events/batch` without a token answers 401 (the route exists; v9.10.0 had none).
+- `GET /api/v1/analytics/matches/nope/rotations` and `/teams/nope/advanced` answer the guards' JSON 404.
+- The production bundle contains the offline queue (`vv_queue:`) and the tracker's "Who serves first?", "All saved"
+  and "Offline —" text.
+- `/health`: `{"status":"ok","db":"ok"}`. Sentry: no unresolved issues in the hour after the deploy.
