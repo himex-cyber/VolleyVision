@@ -50,6 +50,27 @@ if (info) {
   for (const [domain, rules] of Object.entries(ats.NSExceptionDomains ?? {})) {
     if (rules?.NSExceptionAllowsInsecureHTTPLoads === true) problems.push(`Info.plist: ${domain} allows insecure http`);
   }
+  // Chat and feedback file inputs offer Take Photo: without this text iOS
+  // kills the app the moment it's chosen.
+  for (const key of ['NSCameraUsageDescription', 'NSPhotoLibraryUsageDescription']) {
+    if (typeof info[key] !== 'string' || !info[key].trim()) problems.push(`Info.plist: ${key} is missing`);
+  }
+  // A boolean false (not the string NO) skips the export-compliance question on every upload.
+  if (info.ITSAppUsesNonExemptEncryption !== false) problems.push('Info.plist: ITSAppUsesNonExemptEncryption must be <false/>');
+}
+
+// iPhone only (iPad would need its own screenshots and review) and iOS 16.4+
+// (Web Locks, crypto.randomUUID, and the web inspector in release builds).
+const pbxPath = path.join(root, 'App/App.xcodeproj/project.pbxproj');
+if (!existsSync(pbxPath)) {
+  problems.push(`${pbxPath} is missing`);
+} else {
+  const pbx = readFileSync(pbxPath, 'utf8');
+  const values = (key) => [...pbx.matchAll(new RegExp(`${key} = ([^;]+);`, 'g'))].map((m) => m[1]);
+  const families = values('TARGETED_DEVICE_FAMILY');
+  if (!families.length || families.some((v) => v !== '1')) problems.push(`project.pbxproj: TARGETED_DEVICE_FAMILY must be 1 (iPhone only), found ${families.join(', ') || 'none'}`);
+  const targets = values('IPHONEOS_DEPLOYMENT_TARGET');
+  if (targets.length !== 4 || targets.some((v) => v !== '16.4')) problems.push(`project.pbxproj: IPHONEOS_DEPLOYMENT_TARGET must be 16.4 in all four configurations, found ${targets.join(', ') || 'none'}`);
 }
 
 for (const w of warnings) console.warn(`WARNING: ${w}`);
@@ -57,4 +78,4 @@ if (problems.length) {
   console.error(`iOS prod-config check FAILED:\n  - ${problems.join('\n  - ')}`);
   process.exit(1);
 }
-console.log('iOS prod-config check passed: no remote server URL, no cleartext, default origin, no ATS exceptions.');
+console.log('iOS prod-config check passed: no remote server URL, no cleartext, default origin, no ATS exceptions, iPhone-only iOS 16.4 with its permission texts.');

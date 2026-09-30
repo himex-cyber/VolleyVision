@@ -10,15 +10,26 @@ import plist from 'plist';
 
 const script = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), 'check-ios-prod.mjs');
 
-const goodPlist = { CFBundleDisplayName: 'VolleyVision' };
+const goodPlist = {
+  CFBundleDisplayName: 'VolleyVision',
+  ITSAppUsesNonExemptEncryption: false,
+  NSCameraUsageDescription: 'VolleyVision uses the camera so you can take a photo to share in team chat.',
+  NSPhotoLibraryUsageDescription: 'VolleyVision uses your photo library so you can share photos in team chat.',
+};
+// Both build configurations of the project and of the App target.
+const goodPbx = [1, 2, 3, 4].map(() => 'IPHONEOS_DEPLOYMENT_TARGET = 16.4;').join('\n')
+  + '\nTARGETED_DEVICE_FAMILY = 1;\nTARGETED_DEVICE_FAMILY = 1;\n';
 
-function project({ config, info = goodPlist, rawInfo }) {
+function project({ config, info = goodPlist, rawInfo, pbx = goodPbx }) {
   const root = mkdtempSync(path.join(tmpdir(), 'vv-ios-'));
   const app = path.join(root, 'App/App');
   mkdirSync(app, { recursive: true });
+  mkdirSync(path.join(root, 'App/App.xcodeproj'), { recursive: true });
+  if (pbx != null) writeFileSync(path.join(root, 'App/App.xcodeproj/project.pbxproj'), pbx);
   if (config) writeFileSync(path.join(app, 'capacitor.config.json'), JSON.stringify(config));
   if (rawInfo !== undefined) writeFileSync(path.join(app, 'Info.plist'), rawInfo);
-  else if (info) writeFileSync(path.join(app, 'Info.plist'), plist.build(info));
+  // JSON round trip: a key set to undefined is left out, as if never written.
+  else if (info) writeFileSync(path.join(app, 'Info.plist'), plist.build(JSON.parse(JSON.stringify(info))));
   return root;
 }
 const run = (root) => spawnSync(process.execPath, [script, root], { encoding: 'utf8' });
@@ -36,6 +47,14 @@ const cases = [
   ['an insecure exception domain fails', { config: {}, info: { ...goodPlist, NSAppTransportSecurity: { NSExceptionDomains: { 'example.com': { NSExceptionAllowsInsecureHTTPLoads: true } } } } }, 1],
   ['ATS switched off explicitly (false) passes', { config: {}, info: { ...goodPlist, NSAppTransportSecurity: { NSAllowsArbitraryLoads: false } } }, 0],
   ['a missing sync fails', {}, 1],
+  // 8.5.3: settings a build can't do without.
+  ['no camera text fails (Take Photo would crash the app)', { config: {}, info: { ...goodPlist, NSCameraUsageDescription: undefined } }, 1],
+  ['no photo library text fails', { config: {}, info: { ...goodPlist, NSPhotoLibraryUsageDescription: '' } }, 1],
+  ['export compliance as the string NO fails', { config: {}, info: { ...goodPlist, ITSAppUsesNonExemptEncryption: 'NO' } }, 1],
+  ['no export compliance key fails', { config: {}, info: { ...goodPlist, ITSAppUsesNonExemptEncryption: undefined } }, 1],
+  ['iPad support fails', { config: {}, pbx: goodPbx.replace('TARGETED_DEVICE_FAMILY = 1;', 'TARGETED_DEVICE_FAMILY = "1,2";') }, 1],
+  ['iOS 15 fails', { config: {}, pbx: goodPbx.replace('16.4', '15.0') }, 1],
+  ['a missing project fails', { config: {}, pbx: null }, 1],
   ['a missing Info.plist fails', { config: {}, info: null }, 1],
   ['an Info.plist that does not parse fails', { config: {}, rawInfo: '<plist><dict><key>x</key>' }, 1],
 ];
