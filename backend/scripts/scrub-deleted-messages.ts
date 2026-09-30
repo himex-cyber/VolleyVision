@@ -6,9 +6,11 @@
  *   Local:      DATABASE_URL=postgresql://…@localhost… npx ts-node scripts/scrub-deleted-messages.ts [--apply]
  *   Production: npx ts-node scripts/scrub-deleted-messages.ts --prod [--apply]   (backend/.env; take a backup first)
  *
- * A dry run by default: counts only. --apply blanks the text, deletes the
- * attachment rows, then removes the files (best effort). Prints the database's
- * project ref, never its URL, and never message text or file names.
+ * A dry run by default: counts only. --apply removes each batch's files, then
+ * blanks the text and deletes the attachment rows. A batch whose files can't
+ * all be removed keeps its rows, so running it again retries them. Local runs
+ * skip storage (there's no bucket locally). Prints the database's project ref,
+ * never its URL, and never message text or file names.
  */
 import path from 'node:path';
 import { adminScriptTarget, projectRef } from '../src/lib/adminScript';
@@ -42,18 +44,26 @@ async function main() {
       return;
     }
 
-    let missed = 0;
+    if (!target.prod) console.log('Local run: storage skipped.');
+    let erased = 0;
+    let kept = 0;
     for (let i = 0; i < messages.length; i += BATCH) {
       const batch = messages.slice(i, i + BATCH);
+      const paths = batch.flatMap((m) => m.attachments.map((a) => a.storagePath));
+      // Files first: once the rows are gone, nothing records where they are.
+      if (target.prod && paths.length && (await removeStoredFiles(paths)) > 0) {
+        kept += batch.length;
+        continue;
+      }
       const ids = batch.map((m) => m.id);
       await prisma.$transaction([
         prisma.messageAttachment.deleteMany({ where: { messageId: { in: ids } } }),
         prisma.message.updateMany({ where: { id: { in: ids } }, data: { body: null } }),
       ]);
-      missed += await removeStoredFiles(batch.flatMap((m) => m.attachments.map((a) => a.storagePath)));
+      erased += batch.length;
     }
-    console.log(`Erased ${messages.length} message(s) and ${files} attachment row(s).`);
-    if (missed) console.log(`${missed} file(s) could not be removed from storage (see the errors above); their rows are gone.`);
+    console.log(`Erased ${erased} message(s).`);
+    if (kept) console.log(`${kept} message(s) kept: their files couldn't be removed (see the errors above). Run it again to retry.`);
   } finally {
     await prisma.$disconnect();
   }

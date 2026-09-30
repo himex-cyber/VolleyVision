@@ -7,6 +7,7 @@ import {
   leadingSide,
   currentSetNumber,
   parseSetScoresEdit,
+  statusAfterSetEdit,
 } from './setOperations';
 import type { MatchScoreState } from './setOperations';
 import { checkMatchIntegrity } from './matchIntegrity';
@@ -249,5 +250,15 @@ describe('parseSetScoresEdit (9.0.5)', () => {
     refused(Array.from({ length: 6 }, (_, i) => s(i + 1, 25, 20)));
     refused([s(1, 25, 20), s(2, 25, 20), s(3, 25, 20), s(4, 25, 20)]); // a set after the match was won
     refused([{ set: 1, home: '25', away: 20 }]);
+  });
+});
+
+describe('statusAfterSetEdit (9.0.5 review)', () => {
+  it('a side with 3 sets completes the match; fewer reopens a completed one', () => {
+    assert.equal(statusAfterSetEdit('IN_PROGRESS', { homeSetsWon: 3, awaySetsWon: 1 }), 'COMPLETED');
+    assert.equal(statusAfterSetEdit('COMPLETED', { homeSetsWon: 2, awaySetsWon: 0 }), 'IN_PROGRESS');
+    assert.equal(statusAfterSetEdit('IN_PROGRESS', { homeSetsWon: 1, awaySetsWon: 1 }), 'IN_PROGRESS');
+    assert.equal(statusAfterSetEdit('SCHEDULED', { homeSetsWon: 0, awaySetsWon: 0 }), 'SCHEDULED');
+    assert.equal(statusAfterSetEdit('CANCELLED', { homeSetsWon: 1, awaySetsWon: 0 }), 'CANCELLED');
   });
 });

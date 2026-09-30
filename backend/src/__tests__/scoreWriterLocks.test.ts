@@ -213,8 +213,10 @@ async function main() {
     world();
     let data: any;
     db.match.update = async (a: any) => { data = a.data; return {}; };
+    db.match.findUnique = async () => ({ status: 'COMPLETED' });
     await applyUpdateMatch('M', { setScores: [{ set: 1, home: 25, away: 20 }, { set: 2, home: 18, away: 12 }] });
     assert.deepEqual([data.homeSetsWon, data.awaySetsWon, data.manualScoreOverride], [2, 0, true]);
+    assert.equal(data.status, 'IN_PROGRESS', 'two sets reopen a completed match');
     assert.deepEqual(data.setScores, [{ set: 1, home: 25, away: 20 }, { set: 2, home: 18, away: 12 }]);
     await assert.rejects(applyUpdateMatch('M', { setScores: [{ set: 1, home: 20, away: 20 }] }), (e: any) => e.statusCode === 400);
   }

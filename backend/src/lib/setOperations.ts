@@ -136,3 +136,13 @@ export function parseSetScoresEdit(
   }
   return { setScores, homeSetsWon: won.home, awaySetsWon: won.away };
 }
+
+/**
+ * The match status after a set-score edit, so status and sets won can't
+ * disagree: 3 sets completes the match, fewer reopens a completed one, and
+ * any other status (scheduled, cancelled) is left as the coach set it.
+ */
+export function statusAfterSetEdit(current: string, won: { homeSetsWon: number; awaySetsWon: number }): string {
+  if (won.homeSetsWon >= SETS_TO_WIN_MATCH || won.awaySetsWon >= SETS_TO_WIN_MATCH) return 'COMPLETED';
+  return current === 'COMPLETED' ? 'IN_PROGRESS' : current;
+}

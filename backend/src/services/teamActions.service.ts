@@ -6,7 +6,7 @@ import { getUserTeamRole } from './permission.service';
 import { AppError } from '../middleware/errorHandler';
 import { withMatchLock } from './eventRecording.service';
 import { parseMatchDate } from '../lib/matchDate';
-import { parseSetScoresEdit } from '../lib/setOperations';
+import { parseSetScoresEdit, statusAfterSetEdit } from '../lib/setOperations';
 
 /**
  * Stabilization Pass 2 — single "apply the change" function per structural
@@ -61,23 +61,27 @@ export async function applyUpdateMatch(matchId: string, p: MatchUpdatePayload) {
   // 9.0.5: an edit of the set scores is authored, like End Set: sets won follow
   // it, and the override stops the next replay from overwriting it. Checked
   // again here for approvals queued before the controller checked it.
-  let sets = {};
-  if (p.setScores !== undefined) {
-    const edit = parseSetScoresEdit(p.setScores);
-    if ('error' in edit) throw new AppError(400, edit.error);
-    sets = { ...edit, manualScoreOverride: true };
-  }
-  const write = (db: Prisma.TransactionClient) => db.match.update({
-    where: { id: matchId },
-    data: {
-      matchDate: p.matchDate ? parseMatchDate(p.matchDate) ?? new Date(p.matchDate) : undefined,
-      opponent: p.opponent,
-      competition: p.competition,
-      venue: p.venue,
-      status: p.status as any,
-      ...sets,
-    },
-  });
+  const edit = p.setScores === undefined ? null : parseSetScoresEdit(p.setScores);
+  if (edit && 'error' in edit) throw new AppError(400, edit.error);
+  const write = async (db: Prisma.TransactionClient) => {
+    // A status sent with the edit wins; otherwise it follows the sets won.
+    let status = p.status;
+    if (edit && status === undefined) {
+      const current = await db.match.findUnique({ where: { id: matchId }, select: { status: true } });
+      if (current) status = statusAfterSetEdit(current.status, edit);
+    }
+    return db.match.update({
+      where: { id: matchId },
+      data: {
+        matchDate: p.matchDate ? parseMatchDate(p.matchDate) ?? new Date(p.matchDate) : undefined,
+        opponent: p.opponent,
+        competition: p.competition,
+        venue: p.venue,
+        status: status as any,
+        ...(edit ? { ...edit, manualScoreOverride: true } : {}),
+      },
+    });
+  };
   // status and setScores are also written by the replay a tap can trigger;
   // without the lock one of the two writes silently wins.
   return p.status !== undefined || p.setScores !== undefined ? withMatchLock(matchId, write) : write(prisma);
