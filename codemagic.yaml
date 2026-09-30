@@ -42,7 +42,11 @@ workflows:
       - name: iOS prod-config check
         script: node scripts/check-ios-prod.mjs
       - name: Use the signing profiles
-        script: xcode-project use-profiles --project ios/App/App.xcodeproj
+        # Internal TestFlight only, enforced by Apple: this build has the web
+        # inspector on, so it can never go to an external group or review.
+        # Phase 9 drops this together with CAP_IOS_INSPECTABLE.
+        script: |
+          xcode-project use-profiles --project ios/App/App.xcodeproj --custom-export-options='{"testFlightInternalTestingOnly": true}'
       - name: App version from android/app/build.gradle (the one version source)
         # Not agvtool: the project has no VERSIONING_SYSTEM, and Info.plist
         # reads $(MARKETING_VERSION). BSD sed on the Mac, hence -i ''.
@@ -53,17 +57,18 @@ workflows:
           sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $V;/" ios/App/App.xcodeproj/project.pbxproj
           echo "Marketing version $V"
       - name: Build number = latest TestFlight build + 1
-        # When the lookup fails (the very first build has nothing on TestFlight
-        # yet), fall back to Codemagic's BUILD_NUMBER, this workflow's own build
-        # count: every upload comes from here, so it is never below the latest
-        # TestFlight number + 1, and a failed lookup can't reuse a number.
+        # No build on TestFlight yet: the lookup prints nothing, so this is 1.
+        # A lookup error (key, Apple ID, API down) falls back to Codemagic's
+        # BUILD_NUMBER, this workflow's own build count: every upload comes from
+        # here, so it is never below the latest TestFlight number + 1, and a
+        # failed lookup can't reuse a number.
         script: |
           set -e
           case "$APP_STORE_APPLE_ID" in
             ''|*[!0-9]*) echo "Set APP_STORE_APPLE_ID in codemagic.yaml to the app's numeric Apple ID"; exit 1 ;;
           esac
           if LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID"); then
-            N=$((LATEST + 1))
+            N=$(( ${LATEST:-0} + 1 ))
           else
             echo "TestFlight lookup failed or found no build; using Codemagic's BUILD_NUMBER ($BUILD_NUMBER)" >&2
             N=$BUILD_NUMBER
