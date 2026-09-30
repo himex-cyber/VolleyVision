@@ -13,7 +13,8 @@
     "build:native:local": "tsc && vite build --mode native-local",
     "build:native:prod": "tsc && vite build --mode native-prod",
     "android:local": "node scripts/android.mjs local",
-    "android:prod": "node scripts/android.mjs prod"
+    "android:prod": "node scripts/android.mjs prod",
+    "ios:prod": "node scripts/ios.mjs prod"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",
