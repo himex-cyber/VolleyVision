@@ -5,7 +5,20 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 ## v9.15.0 — Unreleased
 
 Phase 8.5.0 (fixes carried from the Phase 8 review) and Phase 8.5 (the iPhone
-app). No migration.
+app). No migration. The Android app's version is 9.15.0 too; no Android build is
+shared with this release (the next one is versionCode 6).
+
+**VolleyVision for iPhone (TestFlight, invite-only)**
+- **The app now runs on iPhone**, with everything the Android app does: tracking
+  online and offline (taps survive the app being closed), dashboards and date
+  filters, team chat with photos from the camera or library, and Copy Report.
+  It's iPhone only, needs iOS 16.4 or later, and for now reaches invited
+  testers only, through Apple's TestFlight app.
+- It fits notched iPhones and the Dynamic Island, and every screen has an
+  on-screen way back (iPhones have no Back button). CSV downloads and printing
+  stay on the website for now, and links in emails open the website.
+- It needs this server version: the server has to accept the iPhone app's
+  requests before it can sign in.
 
 **Privacy**
 - **The team members list no longer shows other members' account ids, or
