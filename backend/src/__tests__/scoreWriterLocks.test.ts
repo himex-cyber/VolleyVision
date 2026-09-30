@@ -98,10 +98,20 @@ async function main() {
     assert.equal(r.error, undefined);
     assert.equal(m.homeScore, 10, 'the stale absolute is ignored when a delta comes with it');
   }
-  for (const body of [{ homeDelta: 1.5 }, { homeDelta: '1' }, { awayDelta: 101 }]) {
+  // 8.5.0.3: absolutes too, 400 rather than a negative score or a Prisma 500.
+  for (const body of [{ homeDelta: 1.5 }, { homeDelta: '1' }, { awayDelta: 101 },
+    { homeScore: -1 }, { awayScore: 2.5 }, { homeScore: 'abc' }, { homeScore: '5' }, { awayScore: 1e10 },
+    { homeSetsWon: -1 }, { awaySetsWon: 1.5 }, { homeSetsWon: 'x' }, { homeDelta: 1, homeScore: -3 }]) {
     world();
     const r = await call(updateScore, { params: { id: 'M' }, body });
     assert.equal(r.error?.statusCode, 400, `400 for ${JSON.stringify(body)}`);
+  }
+
+  {
+    const m = world({ homeScore: 3 });
+    const r = await call(updateScore, { params: { id: 'M' }, body: { homeScore: 0, awayScore: null } });
+    assert.equal(r.error, undefined, '0 is a valid score and null means "not sent"');
+    assert.equal(m.homeScore, 0);
   }
 
   // A set closed by a delta marks that adjustment, still under the lock.
