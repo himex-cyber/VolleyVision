@@ -158,7 +158,9 @@ export async function planAccountDeletion(userId: string) {
     prisma.message.count({ where: { senderId: userId } }),
     prisma.messageAttachment.count({ where: { OR: [{ message: { senderId: userId } }, { uploadedByUserId: userId }] } }),
     prisma.player.count({ where: { userId } }),
-    prisma.invitation.count({ where: { email: { equals: email, mode: 'insensitive' } } }),
+    // Compared as the deletion does: the address was typed, maybe with spaces.
+    prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM invitations WHERE lower(trim(email)) = ${email}`
+      .then(([row]) => Number(row.n)),
     prisma.auditLog.count({ where: { userId } }),
   ]);
   return { blockers: found, messages, files, players, invitations, auditRows };

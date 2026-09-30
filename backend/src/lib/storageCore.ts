@@ -24,10 +24,12 @@ const OWN = (key: string) => key.startsWith('vv_') && key !== 'vv_probe';
 export function createNativeStore(prefs: KeyValue) {
   const memory = new Map<string, string>();
   let chain: Promise<void> = Promise.resolve();
+  let failed = false;
   // ponytail: writes land a moment later; an app killed within that moment can
   // lose the last tap. flush() on pause and before sign-out narrows it.
+  // A failed write doesn't stop later ones, but it's remembered (writeFailed).
   const enqueue = (write: () => Promise<void>) => {
-    chain = chain.then(write).catch(() => undefined);
+    chain = chain.then(write).catch(() => { failed = true; });
   };
 
   return {
@@ -51,10 +53,9 @@ export function createNativeStore(prefs: KeyValue) {
         for (const key of old) legacy.remove(key);
       }
       const { keys } = await prefs.keys();
-      for (const key of keys.filter(OWN)) {
-        const { value } = await prefs.get({ key });
-        if (value != null) memory.set(key, value);
-      }
+      // In parallel: every read is a native bridge round trip before first render.
+      const values = await Promise.all(keys.filter(OWN).map(async (key) => [key, (await prefs.get({ key })).value] as const));
+      for (const [key, value] of values) if (value != null) memory.set(key, value);
       return true;
     },
     get: (key: string): string | null => memory.get(key) ?? null,
@@ -69,6 +70,8 @@ export function createNativeStore(prefs: KeyValue) {
     keys: (prefix: string): string[] => [...memory.keys()].filter((k) => k.startsWith(prefix)),
     /** Waits for every write so far. */
     flush: (): Promise<void> => chain,
+    /** True once any write failed: what's in memory may not survive a restart. */
+    writeFailed: (): boolean => failed,
   };
 }
 

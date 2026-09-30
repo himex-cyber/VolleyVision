@@ -14,7 +14,7 @@ import {
   removeItem, resetSending, retryItem, undoNewest,
 } from './eventQueueCore';
 import type { FailureKind, QueueItem, QueuedEventPayload } from './eventQueueCore';
-import { storageGet, storageKeys, storageRemove, storageSet, storageWorks } from './safeStorage';
+import { storageGet, storageKeys, storageRemove, storageSet, storageWorks, storageDurable } from './safeStorage';
 import { getToken } from './tokenStorage';
 
 const QUEUE_PREFIX = 'vv_queue:';
@@ -116,7 +116,7 @@ export function getQueue(userId: string, matchId: string): QueueItem[] {
 
 /** False when this device can't keep taps across a restart (blocked or full storage). */
 export function queueCanPersist(): boolean {
-  return storageWorks() && !persistFailed;
+  return storageWorks() && storageDurable() && !persistFailed;
 }
 
 /** Matches with anything still queued for this user. */

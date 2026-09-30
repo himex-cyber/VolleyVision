@@ -85,6 +85,16 @@ async function main() {
     store.set('vv_token', 'y');
     await store.flush();
     assert.equal(data.get('vv_token'), 'y');
+    // ...but it's reported, so the queue knows taps may not survive a restart.
+    assert.equal(store.writeFailed(), true);
+  }
+  {
+    const { prefs } = fakePrefs();
+    const store = createNativeStore(prefs);
+    await store.hydrate();
+    store.set('vv_token', 'ok');
+    await store.flush();
+    assert.equal(store.writeFailed(), false, 'no failure, no flag');
   }
 
   // The frontend copy (no test runner there) must not drift from this one.

@@ -9,6 +9,9 @@ export const SITE_URL = 'https://volleyvision-app.netlify.app';
 
 export type LegalPage = 'privacy' | 'terms' | 'delete-account' | 'support';
 
+/** The pages linked from the avatar menu and the signed-out footer. */
+export const LEGAL_LINKS: readonly [LegalPage, string][] = [['privacy', 'Privacy'], ['terms', 'Terms'], ['support', 'Support']];
+
 // The one config spot for the legal details (9.2). The static pages in
 // public/ repeat them, and scripts/check-legal.mjs fails CI if they differ.
 export const LEGAL_ENTITY = 'Himex Trading Ltd';
