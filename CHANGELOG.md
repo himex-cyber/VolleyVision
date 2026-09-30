@@ -2,10 +2,10 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.15.0 — Unreleased
+## v9.15.0 — 2026-09-30
 
 Phase 8.5.0 (fixes carried from the Phase 8 review) and Phase 8.5 (the iPhone
-app). No migration. The Android app's version is 9.15.0 too; no Android build is
+app). No migration. Released, not yet deployed. The Android app's version is 9.15.0 too; no Android build is
 shared with this release (the next one is versionCode 6).
 
 **VolleyVision for iPhone (TestFlight, invite-only)**
