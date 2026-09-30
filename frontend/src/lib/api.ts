@@ -84,14 +84,14 @@ export function isRateLimitedError(err: unknown): boolean {
   return axios.isAxiosError(err) && err.response?.status === 429;
 }
 
-/** Every mutation in this app surfaces backend errors the same way: the
- *  Express error middleware puts a user-facing string at response.data.error.
- *  One shared extractor instead of an `any`-typed destructure at every call site. */
 /** 426: this app build is below the API's minimum version (backend lib/clientVersion). */
 export function isAppOutdatedError(err: unknown): boolean {
   return axios.isAxiosError(err) && err.response?.status === 426;
 }
 
+/** Every mutation in this app surfaces backend errors the same way: the
+ *  Express error middleware puts a user-facing string at response.data.error.
+ *  One shared extractor instead of an `any`-typed destructure at every call site. */
 export function getApiErrorMessage(err: unknown, fallback: string): string {
   if (isAppOutdatedError(err)) return 'Please update VolleyVision to keep going.';
   if (axios.isAxiosError(err)) {

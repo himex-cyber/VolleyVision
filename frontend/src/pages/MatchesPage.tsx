@@ -28,7 +28,9 @@ export default function MatchesPage() {
 
   const [filters, setFilters] = useState({ opponent: '', status: '', from: '', to: '' });
   // A backwards range is left out of the query: the server rejects it with a 400.
-  const badRange = !!filters.from && !!filters.to && filters.from > filters.to;
+  // Date.parse, not a string compare: a five-digit year sorts wrongly as text
+  // (the server refuses it anyway; NaN compares false, so that path shows its 400).
+  const badRange = Date.parse(filters.from) > Date.parse(filters.to);
   const activeFilters = {
     opponent: filters.opponent || undefined,
     status:   filters.status   || undefined,

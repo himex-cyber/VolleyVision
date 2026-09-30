@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMyFeedback } from '../../hooks';
 import { feedbackApi, getApiErrorMessage } from '../../lib/api';
 import type { Feedback, FeedbackStatus, FeedbackType } from '../../types/feedback';
@@ -46,6 +46,13 @@ export const TYPE_OPTIONS: FeedbackType[] = ['BUG', 'FEATURE_REQUEST', 'GENERAL'
  */
 function AttachmentChip({ feedbackId, a }: { feedbackId: string; a: Feedback['attachments'][number] }) {
   const [state, setState] = useState<{ loading: boolean; url?: string; error?: string }>({ loading: false });
+
+  // Drop the link before the signed URL expires, so a later tap fetches a fresh one.
+  useEffect(() => {
+    if (!state.url) return;
+    const t = setTimeout(() => setState({ loading: false }), 50 * 60_000);
+    return () => clearTimeout(t);
+  }, [state.url]);
 
   async function fetchUrl() {
     setState({ loading: true });
