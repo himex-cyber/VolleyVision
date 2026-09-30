@@ -1055,6 +1055,6 @@ Karlos's go-ahead after `.\backup.ps1` and the Netlify change (C3). No migration
 - The production bundle contains the update message, `getPlatform`, "Pick an earlier start date", "Open attachment"
   and "Back to home". `/health`: `{"status":"ok","db":"ok"}`.
 - Sentry: no unresolved issues in the hour of the deploy.
-- Not checked live (covered by the integration tests): the members-list masking for a signed-in player; a real email
-  through nodemailer 10 (Karlos triggers one password reset).
+- A real email through nodemailer 10: Karlos triggered a password reset on production and it arrived (30 Sept).
+- Not checked live (covered by the integration tests): the members-list masking for a signed-in player.
 
