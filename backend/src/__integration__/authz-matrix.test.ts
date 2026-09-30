@@ -206,7 +206,17 @@ async function main() {
       const mine = (await call(base, 'GET', '/api/v1/users/me/teams', token)).body as { team: { id: string; ownerId: unknown } }[];
       assert.ok(mine.some((m) => m.team.id === f.team.id), `${who}: /users/me/teams lists the team`);
       assert.ok(mine.every((m) => m.team.ownerId === null), `${who} saw the owner's account id in /users/me/teams`);
+      // 9.0.10 (Opus review): the match detail and the coach portal carry team rows too.
+      const match = (await call(base, 'GET', `/api/v1/matches/${f.match.id}`, token)).body;
+      assert.equal(match.team.ownerId, null, `${who} saw the owner's account id on a match`);
+      const portal = (await call(base, 'GET', '/api/v1/coach/teams', token)).body as { member: { id: string; ownerId: unknown }[] };
+      const dash = (await call(base, 'GET', '/api/v1/coach/dashboard', token)).body as { memberTeams: { id: string; ownerId: unknown }[] };
+      for (const t of [...portal.member, ...dash.memberTeams].filter((x) => x.id === f.team.id)) {
+        assert.equal(t.ownerId, null, `${who} saw the owner's account id in the coach portal`);
+      }
+      assert.ok(portal.member.some((t) => t.id === f.team.id), `${who}: /coach/teams lists the team`);
     }
+    assert.equal((await call(base, 'GET', `/api/v1/matches/${f.match.id}`, f.manager.token)).body.team.ownerId, f.owner.id, 'a manager sees it on a match');
     for (const t of [f.manager.token, f.owner.token]) {
       const res = await call(base, 'GET', `/api/v1/teams/${f.team.id}`, t);
       assert.equal(res.body.ownerId, f.owner.id, 'a manager and the owner see the owner id');

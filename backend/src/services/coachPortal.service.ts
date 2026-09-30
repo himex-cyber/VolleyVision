@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { MatchStatus } from '@prisma/client';
+import { maskOwner } from '../lib/playerPrivacy';
+import { Permission, roleHasPermission } from '../lib/rolePermissions';
 
 const teamSummaryInclude = {
   _count: { select: { players: true, matches: true } },
@@ -21,7 +23,11 @@ export async function getCoachMemberTeams(userId: string) {
     },
     orderBy: { joinedAt: 'desc' },
   });
-  return memberships.map((m) => ({ ...m.team, memberRole: m.role }));
+  // Owner id only for members who manage the roster (9.0.2); never the owner here.
+  return memberships.map((m) => ({
+    ...maskOwner(m.team, roleHasPermission(m.role, Permission.MANAGE_MEMBERS), userId),
+    memberRole: m.role,
+  }));
 }
 
 export async function getCoachingStats(userId: string) {

@@ -50,7 +50,8 @@ type ScrubbableEvent = {
 
 // 9.0.9: the client's IP, as Netlify and common proxies/CDNs forward it.
 const IP_HEADERS = new Set([
-  'x-forwarded-for', 'x-real-ip', 'x-nf-client-connection-ip', 'cf-connecting-ip', 'true-client-ip',
+  'x-forwarded-for', 'x-real-ip', 'x-nf-client-connection-ip', 'client-ip', 'forwarded',
+  'cf-connecting-ip', 'true-client-ip',
 ]);
 
 export function scrubRequest<T extends ScrubbableEvent>(event: T): T {

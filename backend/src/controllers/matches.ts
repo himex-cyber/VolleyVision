@@ -9,10 +9,10 @@ import { checkSetCompletion, loadScoreState } from '../lib/scoring';
 import { resetMatchScore, parseSetScoresEdit } from '../lib/setOperations';
 import type { MatchScoreState } from '../lib/setOperations';
 import { logAudit } from '../lib/audit';
-import { maskOtherUserIds } from '../lib/playerPrivacy';
+import { maskOtherUserIds, maskOwner } from '../lib/playerPrivacy';
 import { parseDateWindow, matchDateWhere } from '../lib/dateWindow';
 import { parseMatchDate } from '../lib/matchDate';
-import { getAccessTier, seesEveryPlayer } from '../services/permission.service';
+import { getAccessTier, seesEveryPlayer, canManageMembers } from '../services/permission.service';
 import { createApprovalRequest } from '../services/approval.service';
 import { applyCreateMatch, applyUpdateMatch, applyDeleteMatch } from '../services/teamActions.service';
 import { withMatchLock } from '../services/eventRecording.service';
@@ -67,7 +67,8 @@ export async function getMatch(req: Request, res: Response, next: NextFunction) 
     if (!match) throw new AppError(404, 'Match not found.');
     const callerId = req.user?.userId ?? null;
     const players = maskOtherUserIds(match.team.players, await seesEveryPlayer(callerId, match.teamId), callerId);
-    res.json({ ...match, team: { ...match.team, players } });
+    const canManage = callerId ? await canManageMembers(callerId, match.teamId) : false;
+    res.json({ ...match, team: maskOwner({ ...match.team, players }, canManage, callerId) });
   } catch (err) {
     next(err);
   }

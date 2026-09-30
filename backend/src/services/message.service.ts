@@ -282,11 +282,14 @@ export async function editMessage(messageId: string, userId: string, rawBody: un
   if (rejection) throw new AppError(rejection.status, rejection.error);
 
   const body = requireValidBody(rawBody);
-  const message = await prisma.message.update({
-    where: { id: messageId },
+  // Only while it's still live: a delete committed since the read above must
+  // not get its text written back (9.0.8 erases deleted messages).
+  const { count } = await prisma.message.updateMany({
+    where: { id: messageId, deletedAt: null },
     data: { body, editedAt: new Date() },
-    include: messageInclude,
   });
+  if (count === 0) throw new AppError(409, 'This message is no longer available.');
+  const message = await prisma.message.findUniqueOrThrow({ where: { id: messageId }, include: messageInclude });
   // An edited message keeps its attachments — re-sign them for the response.
   const [dto] = await withSignedUrls([serializeMessage(message, userId)]);
   return dto;

@@ -12,6 +12,7 @@ const event: Parameters<typeof scrubRequest>[0] = scrubRequest({
     headers: {
       Authorization: 'Bearer t', cookie: 'c', 'X-Forwarded-For': '203.0.113.9', 'x-real-ip': '203.0.113.9',
       'x-nf-client-connection-ip': '203.0.113.9', 'CF-Connecting-IP': '203.0.113.9', 'true-client-ip': '203.0.113.9',
+      'client-ip': '203.0.113.9', Forwarded: 'for=203.0.113.9',
       'x-client': 'android/9.15.0', 'user-agent': 'UA',
     },
   },
