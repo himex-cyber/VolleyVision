@@ -9,6 +9,7 @@ import app from '../index';
 import { prisma } from '../lib/prisma';
 import { generateToken } from '../services/auth.service';
 import { defaultAccessTiers } from '../services/permission.service';
+import { CURRENT_TERMS_VERSION } from '../lib/terms';
 
 export { prisma };
 
@@ -27,10 +28,14 @@ export const RUN = `it${Date.now().toString(36)}`;
 
 export type TestUser = { id: string; email: string; token: string };
 
-export async function makeUser(key: string): Promise<TestUser> {
+/** A verified user who has accepted the current Terms, unless `terms: false` (9.3). */
+export async function makeUser(key: string, { terms = true } = {}): Promise<TestUser> {
   const email = `${RUN}-${key}@integration.test`;
   const user = await prisma.user.create({
-    data: { email, passwordHash: 'x', firstName: key, lastName: 'Test', emailVerifiedAt: new Date() },
+    data: {
+      email, passwordHash: 'x', firstName: key, lastName: 'Test', emailVerifiedAt: new Date(),
+      ...(terms ? { termsAcceptedAt: new Date(), termsVersion: CURRENT_TERMS_VERSION } : {}),
+    },
   });
   return { id: user.id, email, token: generateToken({ userId: user.id, email, role: user.role, tv: 0 }) };
 }

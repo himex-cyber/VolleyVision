@@ -21,6 +21,7 @@ import {
   hasTeamPermission,
 } from '../services/permission.service';
 import { logAudit } from '../lib/audit';
+import { assertTermsAccepted } from '../services/auth.service';
 import { idempotencyKey } from '../lib/idempotencyKey';
 
 
@@ -104,6 +105,7 @@ export async function updateMessage(req: Request, res: Response, next: NextFunct
     // to VIEWER) loses it immediately, even for their own old messages.
     const allowed = await hasTeamPermission(req.user.userId, teamId, Permission.POST_MESSAGE);
     if (!allowed) throw new AppError(403, 'You do not have permission to perform this action.');
+    await assertTermsAccepted(req.user.userId);
     const message = await editMessage(req.params.messageId, req.user.userId, req.body?.body);
     res.json(message);
   } catch (err) {

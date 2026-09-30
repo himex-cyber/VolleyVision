@@ -199,6 +199,9 @@ export interface User {
   signupIntent?: SignupIntent | null;
   emailVerified: boolean;
   createdAt?: string;
+  // 9.3: the app asks for the Terms when true. Absent from a server older than
+  // v9.17.0 (and from a user cached before it), which means "don't ask".
+  termsRequired?: boolean;
 }
 
 export interface AuthResponse {

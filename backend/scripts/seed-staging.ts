@@ -16,6 +16,7 @@ import bcrypt from 'bcryptjs';
 import { EventType, Position, ServingSide, TeamRole, UserRole } from '@prisma/client';
 import { stagingGuardError } from '../src/lib/stagingGuard';
 import { scoringTeam } from '../src/lib/scoringRules';
+import { CURRENT_TERMS_VERSION } from '../src/lib/terms';
 
 // Prisma Client loads backend/.env (prod) on its own for any variable the shell
 // didn't set, so the guard inspects the resolved DATABASE_URL itself rather
@@ -129,7 +130,8 @@ async function main() {
   const userIds: Record<string, string> = {};
   for (const u of USERS) {
     const email = `staging+${u.key}@volleyvision.test`;
-    const data = { firstName: u.firstName, lastName: 'Staging', role: u.role, passwordHash, emailVerifiedAt: now };
+    const data = { firstName: u.firstName, lastName: 'Staging', role: u.role, passwordHash, emailVerifiedAt: now,
+      termsAcceptedAt: now, termsVersion: CURRENT_TERMS_VERSION }; // 9.3: no Terms step for seed logins
     const user = await prisma.user.upsert({ where: { email }, update: data, create: { email, ...data } });
     userIds[u.key] = user.id;
   }

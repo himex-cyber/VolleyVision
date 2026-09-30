@@ -8,6 +8,8 @@ import { requireAuth } from '../middleware/auth';
 import { chatPostRateLimit } from '../middleware/rateLimit';
 import { requireChannelPermission, requireTeamPermission } from '../middleware/permissions';
 import { Permission } from '../services/permission.service';
+import { assertTermsAccepted } from '../services/auth.service';
+import { asyncHandler } from '../middleware/asyncHandler';
 import { MAX_ATTACHMENTS_PER_MESSAGE, MAX_FILE_BYTES } from '../services/chatStorage.service';
 import {
   getTeamChannel,
@@ -65,11 +67,19 @@ router.get(
   requireChannelPermission(Permission.VIEW_TEAM),
   listChannelMessages,
 );
+// Posting needs the current Terms (9.3). After the channel check, so an
+// outsider still gets the team's 404; before multer, so no upload is parsed.
+const requireTermsAccepted = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+  await assertTermsAccepted(req.user!.userId);
+  next();
+});
+
 router.post(
   '/channels/:channelId/messages',
   requireAuth,
   chatPostRateLimit,
   requireChannelPermission(Permission.POST_MESSAGE),
+  requireTermsAccepted,
   postChannelMessage,
 );
 router.post(
@@ -77,6 +87,7 @@ router.post(
   requireAuth,
   chatPostRateLimit,
   requireChannelPermission(Permission.POST_MESSAGE),
+  requireTermsAccepted,
   uploadFiles,
   uploadChannelMessage,
 );
