@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getToken, clearToken } from './tokenStorage';
 import { clearOfflineCache } from './offlineCache';
 import { setLeaveGuard } from './leaveGuard';
-import { isNative } from './native';
+import { isNative, nativePlatform } from './native';
 import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, RotationData, MomentumData, AdvancedMetrics, DateRange, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
@@ -30,9 +30,9 @@ const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/forgot-passwo
 
 // Attach stored JWT to every other request automatically
 api.interceptors.request.use((config) => {
-  // Which app build is calling: logged by the API (Sentry), and the hook for a
-  // future "please update the app" check once old builds are in people's hands.
-  if (isNative()) config.headers['X-Client'] = `android/${import.meta.env.VITE_APP_VERSION ?? 'unknown'}`;
+  // Which app build is calling: the API tags Sentry events with it and refuses
+  // builds below its minimum version (426, backend lib/clientVersion).
+  if (isNative()) config.headers['X-Client'] = `${nativePlatform()}/${import.meta.env.VITE_APP_VERSION ?? 'unknown'}`;
   const token = getToken();
   const isPublicAuth = PUBLIC_AUTH_PATHS.some((p) => config.url?.startsWith(p));
   if (token && !isPublicAuth) config.headers.Authorization = `Bearer ${token}`;
@@ -87,7 +87,13 @@ export function isRateLimitedError(err: unknown): boolean {
 /** Every mutation in this app surfaces backend errors the same way: the
  *  Express error middleware puts a user-facing string at response.data.error.
  *  One shared extractor instead of an `any`-typed destructure at every call site. */
+/** 426: this app build is below the API's minimum version (backend lib/clientVersion). */
+export function isAppOutdatedError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.status === 426;
+}
+
 export function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (isAppOutdatedError(err)) return 'Please update VolleyVision to keep going.';
   if (axios.isAxiosError(err)) {
     return (err.response?.data as { error?: string } | undefined)?.error ?? fallback;
   }

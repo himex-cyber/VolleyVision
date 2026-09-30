@@ -12,6 +12,7 @@ import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
 import QueueFlusher from './components/tracking/QueueFlusher';
 import { trimCachedMatches } from './lib/offlineCache';
+import { isAppOutdatedError } from './lib/api';
 import PageLoadingFallback from './components/ui/PageLoadingFallback';
 
 // Fail-soft: unset VITE_SENTRY_DSN is normal in local dev (see
@@ -132,7 +133,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      // An outdated app gets the same 426 every time; don't ask twice.
+      retry: (n, err) => !isAppOutdatedError(err) && n < 1,
     },
   },
 });

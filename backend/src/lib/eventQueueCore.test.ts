@@ -108,6 +108,8 @@ assert.equal(failureKind(409, false), 'reject', 'a plain 409 is a refusal');
 assert.equal(failureKind(500, false), 'server');
 assert.equal(failureKind(502, false), 'server');
 for (const s of [400, 403, 404]) assert.equal(failureKind(s, false), 'reject');
+// 426: this app build is too old. The taps are kept for the updated app.
+assert.equal(failureKind(426, false), 'outdated');
 
 // ─── provisionalScore ───────────────────────────────────────────────────────
 const server = { homeScore: 10, awayScore: 8, homeSetsWon: 0, awaySetsWon: 0, setScores: [] };

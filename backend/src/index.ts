@@ -26,6 +26,7 @@ import channelRoutes from './routes/channels';
 import feedbackRoutes from './routes/feedback';
 import approvalRoutes from './routes/approvals';
 import { errorHandler } from './middleware/errorHandler';
+import { minClientVersion } from './middleware/minClientVersion';
 import { prisma } from './lib/prisma';
 import { checkDatabase } from './lib/dbHealth';
 import { allowedOrigins } from './lib/corsOrigins';
@@ -54,6 +55,9 @@ morgan.token('url', (req: express.Request) => req.path);
 // Tests drive hundreds of requests through the app; their log would bury failures.
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 app.use(express.json());
+// After CORS, so a 426 still carries the allow headers and preflights never
+// reach it; /health is outside /api/v1 and so never refused.
+app.use('/api/v1', minClientVersion);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 // All routes versioned under /api/v1 so Phase 2+ can introduce /api/v2 without

@@ -142,19 +142,21 @@ export function rejectItems(items: QueueItem[], keys: string[], error: string): 
     .map((i) => (set.has(i.clientKey) ? { ...i, state: 'rejected', error } : i));
 }
 
-export type FailureKind = 'network' | 'auth' | 'rate' | 'retry' | 'server' | 'reject';
+export type FailureKind = 'network' | 'auth' | 'rate' | 'retry' | 'server' | 'outdated' | 'reject';
 
 /**
  * What a failed send means (6.6). No response (offline, timeout): keep and
  * retry later. 401: keep; the user signs in again. 429: back off. A 409
- * marked retryable: retry. 5xx: keep. Any other 4xx: the server refused it,
- * so it waits for the user (never dropped silently).
+ * marked retryable: retry. 5xx: keep. 426: this app build is too old; keep
+ * them for the updated app. Any other 4xx: the server refused it, so it waits
+ * for the user (never dropped silently).
  */
 export function failureKind(status: number | null, retryable: boolean): FailureKind {
   if (status == null) return 'network';
   if (status === 401) return 'auth';
   if (status === 429) return 'rate';
   if (status === 409 && retryable) return 'retry';
+  if (status === 426) return 'outdated';
   if (status >= 500) return 'server';
   return 'reject';
 }
