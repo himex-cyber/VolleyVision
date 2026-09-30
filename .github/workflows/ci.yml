@@ -149,3 +149,30 @@ jobs:
         run: |
           chmod +x android/gradlew
           cd android && ./gradlew assembleDebug
+
+  # The iPhone shell (Phase 8.5), checked on Linux: there's no macOS job
+  # (macOS minutes cost 10x on a private repo), and the signed build runs on
+  # Codemagic (codemagic.yaml). `cap sync ios` needs no Xcode with Swift
+  # Package Manager, so a prod sync and the prod-config check run here, and the
+  # committed ios/ project must be exactly what that sync writes.
+  ios-config:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: The iOS prod-config check still catches what it should
+        run: node scripts/check-ios-prod.test.mjs
+      - name: Production sync
+        run: npm run ios:prod
+      - name: iOS prod-config check
+        run: node scripts/check-ios-prod.mjs
+      - name: The committed ios/ project matches a fresh sync
+        run: git diff --exit-code -- ios
