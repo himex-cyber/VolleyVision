@@ -28,7 +28,7 @@ const MAX_DEVICE_KEYS = 3000;
 const MAX_DEVICE_KEY_MATCHES = 10;
 
 /** crypto.randomUUID needs a secure context (and iOS 15.4+); a LAN test over http has neither. */
-function newKey(): string {
+export function newKey(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   const b = crypto.getRandomValues(new Uint8Array(16));
   return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');

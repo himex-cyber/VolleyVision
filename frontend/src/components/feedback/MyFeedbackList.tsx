@@ -3,6 +3,7 @@ import { useMyFeedback } from '../../hooks';
 import { feedbackApi, getApiErrorMessage } from '../../lib/api';
 import type { Feedback, FeedbackStatus, FeedbackType } from '../../types/feedback';
 import { formatBytes } from '../chat/format';
+import { isNative } from '../../lib/native';
 
 // The feedback views (submit, mine, admin triage) share this vocabulary, so it is
 // declared once here rather than copied into each of them.
@@ -38,37 +39,62 @@ const STATUS_BADGE: Record<FeedbackStatus, string> = {
 // eslint-disable-next-line react-refresh/only-export-components -- see TYPE_LABELS above
 export const TYPE_OPTIONS: FeedbackType[] = ['BUG', 'FEATURE_REQUEST', 'GENERAL'];
 
-/** Fetch a short-lived signed URL and open the attachment in a new tab. */
-async function openAttachment(feedbackId: string, attachmentId: string, onError: (msg: string) => void) {
-  try {
-    const url = await feedbackApi.getAttachmentUrl(feedbackId, attachmentId);
-    window.open(url, '_blank', 'noopener');
-  } catch (err) {
-    onError(getApiErrorMessage(err, "Couldn't open that attachment. Try again."));
+/**
+ * A window.open after an await is blocked by popup blockers and iOS WKWebView,
+ * so on web the fetched signed URL (valid 3600 s) becomes a real link the user
+ * taps. The native app hands the outside host to the system browser instead.
+ */
+function AttachmentChip({ feedbackId, a }: { feedbackId: string; a: Feedback['attachments'][number] }) {
+  const [state, setState] = useState<{ loading: boolean; url?: string; error?: string }>({ loading: false });
+
+  async function fetchUrl() {
+    setState({ loading: true });
+    try {
+      const url = await feedbackApi.getAttachmentUrl(feedbackId, a.id);
+      if (isNative()) {
+        window.location.assign(url);
+        setState({ loading: false });
+      } else {
+        setState({ loading: false, url });
+      }
+    } catch (err) {
+      setState({ loading: false, error: getApiErrorMessage(err, "Couldn't open that attachment. Try again.") });
+    }
   }
+
+  return (
+    <div className="flex flex-col gap-1 max-w-56">
+      <button
+        type="button"
+        className="flex items-center gap-1.5 bg-grey-50 border border-grey-200 rounded-lg px-2 py-1 min-h-[44px] text-xs text-grey-900 hover:text-navy-700 hover:border-gold-500 transition-colors"
+        title={`Open ${a.originalName}`}
+        disabled={state.loading}
+        onClick={fetchUrl}
+      >
+        <span aria-hidden>{a.kind === 'IMAGE' ? '🖼' : '📄'}</span>
+        <span className="truncate font-medium">{a.originalName}</span>
+        <span className="text-grey-600 shrink-0">{state.loading ? 'Loading…' : formatBytes(a.sizeBytes)}</span>
+      </button>
+      {state.url && (
+        <a
+          href={state.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary text-xs min-h-[44px] inline-flex items-center justify-center"
+        >
+          Open attachment
+        </a>
+      )}
+      {state.error && <p className="text-error text-xs">{state.error}</p>}
+    </div>
+  );
 }
 
 export function AttachmentChips({ feedback }: { feedback: Feedback }) {
-  const [error, setError] = useState('');
   if (feedback.attachments.length === 0) return null;
   return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap gap-1.5">
-        {feedback.attachments.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            className="flex items-center gap-1.5 bg-grey-50 border border-grey-200 rounded-lg px-2 py-1 text-xs text-grey-900 hover:text-navy-700 hover:border-gold-500 transition-colors max-w-56"
-            title={`Open ${a.originalName}`}
-            onClick={() => openAttachment(feedback.id, a.id, setError)}
-          >
-            <span aria-hidden>{a.kind === 'IMAGE' ? '🖼' : '📄'}</span>
-            <span className="truncate font-medium">{a.originalName}</span>
-            <span className="text-grey-600 shrink-0">{formatBytes(a.sizeBytes)}</span>
-          </button>
-        ))}
-      </div>
-      {error && <p className="text-error text-xs">{error}</p>}
+    <div className="flex flex-wrap gap-1.5">
+      {feedback.attachments.map((a) => <AttachmentChip key={a.id} feedbackId={feedback.id} a={a} />)}
     </div>
   );
 }
