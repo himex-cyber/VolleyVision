@@ -17,9 +17,11 @@ function world() {
     const role = ROLES[args.where.userId_teamId?.userId];
     return role ? { id: `m-${role}`, role, rosterAccess: 'FULL_ACCESS', invitationAccess: 'FULL_ACCESS', matchAccess: 'FULL_ACCESS' } : null;
   };
-  db.team.delete = async () => ({ id: TEAM });
+  db.team.delete = async () => { order.push('delete'); return { id: TEAM }; };
+  db.messageAttachment.findMany = async () => { order.push('paths'); return [{ storagePath: 'teams/team1/channels/c/m/f.png' }]; };
   db.auditLog.create = async () => ({});
 }
+let order: string[] = [];
 
 async function main() {
   await withServer(async (base) => {
@@ -29,8 +31,12 @@ async function main() {
     assert.equal(await send(base, 'DELETE', `/api/v1/teams/${TEAM}`, tokenFor('outsider')), 404, 'an outsider must not learn the team exists');
     assert.equal(callsFor('team', 'delete').length, 0, 'nothing may be deleted before the owner asks');
 
+    order = [];
     assert.equal(await send(base, 'DELETE', `/api/v1/teams/${TEAM}`, tokenFor('owner')), 204);
     assert.equal(callsFor('team', 'delete').length, 1);
+    // 9.0.8: the chat files' paths are read before the cascade drops their rows.
+    assert.deepEqual(order, ['paths', 'delete']);
+    assert.deepEqual(callsFor('messageAttachment', 'findMany')[0][0].where, { message: { channel: { teamId: TEAM } } });
   });
   console.log('http.teamDelete.test.ts passed');
 }

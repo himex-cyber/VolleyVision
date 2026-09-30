@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { resolveUploadContentType } from '../lib/fileSignature';
+import { removeStoredFiles } from '../lib/storageCleanup';
 import {
   afterCursorWhere,
   beforeCursorWhere,
@@ -22,7 +23,6 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   assertAcceptable,
   buildObjectKey,
-  deleteObjects,
   imageDimensions,
   signAttachmentUrls,
   uploadAttachment,
@@ -261,7 +261,7 @@ export async function postMessageWithAttachments(
     const [dto] = await withSignedUrls([serializeMessage(message, senderId)]);
     return dto;
   } catch (err) {
-    await deleteObjects(uploaded.map((u) => u.storagePath));
+    await removeStoredFiles(uploaded.map((u) => u.storagePath));
     // A concurrent retry with the same key won the race — return its message.
     if (clientKey && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       const existing = await findByClientKey(channelId, clientKey, senderId);
@@ -309,10 +309,17 @@ export async function softDeleteMessage(messageId: string, userId: string, isMod
     throw new AppError(403, 'You can only delete your own messages.');
   }
 
-  const message = await prisma.message.update({
-    where: { id: messageId },
-    data: { deletedAt: new Date(), deletedByUserId: userId },
-    include: messageInclude,
-  });
+  // 9.0.8: a deleted message is erased, not hidden: its text and attachment
+  // rows go in the same write, and the files right after. The row stays as a
+  // tombstone so the conversation keeps its order.
+  const [, message] = await prisma.$transaction([
+    prisma.messageAttachment.deleteMany({ where: { messageId } }),
+    prisma.message.update({
+      where: { id: messageId },
+      data: { body: null, deletedAt: new Date(), deletedByUserId: userId },
+      include: messageInclude,
+    }),
+  ]);
+  await removeStoredFiles(existing.attachments.map((a) => a.storagePath));
   return { tombstone: serializeMessage(message, userId), didDelete: true };
 }

@@ -10,12 +10,12 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { beforeCursorWhere, clampPageSize } from '../lib/chat';
 import { resolveUploadContentType } from '../lib/fileSignature';
+import { removeStoredFiles } from '../lib/storageCleanup';
 import { isEnumValue, parseRequiredText, parseSeverity, parseType } from '../lib/feedbackValidation';
 import {
   MAX_ATTACHMENTS_PER_FEEDBACK,
   assertAcceptable,
   buildFeedbackObjectKey,
-  deleteObjects,
   imageDimensions,
   signAttachmentUrl,
   uploadAttachment,
@@ -140,7 +140,7 @@ export async function createFeedback(input: CreateFeedbackInput) {
     });
     return serializeFeedback(feedback);
   } catch (err) {
-    await deleteObjects(uploaded.map((u) => u.storagePath));
+    await removeStoredFiles(uploaded.map((u) => u.storagePath));
     throw err;
   }
 }

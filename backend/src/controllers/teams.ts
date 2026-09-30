@@ -8,6 +8,7 @@ import { generateTeamJoinCode } from '../services/teamJoinCode.service';
 import { assertRoomForAnotherTeam } from '../services/teamOwnership.service';
 import { isGlobalAdmin, seesEveryPlayer, canManageMembers, Permission, roleHasPermission } from '../services/permission.service';
 import { maskOtherUserIds, maskOwner } from '../lib/playerPrivacy';
+import { removeStoredFiles } from '../lib/storageCleanup';
 
 const ownerSelect = {
   id: true,
@@ -140,7 +141,14 @@ export async function updateTeam(req: Request, res: Response, next: NextFunction
 
 export async function deleteTeam(req: Request, res: Response, next: NextFunction) {
   try {
+    // 9.0.8: the cascade drops the attachment rows, so read the file paths from
+    // the database first (listing the bucket isn't recursive and pages at 100).
+    const files = await prisma.messageAttachment.findMany({
+      where: { message: { channel: { teamId: req.params.id } } },
+      select: { storagePath: true },
+    });
     await prisma.team.delete({ where: { id: req.params.id } });
+    await removeStoredFiles(files.map((f) => f.storagePath));
     if (req.user) logAudit(req.user.userId, 'DELETE_TEAM', 'team', req.params.id);
     res.status(204).send();
   } catch (err) {

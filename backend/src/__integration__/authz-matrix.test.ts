@@ -240,6 +240,17 @@ async function main() {
     const declined = await call(base, 'POST', `/api/v1/invitations/${second.token}/decline`, f.invitee.token);
     assert.equal(declined.status, 200);
     assert.equal(declined.body.invitedById, null, 'decline returns no inviter id');
+    // 9.0.8: deleting a message erases its text and attachment rows (the files
+    // follow after commit; no storage runs here).
+    const doomed = await prisma.message.create({
+      data: { channelId: f.channel.id, senderId: f.owner.id, body: 'take this back',
+        attachments: { create: { kind: 'FILE', storagePath: `teams/${f.team.id}/x.pdf`, fileName: 'x.pdf', mimeType: 'application/pdf', sizeBytes: 1, uploadedByUserId: f.owner.id } } },
+    });
+    assert.equal((await call(base, 'DELETE', `/api/v1/messages/${doomed.id}`, f.owner.token)).status, 200);
+    const erased = await prisma.message.findUniqueOrThrow({ where: { id: doomed.id }, include: { attachments: true } });
+    assert.equal(erased.body, null, 'the text is erased');
+    assert.equal(erased.attachments.length, 0, 'the attachment rows are gone');
+    assert.ok(erased.deletedAt, 'the tombstone stays');
     const managed = await call(base, 'GET', `/api/v1/teams/${f.team.id}/members`, f.manager.token);
     assert.ok((managed.body as { user: { id: unknown; role?: unknown } }[]).every((m) => typeof m.user.id === 'string' && 'role' in m.user),
       'a manager sees every account id and role');
