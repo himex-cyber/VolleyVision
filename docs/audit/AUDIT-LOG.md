@@ -1039,7 +1039,7 @@ CI's audit; it also clears the three moderate ones recorded since Phase 6. Only 
 
 ### Production deploy: v9.15.0 (2026-09-30)
 
-Karlos's go-ahead after `.ackup.ps1` and the Netlify change (C3). No migration.
+Karlos's go-ahead after `.\backup.ps1` and the Netlify change (C3). No migration.
 
 1. **Backup (Karlos):** `vv-backup-2026-09-30-1743.sql`; `deploy.ps1`'s check found and named it.
 2. **Netlify env (Karlos, C3):** `CORS_EXTRA_ORIGINS` = `https://localhost,capacitor://localhost` in every context
