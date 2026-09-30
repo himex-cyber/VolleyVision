@@ -4,13 +4,17 @@
 // ios/App/App/capacitor.config.json; App Transport Security exceptions in
 // Info.plist would let the app talk plain http. There is no Mac here, so this
 // is the only check the project gets before Codemagic builds it.
-//   node scripts/check-ios-prod.mjs [iosDir]
+//   node scripts/check-ios-prod.mjs [--release] [iosDir]
+// --release (the App Store workflow, 9.9) turns the web-inspector warning into
+// a failure: only internal TestFlight builds may have it on.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 // Already installed as a dependency of @capacitor/cli; no new package.
 import plist from 'plist';
 
-const root = process.argv[2] ?? 'ios';
+const args = process.argv.slice(2);
+const release = args.includes('--release');
+const root = args.find((a) => !a.startsWith('--')) ?? 'ios';
 const problems = [];
 const warnings = [];
 
@@ -27,7 +31,8 @@ if (!existsSync(configPath)) {
   if (server.iosScheme) problems.push(`capacitor.config.json: server.iosScheme is set (${server.iosScheme}); keep the default capacitor://`);
   if (server.hostname) problems.push(`capacitor.config.json: server.hostname is set (${server.hostname}); keep the default localhost`);
   if (config.ios?.webContentsDebuggingEnabled === true) {
-    warnings.push('the web inspector is on (CAP_IOS_INSPECTABLE=1): fine for internal TestFlight, off for any external or App Store build');
+    if (release) problems.push('the web inspector is on (CAP_IOS_INSPECTABLE=1): a release build must not have it');
+    else warnings.push('the web inspector is on (CAP_IOS_INSPECTABLE=1): fine for internal TestFlight, off for any external or App Store build');
   }
 }
 
