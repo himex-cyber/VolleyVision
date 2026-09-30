@@ -14,6 +14,9 @@ export const nativePlatform = (): string => capacitor()?.getPlatform?.() ?? 'web
 
 /** Native-only setup, called from main.tsx inside `if (isNative())`. */
 export async function initNative(): Promise<void> {
+  // iPhones have no Back button (every screen has an in-app way back), and
+  // swipe-back stays off: it would skip the tracker's leave guard.
+  if (nativePlatform() !== 'android') return;
   // Dynamic import: the web bundle never loads @capacitor/app.
   const { App } = await import('@capacitor/app');
   // Android's back gesture/button walks the app's history, and leaves the app

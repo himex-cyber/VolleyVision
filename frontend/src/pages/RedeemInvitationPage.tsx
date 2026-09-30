@@ -106,7 +106,9 @@ export default function RedeemInvitationPage() {
         )}
 
         <p className="text-center text-chalk-500 text-sm mt-4">
-          <Link to="/login" className="text-navy-700 hover:text-navy-700 font-medium">Back to sign in</Link>
+          {user
+            ? <Link to="/dashboard" className="text-navy-700 hover:text-navy-700 font-medium">Back to home</Link>
+            : <Link to="/login" className="text-navy-700 hover:text-navy-700 font-medium">Back to sign in</Link>}
         </p>
       </div>
     </div>
