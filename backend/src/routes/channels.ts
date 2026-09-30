@@ -5,7 +5,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
-import { chatPostRateLimit } from '../middleware/rateLimit';
+import { chatPostRateLimit, messageReportRateLimit, blockRateLimit } from '../middleware/rateLimit';
 import { requireChannelPermission, requireTeamPermission } from '../middleware/permissions';
 import { Permission } from '../services/permission.service';
 import { assertTermsAccepted } from '../services/auth.service';
@@ -18,6 +18,8 @@ import {
   uploadChannelMessage,
   updateMessage,
   deleteMessage,
+  reportMessageHandler,
+  blockSenderHandler,
 } from '../controllers/messages';
 
 const router = Router();
@@ -95,5 +97,8 @@ router.post(
 // Author/moderator rules resolved in the controller + service.
 router.patch('/messages/:messageId', requireAuth, updateMessage);
 router.delete('/messages/:messageId', requireAuth, deleteMessage);
+// Members moderating by message (9.5, 9.6): membership checked in the controller.
+router.post('/messages/:messageId/report', requireAuth, messageReportRateLimit, reportMessageHandler);
+router.post('/messages/:messageId/block-sender', requireAuth, blockRateLimit, blockSenderHandler);
 
 export default router;

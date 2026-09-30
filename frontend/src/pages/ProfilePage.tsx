@@ -8,6 +8,7 @@ import TeamTrendChart from '../components/charts/TeamTrendChart';
 import PlayerRecordsManager from '../components/player/PlayerRecordsManager';
 import { Link } from 'react-router-dom';
 import { legalHref } from '../lib/legal';
+import BlockedMembers from '../components/chat/BlockedMembers';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Admin', COACH: 'Coach', PLAYER: 'Player', VIEWER: 'Viewer',
@@ -251,6 +252,8 @@ export default function ProfilePage() {
 
       {/* Linked player records (moved here from the Player Dashboard) */}
       <PlayerRecordsManager />
+
+      <BlockedMembers />
 
       {/* Account (9.2/9.4): the legal pages and account deletion */}
       <div className="card p-5">

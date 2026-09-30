@@ -9,6 +9,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { chatApi, isTermsRequiredError } from '../lib/api';
+import type { ReportReason } from '../lib/api';
 import { newKey } from '../lib/eventQueue';
 import { useAuth } from '../context/AuthContext';
 import type { ChatAttachment, ChatMessage } from '../types';
@@ -387,6 +388,47 @@ export function useDeleteMessage(channelId: string | undefined) {
       qc.setQueryData<ChatMessage[]>(messagesKey(channelId ?? ''), (cur = []) =>
         mergeServer(cur, [tombstone]),
       );
+    },
+  });
+}
+
+// ─── Report / block (9.5, 9.6) ───────────────────────────────────────────────
+
+export function useReportMessage() {
+  return useMutation({
+    mutationFn: (vars: { messageId: string; reason: ReportReason; note?: string }) =>
+      chatApi.reportMessage(vars.messageId, { reason: vars.reason, note: vars.note }),
+  });
+}
+
+/**
+ * Blocking hides the sender's messages server-side. The cache can't tell which
+ * rows were theirs (ids are masked, 9.0.3) and merges never drop rows, so the
+ * channel's messages are refetched from scratch; the block list too.
+ */
+export function useBlockSender(channelId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) => chatApi.blockSender(messageId),
+    onSuccess: () => {
+      qc.resetQueries({ queryKey: messagesKey(channelId ?? '') });
+      qc.invalidateQueries({ queryKey: ['chat', 'blocks'] });
+    },
+  });
+}
+
+export function useBlocks() {
+  return useQuery({ queryKey: ['chat', 'blocks'], queryFn: chatApi.listBlocks });
+}
+
+export function useUnblock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (blockId: string) => chatApi.unblock(blockId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chat', 'blocks'] });
+      // Every channel's page may now include their messages again.
+      qc.resetQueries({ queryKey: ['chat', 'messages'] });
     },
   });
 }

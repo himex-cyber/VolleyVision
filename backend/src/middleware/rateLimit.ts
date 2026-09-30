@@ -99,6 +99,22 @@ export const accountDeleteRateLimit = createRateLimit({
   message: 'Too many attempts. Wait an hour and try again.',
 });
 
+/** Reporting chat messages (9.5): each one emails the admins. */
+export const messageReportRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => (req.user?.userId ? `report:user:${req.user.userId}` : null),
+  message: "You've sent a lot of reports. Wait a while, or email support if it's urgent.",
+});
+
+/** Blocking and unblocking members in chat (9.6). */
+export const blockRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  keyFn: (req) => (req.user?.userId ? `block:user:${req.user.userId}` : null),
+  message: 'Too many changes. Wait a few minutes and try again.',
+});
+
 /** Accepting the Terms (9.3): one write per sign-in in practice. */
 export const termsAcceptRateLimit = createRateLimit({
   windowMs: 60 * 60 * 1000,

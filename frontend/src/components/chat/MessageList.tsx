@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { ChatMessage } from '../../types';
 import MessageItem from './MessageItem';
+import type { ReportReason } from '../../lib/api';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -12,6 +13,8 @@ interface MessageListProps {
   onLoadOlder: () => void;
   onEdit: (messageId: string, body: string) => void;
   onDelete: (messageId: string) => void;
+  onReport: (messageId: string, reason: ReportReason, note: string) => Promise<void>;
+  onBlock: (messageId: string, senderName: string) => void;
   onRetry: (tempId: string) => void;
   onDiscardFailed: (tempId: string) => void;
   onStaleAttachment?: () => void;
@@ -27,6 +30,8 @@ export default function MessageList({
   onLoadOlder,
   onEdit,
   onDelete,
+  onReport,
+  onBlock,
   onRetry,
   onDiscardFailed,
   onStaleAttachment,
@@ -118,6 +123,8 @@ export default function MessageList({
           canModerate={canModerate}
           onEdit={onEdit}
           onDelete={onDelete}
+          onReport={onReport}
+          onBlock={onBlock}
           onRetry={onRetry}
           onDiscardFailed={onDiscardFailed}
           onStaleAttachment={onStaleAttachment}

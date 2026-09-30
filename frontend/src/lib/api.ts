@@ -337,7 +337,15 @@ export const chatApi = {
     api.patch<ChatMessage>(`/messages/${messageId}`, { body }).then((r) => r.data),
   deleteMessage: (messageId: string) =>
     api.delete<ChatMessage>(`/messages/${messageId}`).then((r) => r.data),
+  // Members moderate by message: other members' account ids aren't sent (9.5, 9.6).
+  reportMessage: (messageId: string, data: { reason: ReportReason; note?: string }) =>
+    api.post<{ id: string }>(`/messages/${messageId}/report`, data).then((r) => r.data),
+  blockSender: (messageId: string) => api.post(`/messages/${messageId}/block-sender`),
+  listBlocks: () => api.get<{ id: string; name: string }[]>('/users/me/blocks').then((r) => r.data),
+  unblock: (blockId: string) => api.delete(`/users/me/blocks/${blockId}`),
 };
+
+export type ReportReason = 'harassment' | 'inappropriate' | 'spam' | 'other';
 
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
 import type { Feedback, FeedbackPage, FeedbackStatus } from '../types/feedback';
