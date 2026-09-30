@@ -1027,7 +1027,11 @@ only on Codemagic; Karlos runs the device checks. Released as v9.15.0. No migrat
 | 8.5.10 | README "Building the iOS app", `docs/ios-device-checklist.md`, CLAUDE.md | — |
 
 **Reviews:** `/code-review high` 6, all fixed; Opus Codemagic/Xcode config review PASS (1 medium: lock the
-inspector build to internal TestFlight; 2 low), fixed; `/security-review` none.
+inspector build to internal TestFlight; 2 low), fixed; `/security-review` none; phase-end Opus audit PASS with 3 low
+(two device-checklist wordings, fixed; `plist` used from @capacitor/cli's dependencies rather than pinned, recorded).
+
+**Dependency (G3, Karlos):** nodemailer 9.1.1 → 10.0.12 for a new high advisory (GHSA-v53p-9fqp-m79j) that failed
+CI's audit; it also clears the three moderate ones recorded since Phase 6. Only breaking change for us: Node 20+.
 
 **Verified:** backend `tsc`, 74 unit test files, build; frontend `tsc`, lint, build; `check-ios-prod` 27 cases,
 `check-android-prod` 9; CI `ios-config` green. Not verifiable here: the Codemagic build and the iPhone itself
