@@ -49,7 +49,13 @@ async function main() {
     assert.equal(accept.status, 200, JSON.stringify(accept.body));
     assert.equal(accept.body.termsRequired, false);
     assert.equal((await call(app.base, 'GET', '/api/v1/auth/me', old.token)).body.termsRequired, false);
-    assert.equal((await call(app.base, 'POST', `/api/v1/channels/${channel.id}/messages`, old.token, { body: 'hi' })).status, 201, 'posting works once accepted');
+    const posted = await call(app.base, 'POST', `/api/v1/channels/${channel.id}/messages`, old.token, { body: 'that was shit' });
+    assert.equal(posted.status, 201, 'posting works once accepted');
+    // 9.7: the stored and returned text is masked.
+    assert.equal(posted.body.body, 'that was ****');
+    assert.equal((await prisma.message.findUniqueOrThrow({ where: { id: posted.body.id } })).body, 'that was ****');
+    const edited = await call(app.base, 'PATCH', `/api/v1/messages/${mine.id}`, old.token, { body: 'Sh1t, again' });
+    assert.equal(edited.body.body, '****, again', 'edits are masked too');
 
     // An outsider still gets the team's 404 first, not a Terms answer.
     const outsider = await makeUser('outsider', { terms: false });

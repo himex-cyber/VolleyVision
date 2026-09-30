@@ -9,6 +9,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { resolveUploadContentType } from '../lib/fileSignature';
 import { removeStoredFiles } from '../lib/storageCleanup';
+import { maskObjectionable } from '../lib/contentFilter';
 import {
   afterCursorWhere,
   beforeCursorWhere,
@@ -40,10 +41,11 @@ const messageInclude = {
   attachments: true,
 } as const;
 
+/** A valid body with objectionable words masked (9.7). Every create, upload and edit goes through here. */
 function requireValidBody(raw: unknown): string {
   const result = validateMessageBody(raw);
   if (!result.ok) throw new AppError(400, result.error);
-  return result.body;
+  return maskObjectionable(result.body);
 }
 
 // ─── Attachment DTOs ──────────────────────────────────────────────────────────
