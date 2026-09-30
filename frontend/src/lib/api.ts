@@ -93,7 +93,7 @@ export function isAppOutdatedError(err: unknown): boolean {
  *  Express error middleware puts a user-facing string at response.data.error.
  *  One shared extractor instead of an `any`-typed destructure at every call site. */
 export function getApiErrorMessage(err: unknown, fallback: string): string {
-  if (isAppOutdatedError(err)) return 'Please update VolleyVision to keep going.';
+  if (isAppOutdatedError(err)) return 'This version of VolleyVision is out of date. Please update the app to keep going.';
   if (axios.isAxiosError(err)) {
     return (err.response?.data as { error?: string } | undefined)?.error ?? fallback;
   }

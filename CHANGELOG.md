@@ -22,7 +22,7 @@ app). No migration.
   could wipe out points recorded on another device, and they moved a match's
   time whenever it was edited. None are known to be installed. The website and
   newer apps are unaffected. Taps an outdated app has waiting are kept, not
-  thrown away, and send once it's updated.
+  thrown away: after updating, tap Retry on them to send them.
 
 **Fixes**
 - **The matches list says what's wrong instead of going blank.** A start date

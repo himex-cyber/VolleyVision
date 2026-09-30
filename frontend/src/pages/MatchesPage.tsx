@@ -154,7 +154,7 @@ export default function MatchesPage() {
           <label className="block text-xs text-grey-600 mb-1">To</label>
           <input type="date" className="input text-sm" value={filters.to} min={filters.from || undefined} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
         </div>
-        {badRange && <p className="sm:col-span-4 text-error text-xs">The start date is after the end date.</p>}
+        {badRange && <p className="sm:col-span-4 text-error text-xs">The start date is after the end date. Pick an earlier start date to filter by dates.</p>}
         {(filters.opponent || filters.status || filters.from || filters.to) && (
           <div className="sm:col-span-4">
             <button className="text-xs text-grey-600 hover:text-grey-900 transition-colors" onClick={() => setFilters({ opponent: '', status: '', from: '', to: '' })}>
