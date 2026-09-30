@@ -46,6 +46,34 @@ export function maskMembers<T extends MemberRow>(members: T[], canManage: boolea
   });
 }
 
+type OwnedTeam = { ownerId: string | null; owner?: { id: string | null; email?: string | null } | null };
+
+/**
+ * A team row's owner for this caller (9.0.2). Like maskMembers: only members
+ * who can manage the roster, and the owner, get the owner's email and account
+ * id. Everyone else keeps the owner's name; id, ownerId and email are null
+ * rather than removed, because installed apps read them.
+ */
+export function maskOwner<T extends OwnedTeam>(team: T, canManage: boolean, callerId: string | null): T {
+  if (canManage || isCaller(team.ownerId, callerId)) return team;
+  const masked = { ...team, ownerId: null };
+  if (team.owner) masked.owner = { ...team.owner, id: null, email: null };
+  return masked;
+}
+
+type InviteRow = { invitedById: string | null; invitedBy?: { id: string | null; email?: string | null } | null };
+
+/**
+ * An invitation as its invitee sees it (9.0.4): the inviter's name, never their
+ * account id or email. Invitees can be minors. Null rather than removed, as
+ * installed apps may read the fields.
+ */
+export function maskInviter<T extends InviteRow>(inv: T): T {
+  const masked = { ...inv, invitedById: null };
+  if (inv.invitedBy) masked.invitedBy = { ...inv.invitedBy, id: null, email: null };
+  return masked;
+}
+
 type EventWithPlayer = {
   playerId: string | null;
   notes: string | null;

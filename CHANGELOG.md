@@ -2,21 +2,65 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.16.0 — 2026-10-01
+
+Phase 9.0 of the rebuild roadmap: fixes carried from the Phase 8.5 review,
+before the store work in v9.17.0. No migration. Released, not yet deployed.
+Works with the Android 9.13.0+ apps: fields that are now hidden are sent
+empty, never removed.
+
+**Privacy**
+- **Players and viewers no longer receive the team owner's email address or
+  account id.** They still see the owner's name. Only members who manage the
+  roster, and the owner, get the rest. This covers the team pages, the team
+  list, a match's page and the home page. The team owner's email no longer
+  shows on the team page for everyone.
+- **Team chat no longer sends other members' account ids** with their
+  messages, or the internal details of who deleted a message. Names and
+  photos are unchanged.
+- **An invitation shows only the name of the person who sent it,** not their
+  email address or account id. Invitations can go to players under 18.
+- **Deleting a chat message now erases it:** its text, attachments and files
+  are removed, not just hidden. Deleting a team removes its chat files too.
+- **Error reports no longer include anyone's IP address** from the server.
+- **The app's fonts now load from VolleyVision itself, not Google,** so
+  Google no longer sees who opens the app.
+
+**Scoring**
+- **Reset Set clears the right set's manual score changes** after a tap that
+  synced late moved where a set ended. Stats are filed under the set they were
+  played in, too.
+- **Editing a match's set scores sticks:** sets won and the match's status
+  follow the edit, and later taps no longer overwrite it. Set scores must be
+  whole numbers, no ties, at most five sets.
+- The score screen can no longer be sent a "sets won" number directly; sets
+  won always come from the set scores. No app sends one.
+
+**Fixes**
+- **"Upcoming" matches use your own time,** so a game in New Zealand no
+  longer stays "upcoming" for about 13 hours after it starts.
+- **The match report's kill rate and hitting % now match the Advanced
+  panel:** tips and free balls count as attack attempts in both.
+- Date of birth on the profile page shows the date that was entered, in every
+  time zone.
+
 ## v9.15.0 — 2026-09-30
 
 Phase 8.5.0 (fixes carried from the Phase 8 review) and Phase 8.5 (the iPhone
-app). No migration. Released, not yet deployed. The Android app's version is 9.15.0 too; no Android build is
+app). No migration. Deployed to production on 2026-09-30. The Android app's version is 9.15.0 too; no Android build is
 shared with this release (the next one is versionCode 6).
 
 **VolleyVision for iPhone (TestFlight, invite-only)**
-- **The app now runs on iPhone**, with everything the Android app does: tracking
-  online and offline (taps survive the app being closed), dashboards and date
-  filters, team chat with photos from the camera or library, and Copy Report.
-  It's iPhone only, needs iOS 16.4 or later, and for now reaches invited
-  testers only, through Apple's TestFlight app.
-- It fits notched iPhones and the Dynamic Island, and every screen has an
-  on-screen way back (iPhones have no Back button). CSV downloads and printing
-  stay on the website for now, and links in emails open the website.
+- **The iPhone app is ready in code**, built to do what the Android app does:
+  tracking online and offline (taps survive the app being closed), dashboards
+  and date filters, team chat with photos from the camera or library, and Copy
+  Report. It's iPhone only, needs iOS 16.4 or later, and will reach invited
+  testers only, through Apple's TestFlight app. None of this has run on an
+  iPhone yet: it's pending the first TestFlight build.
+- It's laid out for notched iPhones and the Dynamic Island, and screens are
+  meant to have an on-screen way back (iPhones have no Back button); both are
+  on the device checklist for the first build. CSV downloads and printing stay
+  on the website for now, and links in emails open the website.
 - It needs this server version: the server has to accept the iPhone app's
   requests before it can sign in.
 

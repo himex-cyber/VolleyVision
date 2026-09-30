@@ -233,9 +233,15 @@ the key itself, certificates and profiles live only in Codemagic.
 500 macOS minutes a month; a build takes about 10–20 minutes. Once Apple has processed the upload, the build
 reaches the internal group's iPhones through TestFlight on its own.
 
+**If the first build fails before any script runs:** errors such as "integration not found" or "no matching
+profiles" come from Codemagic's own set-up, before the placeholder guard gets a chance. They mean the Apple and
+Codemagic set-up above isn't finished (the API key's name, the certificate or the profile). If the build reports
+"scheme App not found", commit a shared scheme at `ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme`.
+
 - **Versions:** the app version is `versionName` in `frontend/android/app/build.gradle`, the same as Android's; the
   build writes it into the Xcode project. The build number is the latest TestFlight build number plus one, looked
-  up during the build, so it never needs bumping by hand. The app reports itself as `X-Client: ios/<version>`.
+  up during the build, so it never needs bumping by hand. Until a build exists the lookup fails and Codemagic's own
+  run count is used instead, so the first build may be number 3 rather than 1. The app reports itself as `X-Client: ios/<version>`.
 - **Xcode:** pinned to 26.6 in `codemagic.yaml`. Apple takes uploads only from Xcode 26 or later (since 28 April
   2026), and Xcode 27.2's JSON project format breaks `cap sync`, so it isn't `latest`. When Apple raises its minimum
   (see developer.apple.com/news/upcoming-requirements), move the pin to the lowest Xcode that meets it and that

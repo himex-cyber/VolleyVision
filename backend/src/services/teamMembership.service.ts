@@ -1,7 +1,8 @@
 import { AccessTier, Prisma, TeamRole } from '@prisma/client';
 import { prisma, runSerializable } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
-import { defaultAccessTiers } from './permission.service';
+import { defaultAccessTiers, Permission, roleHasPermission } from './permission.service';
+import { maskOwner } from '../lib/playerPrivacy';
 import { applyCreatePlayer } from './playerActions.service';
 import { roleSlotError } from '../lib/roleSlots';
 
@@ -36,9 +37,9 @@ export async function getTeamMembers(teamId: string) {
   });
 }
 
-/** Return all team memberships for a given user. */
+/** Return all team memberships for a given user, owner ids masked by role (9.0.2). */
 export async function getUserTeams(userId: string) {
-  return prisma.teamMembership.findMany({
+  const memberships = await prisma.teamMembership.findMany({
     where: { userId },
     select: {
       id: true,
@@ -57,6 +58,10 @@ export async function getUserTeams(userId: string) {
     },
     orderBy: { joinedAt: 'asc' },
   });
+  return memberships.map((m) => ({
+    ...m,
+    team: maskOwner(m.team, roleHasPermission(m.role, Permission.MANAGE_MEMBERS), userId),
+  }));
 }
 
 /**

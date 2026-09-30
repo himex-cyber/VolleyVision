@@ -3,6 +3,7 @@
 // attempts too. Pure: generateMatchReport touches no database.
 import assert from 'node:assert/strict';
 import { generateMatchReport, ReportEvent, ReportPointEvent } from '../services/report.service';
+import { buildAdvancedMetrics } from '../lib/advancedMetrics';
 
 const ev = (eventType: string, courtZone: number | null): ReportEvent =>
   ({ eventType, courtZone, setNumber: 1, rotationNumber: 1, playerId: 'p1', recordedAt: new Date(0) });
@@ -29,5 +30,16 @@ assert.equal(withOpp.attack.kills, 1, "an opponent's kill is not ours");
 assert.deepEqual(withOpp.momentum, { longestRun: 3, longestRunTeam: 'Wolves', leadChanges: 1, largestHomeLead: 1, largestAwayLead: 2 });
 // Same shape installed apps read: efficiency (= point win %) and total.
 assert.deepEqual(withOpp.bestRotation, { rotation: 2, won: 1, lost: 3, total: 4, net: -2, efficiency: 25 });
+
+// 9.0.7: the report's kill rate and hitting % count tips and free balls as
+// attempts, like the Advanced panel (and lib/analytics calculateStats).
+const mixed = ['KILL', 'KILL', 'ATTACK_ERROR', 'ATTACK_ATTEMPT', 'TIP', 'FREE_BALL'].map((t) => ev(t, null));
+const attackReport = generateMatchReport(
+  { teamName: 'Falcons', opponent: 'Wolves', homeSetsWon: 0, awaySetsWon: 0, setScores: [] }, mixed, [], [],
+);
+const advanced = buildAdvancedMetrics(mixed.map((e) => ({ ...e, matchId: 'm1' })), []);
+assert.equal(attackReport.attack.killRate, 33.3, '2 kills of 6 attempts');
+assert.equal(attackReport.attack.killRate, advanced.attack.killRate, 'report and Advanced panel agree');
+assert.equal(attackReport.attack.hittingPct, advanced.attack.hittingPct);
 
 console.log('matchReportZones.test.ts passed');

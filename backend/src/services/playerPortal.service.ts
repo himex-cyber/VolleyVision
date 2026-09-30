@@ -322,7 +322,7 @@ export async function getPlayerStatsByTeam(userId: string) {
   );
 }
 
-export async function getPlayerUpcomingMatches(userId: string, limit = 5) {
+export async function getPlayerUpcomingMatches(userId: string, limit = 5, from: Date = new Date()) {
   const players = await prisma.player.findMany({
     where: { userId },
     select: { id: true, teamId: true },
@@ -342,7 +342,7 @@ export async function getPlayerUpcomingMatches(userId: string, limit = 5) {
     where: {
       teamId: { in: teamIds },
       status: 'SCHEDULED',
-      matchDate: { gte: new Date() },
+      matchDate: { gte: from },
     },
     orderBy: { matchDate: 'asc' },
     take: limit,
@@ -357,13 +357,14 @@ export async function getPlayerUpcomingMatches(userId: string, limit = 5) {
   });
 }
 
-export async function getPlayerDashboard(userId: string) {
+/** `from`: see lib/matchDate upcomingFrom. */
+export async function getPlayerDashboard(userId: string, from?: Date) {
   const [players, careerStats, recentMatches, developmentMetrics, upcomingMatches, statsByTeam] = await Promise.all([
     getLinkedPlayers(userId),
     getPlayerCareerStats(userId),
     getPlayerRecentMatches(userId),
     getDevelopmentMetrics(userId),
-    getPlayerUpcomingMatches(userId),
+    getPlayerUpcomingMatches(userId, 5, from),
     getPlayerStatsByTeam(userId),
   ]);
 

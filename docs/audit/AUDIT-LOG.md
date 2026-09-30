@@ -1036,3 +1036,51 @@ CI's audit; it also clears the three moderate ones recorded since Phase 6. Only 
 **Verified:** backend `tsc`, 74 unit test files, build; frontend `tsc`, lint, build; `check-ios-prod` 27 cases,
 `check-android-prod` 9; CI `ios-config` green. Not verifiable here: the Codemagic build and the iPhone itself
 (device: pending, Part C4).
+
+### Production deploy: v9.15.0 (2026-09-30)
+
+Karlos's go-ahead after `.\backup.ps1` and the Netlify change (C3). No migration.
+
+1. **Backup (Karlos):** `vv-backup-2026-09-30-1743.sql`; `deploy.ps1`'s check found and named it.
+2. **Netlify env (Karlos, C3):** `CORS_EXTRA_ORIGINS` = `https://localhost,capacitor://localhost` in every context
+   (read back with the CLI before the deploy; a first attempt hadn't saved).
+3. **Deploy:** from a clean `main` at `v9.15.0` (`9bd1979`): migrations up to date, build and publish live (deploy
+   `6abc9436c703852db86e9e1e`), smoke check passed (health and db ok, CSP header, unknown team 404).
+
+**Live checks:**
+- `X-Client: android/9.12.0` on `/api/v1/auth/me` → 426 `APP_OUTDATED`; `android/9.14.0`, `ios/9.15.0` and no header →
+  the usual 401 (the new function code is live despite the CLI's "functions from cache" line).
+- A preflight from `capacitor://localhost` with `authorization, content-type, x-client` is allowed with those headers;
+  `capacitor://evil` gets no allow-origin; `https://localhost` still does.
+- The production bundle contains the update message, `getPlatform`, "Pick an earlier start date", "Open attachment"
+  and "Back to home". `/health`: `{"status":"ok","db":"ok"}`.
+- Sentry: no unresolved issues in the hour of the deploy.
+- A real email through nodemailer 10: Karlos triggered a password reset on production and it arrived (30 Sept).
+- Not checked live (covered by the integration tests): the members-list masking for a signed-in player.
+
+### Phase 9.0 of the rebuild roadmap: carry-over fixes (branch `rebuild/p9-0-carryover`, 2026-09-30)
+
+From the Phase 8.5 review and an independent review of v9.15.0. No migration. Release v9.16.0.
+
+| Item | Change | Test |
+|---|---|---|
+| 9.0.1 | `codemagic.yaml`: `.ipa` artifact under both the clone root and `frontend/`; build-number and internal-only comments corrected. CI `ios-config` fails on untracked files in `ios/` too. README: pre-script Codemagic errors, shared-scheme fix. CHANGELOG v9.15.0 iPhone claims marked pending the first build | CI |
+| 9.0.2 (G2) | Team owner's email and account id (`owner.email`, `owner.id`, `ownerId`) null for callers without MANAGE_MEMBERS who aren't the owner, on `GET /teams`, `/teams/:id`, `/users/me/teams`, `/matches/:id`, `/coach/teams`, `/coach/dashboard` and the transfer response (`maskOwner`). `GET /teams/:id/owner` removed (unused; sent email and global role) | `playerPrivacy.test.ts`, authz matrix shape checks |
+| 9.0.3 (G2) | Chat serializer: explicit field list (no `clientKey`, `deletedByUserId`); `senderId` / `sender.id` null on messages not sent by the caller, moderators included | `chat.test.ts`, authz matrix |
+| 9.0.4 (G2) | Invitee views (`/users/me/invitations`, accept, decline, redeem): inviter's name only (`maskInviter`) | `playerPrivacy.test.ts`, authz matrix |
+| 9.0.5 | Replay rewrites `setNumber` on events and adjustments; `setScores` edits validated (≤5 sets, whole 0–999, no ties) and set sets won, status and `manualScoreOverride`; `PATCH /score` refuses sets won (400) | `scoreReplay`, `setOperations`, `scoreWriterLocks`, integration `setMarks` |
+| 9.0.6 | Dashboards take `?localNow=` (naive, within 14 h) for "upcoming" | `matchDate.test.ts` |
+| 9.0.7 | `ATTACK_ATTEMPT_TYPES` shared by `calculateStats` and the match report; DOB shown in UTC | `matchReportZones.test.ts` |
+| 9.0.8 | `removeStoredFiles` (chunked, Sentry, never throws); message delete erases body, attachment rows and files; team delete removes its chat files; `editMessage` only updates a live message; `scripts/scrub-deleted-messages.ts` (dry run by default, `lib/adminScript.ts` guard) | `storageCleanup`, `adminScript`, `http.teamDelete`, `messageEditRace`, authz matrix; script run on `vv-pg17` |
+| 9.0.9 | Sentry scrub moved to `lib/sentryScrub.ts`, drops IP headers (`x-forwarded-for`, `x-real-ip`, `x-nf-client-connection-ip`, `client-ip`, `forwarded`, `cf-connecting-ip`, `true-client-ip`) and `user.ip_address`. Fonts self-hosted (OFL), Google removed from the CSP | `sentryScrub.test.ts`; built preview |
+
+**Reviews:** `/code-review high` 5 (2 fixed: set-edit status, scrub order; 3 skipped: team-delete upload race, soft
+delete orphaning files if storage fails, a doubled role read); phase-end Opus audit 3 medium + 3 low (owner id on
+the match and coach portal, the two already fixed, the edit race, `client-ip`: all fixed); `/security-review` no
+findings (noted the same owner-id paths, fixed).
+
+**Verified:** backend `tsc`, 78 unit test files, build; integration 6/6 on `vv-pg17`; frontend `tsc`, lint, build.
+
+**Production data job (Karlos, C4, after the deploy and a backup):** `npx ts-node scripts/scrub-deleted-messages.ts
+--prod` (dry run), then with `--apply`.
+

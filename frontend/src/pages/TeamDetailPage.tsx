@@ -269,7 +269,9 @@ export default function TeamDetailPage() {
             {team.owner && (
               <p className="text-grey-900 font-medium">
                 {team.owner.firstName} {team.owner.lastName}
-                <span className="block sm:inline sm:ml-2 text-grey-600 font-normal text-sm break-all">{team.owner.email}</span>
+                {team.owner.email && (
+                  <span className="block sm:inline sm:ml-2 text-grey-600 font-normal text-sm break-all">{team.owner.email}</span>
+                )}
               </p>
             )}
           </div>

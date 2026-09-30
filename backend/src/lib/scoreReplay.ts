@@ -34,6 +34,8 @@ export interface ReplayResult {
   completed: boolean;
   /** Ids of the items whose point closed a set (8.0.3): the completedSet marks. */
   closers: { events: string[]; adjustments: string[] };
+  /** The set each item with an id was played in (9.0.5); items after the end keep the final set. */
+  sets: { events: Map<string, number>; adjustments: Map<string, number> };
 }
 
 function setWinTarget(setNumber: number): number {
@@ -45,7 +47,7 @@ function hasWonSet(score: number, opponentScore: number, setNumber: number): boo
   return score >= target && score - opponentScore >= 2;
 }
 
-export type ReplayStart = Omit<ReplayResult, 'completed' | 'closers'>;
+export type ReplayStart = Omit<ReplayResult, 'completed' | 'closers' | 'sets'>;
 
 const ZERO: ReplayStart = { homeScore: 0, awayScore: 0, homeSetsWon: 0, awaySetsWon: 0, setScores: [] };
 
@@ -59,10 +61,17 @@ export function replayTimeline(items: ReplayItem[], start: ReplayStart = ZERO): 
   let { homeScore, awayScore, homeSetsWon, awaySetsWon } = start;
   const setScores = [...start.setScores];
   const closers: ReplayResult['closers'] = { events: [], adjustments: [] };
+  const sets: ReplayResult['sets'] = { events: new Map(), adjustments: new Map() };
+  const setOf = (item: ReplayItem, set: number) => {
+    if (item.id) (item.kind === 'event' ? sets.events : sets.adjustments).set(item.id, set);
+  };
   let completed = homeSetsWon >= 3 || awaySetsWon >= 3;
-  if (completed) return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers };
+  let i = 0;
 
-  for (const item of items) {
+  for (; !completed && i < items.length; i++) {
+    const item = items[i];
+    // Before the skips below, so non-scoring taps are numbered too.
+    setOf(item, homeSetsWon + awaySetsWon + 1);
     if (item.kind === 'event') {
       const team = scoringTeam(item.eventType, item.isOpponentEvent);
       if (team === 'home') homeScore++;
@@ -87,13 +96,12 @@ export function replayTimeline(items: ReplayItem[], start: ReplayStart = ZERO): 
       if (item.id) (item.kind === 'event' ? closers.events : closers.adjustments).push(item.id);
     }
 
-    if (homeSetsWon >= 3 || awaySetsWon >= 3) {
-      completed = true;
-      break;
-    }
+    if (homeSetsWon >= 3 || awaySetsWon >= 3) completed = true;
   }
+  // Taps after the match ended score nothing; they belong to its last set.
+  for (; i < items.length; i++) setOf(items[i], homeSetsWon + awaySetsWon);
 
-  return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers };
+  return { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers, sets };
 }
 
 /** Merges event and adjustment streams into one chronologically sorted timeline. */

@@ -52,6 +52,38 @@ async function main() {
     assert.equal(undo.body.kind, 'event');
     assert.deepEqual(await score(), { homeScore: 0, awayScore: 0, homeSetsWon: 1 }, 'Set 1 is still won');
 
+    // 9.0.5: set numbers follow the replay too. A manual +1 closes Set 1 and a
+    // kill opens Set 2; two late taps then move the boundary back by two points,
+    // so both belong to Set 2. Reset Set (Set 2) must take that adjustment.
+    const m2 = await prisma.match.create({
+      data: { teamId: team.id, opponent: 'Sets', matchDate: new Date(), status: 'IN_PROGRESS', createdAt: new Date(base - 60_000) },
+    });
+    const tap = (key: string, at: number, setNumber: number) => ({ ...kill(key, at), matchId: m2.id, setNumber });
+    const batch2 = async (events: unknown[]) => {
+      const r = await call(app.base, 'POST', '/api/v1/events/batch', coach.token, { matchId: m2.id, events });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+    };
+    const early = Array.from({ length: 24 }, (_, i) => tap(`s${i + 1}`, base + i * 1000, 1));
+    await batch2(early.slice(0, 20));
+    await batch2(early.slice(20));
+    const plus = await call(app.base, 'PATCH', `/api/v1/matches/${m2.id}/score`, coach.token, { homeDelta: 1 });
+    assert.equal(plus.status, 200, JSON.stringify(plus.body));
+    assert.equal(plus.body.homeSetsWon, 1, 'the +1 closed Set 1');
+    await batch2([tap('s25', Date.now(), 2)]);
+    await batch2([tap('late1', base + 500, 1)]);
+    await batch2([tap('late2', base + 600, 1)]);
+
+    const setOf = async () => Object.fromEntries((await prisma.event.findMany({
+      where: { matchId: m2.id, clientKey: { in: ['s23', 's24', 's25', 'late1'] } }, select: { clientKey: true, setNumber: true },
+    })).map((e) => [e.clientKey, e.setNumber]));
+    assert.deepEqual(await setOf(), { s23: 1, s24: 2, s25: 2, late1: 1 }, 'events moved to the set they were played in');
+    const [adjustment] = await prisma.scoreAdjustment.findMany({ where: { matchId: m2.id } });
+    assert.equal(adjustment.setNumber, 2, 'the adjustment moved to Set 2');
+
+    const reset2 = await call(app.base, 'POST', `/api/v1/matches/${m2.id}/score/reset`, coach.token);
+    assert.equal(reset2.status, 200);
+    assert.equal(await prisma.scoreAdjustment.count({ where: { matchId: m2.id } }), 0, "Reset Set took Set 2's adjustment");
+
     console.log('setMarks: all tests passed');
   } finally {
     await app.close();

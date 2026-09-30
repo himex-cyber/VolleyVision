@@ -1,6 +1,6 @@
 // Team Chat attachments — the single choke-point for all Supabase Storage
-// access. Every byte in or out of the `team-chat` bucket goes through here:
-// upload, signed-URL read, compensating delete. Limits are re-validated in
+// access, except removal (lib/storageCleanup.ts). Bytes in and out of the
+// `team-chat` bucket go through here: upload, signed-URL read. Limits are re-validated in
 // this service even though the bucket enforces its own MIME/size caps
 // (defense in depth — bucket settings can drift).
 
@@ -167,19 +167,4 @@ export async function signAttachmentUrl(storagePath: string, ttlSeconds = 3600):
     throw new AppError(502, 'Could not generate a download link for an attachment.');
   }
   return data.signedUrl;
-}
-
-/**
- * Compensating cleanup (e.g. DB write failed after upload). Cleanup must never
- * mask the original failure, so errors are logged, not thrown — an orphaned
- * object costs storage; a thrown cleanup error costs the real error message.
- */
-export async function deleteObjects(paths: string[]): Promise<void> {
-  if (paths.length === 0) return;
-  try {
-    const { error } = await getSupabaseClient().storage.from(BUCKET).remove(paths);
-    if (error) console.error(`Supabase cleanup failed for ${paths.length} object(s):`, error.message);
-  } catch (err) {
-    console.error('Supabase cleanup threw:', err);
-  }
 }

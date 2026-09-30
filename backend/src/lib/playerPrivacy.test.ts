@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { visiblePlayers, redactEvents, maskMembers } from './playerPrivacy';
+import { visiblePlayers, redactEvents, maskMembers, maskOwner, maskInviter } from './playerPrivacy';
 
 const players = [
   { id: 'p1', firstName: 'Ann', userId: 'u1' },
@@ -67,5 +67,22 @@ assert.ok(asBen.every((m) => !('role' in m.user) && !('email' in m.user)), 'no g
 assert.deepEqual(asBen.map((m) => m.role), ['HEAD_COACH', 'PLAYER'], 'team roles stay');
 assert.equal(asBen[0].user.firstName, 'Ann');
 assert.ok(maskMembers(memberRows, false, null).every((m) => m.user.id === null), 'anonymous: every id masked');
+
+// 9.0.2: the owner's email and account id, on the team rows every member reads.
+const ownedTeam = { id: 't1', ownerId: 'u1', owner: { id: 'u1', firstName: 'Kim', lastName: 'Lee', email: 'kim@x.test' } };
+assert.deepEqual(maskOwner(ownedTeam, true, 'u2'), ownedTeam, 'managers see the owner in full');
+assert.deepEqual(maskOwner(ownedTeam, false, 'u1'), ownedTeam, 'the owner sees themself');
+const asMember = maskOwner(ownedTeam, false, 'u2');
+assert.equal(asMember.ownerId, null, 'no owner id for a member');
+assert.deepEqual(asMember.owner, { id: null, firstName: 'Kim', lastName: 'Lee', email: null }, 'name kept, id and email null');
+assert.equal(ownedTeam.owner.email, 'kim@x.test', 'input not mutated');
+assert.deepEqual(maskOwner({ id: 't2', ownerId: 'u1' }, false, null), { id: 't2', ownerId: null }, 'a row without owner');
+assert.deepEqual(maskOwner({ id: 't3', ownerId: 'u1', owner: null }, false, 'u2').owner, null, 'a null owner stays null');
+
+// 9.0.4: what an invitee learns about who invited them: the name only.
+const inv = { id: 'i1', invitedById: 'u1', invitedBy: { id: 'u1', firstName: 'Kim', lastName: 'Lee', email: 'kim@x.test' } };
+assert.deepEqual(maskInviter(inv), { id: 'i1', invitedById: null, invitedBy: { id: null, firstName: 'Kim', lastName: 'Lee', email: null } });
+assert.deepEqual(maskInviter({ id: 'i2', invitedById: 'u1' }), { id: 'i2', invitedById: null }, 'a row without invitedBy');
+assert.equal(inv.invitedBy.email, 'kim@x.test', 'input not mutated');
 
 console.log('playerPrivacy.test.ts passed');
