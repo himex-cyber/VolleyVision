@@ -61,6 +61,19 @@ export function maskOwner<T extends OwnedTeam>(team: T, canManage: boolean, call
   return masked;
 }
 
+type InviteRow = { invitedById: string | null; invitedBy?: { id: string | null; email?: string | null } | null };
+
+/**
+ * An invitation as its invitee sees it (9.0.4): the inviter's name, never their
+ * account id or email. Invitees can be minors. Null rather than removed, as
+ * installed apps may read the fields.
+ */
+export function maskInviter<T extends InviteRow>(inv: T): T {
+  const masked = { ...inv, invitedById: null };
+  if (inv.invitedBy) masked.invitedBy = { ...inv.invitedBy, id: null, email: null };
+  return masked;
+}
+
 type EventWithPlayer = {
   playerId: string | null;
   notes: string | null;

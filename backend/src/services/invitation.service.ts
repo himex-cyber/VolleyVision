@@ -7,6 +7,7 @@ import { canActInCategory } from './permission.service';
 import { AppError } from '../middleware/errorHandler';
 import { sendInvitationEmail } from '../lib/mailer';
 import { normalizeEmail } from '../lib/email';
+import { maskInviter } from '../lib/playerPrivacy';
 import { assertEmailVerified } from './emailVerification.service';
 
 const EXPIRY_DAYS = 7;
@@ -95,11 +96,11 @@ export async function acceptInvitation(token: string, userId: string) {
 
   await addMember(inv.teamId, userId, inv.role);
 
-  return prisma.invitation.update({
+  return maskInviter(await prisma.invitation.update({
     where: { id: inv.id },
     data: { status: InvitationStatus.ACCEPTED, acceptedAt: new Date() },
     include: { team: { select: { id: true, name: true } } },
-  });
+  }));
 }
 
 /**
@@ -133,11 +134,11 @@ export async function redeemInvitationByCode(joinCode: string, userId: string) {
 
   await addMember(inv.teamId, userId, inv.role);
 
-  return prisma.invitation.update({
+  return maskInviter(await prisma.invitation.update({
     where: { id: inv.id },
     data: { status: InvitationStatus.ACCEPTED, acceptedAt: new Date() },
     include: { team: { select: { id: true, name: true } } },
-  });
+  }));
 }
 
 export async function declineInvitation(token: string, userId: string) {
@@ -153,11 +154,11 @@ export async function declineInvitation(token: string, userId: string) {
     throw Object.assign(new Error('This invitation was sent to a different email address'), { statusCode: 403 });
   }
 
-  return prisma.invitation.update({
+  return maskInviter(await prisma.invitation.update({
     where: { id: inv.id },
     data: { status: InvitationStatus.DECLINED },
     include: { team: { select: { id: true, name: true } } },
-  });
+  }));
 }
 
 export async function expireStaleInvitations() {
@@ -187,7 +188,7 @@ export async function getTeamInvitations(teamId: string, userId: string) {
 
 export async function getUserInvitations(email: string) {
   await expireStaleInvitations();
-  return prisma.invitation.findMany({
+  const invitations = await prisma.invitation.findMany({
     where: { email, status: InvitationStatus.PENDING },
     orderBy: { createdAt: 'desc' },
     include: {
@@ -195,4 +196,5 @@ export async function getUserInvitations(email: string) {
       invitedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
   });
+  return invitations.map(maskInviter);
 }

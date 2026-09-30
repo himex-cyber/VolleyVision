@@ -680,7 +680,8 @@ export interface Invitation {
   id: string;
   email: string;
   teamId: string;
-  invitedById: string;
+  // Null in the invitee's own views (9.0.4); staff lists keep it.
+  invitedById: string | null;
   role: TeamRole;
   status: InvitationStatus;
   token: string;
@@ -691,7 +692,7 @@ export interface Invitation {
   acceptedAt: string | null;
   createdAt: string;
   team?: { id: string; name: string; division?: string; season: string };
-  invitedBy?: { id: string; firstName: string; lastName: string; email: string };
+  invitedBy?: { id: string | null; firstName: string; lastName: string; email: string | null };
 }
 
 // ─── Point flow: rotations, momentum, advanced metrics (7.9) ─────────────────

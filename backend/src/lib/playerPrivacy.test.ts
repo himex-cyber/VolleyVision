@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { visiblePlayers, redactEvents, maskMembers, maskOwner } from './playerPrivacy';
+import { visiblePlayers, redactEvents, maskMembers, maskOwner, maskInviter } from './playerPrivacy';
 
 const players = [
   { id: 'p1', firstName: 'Ann', userId: 'u1' },
@@ -78,5 +78,11 @@ assert.deepEqual(asMember.owner, { id: null, firstName: 'Kim', lastName: 'Lee', 
 assert.equal(ownedTeam.owner.email, 'kim@x.test', 'input not mutated');
 assert.deepEqual(maskOwner({ id: 't2', ownerId: 'u1' }, false, null), { id: 't2', ownerId: null }, 'a row without owner');
 assert.deepEqual(maskOwner({ id: 't3', ownerId: 'u1', owner: null }, false, 'u2').owner, null, 'a null owner stays null');
+
+// 9.0.4: what an invitee learns about who invited them: the name only.
+const inv = { id: 'i1', invitedById: 'u1', invitedBy: { id: 'u1', firstName: 'Kim', lastName: 'Lee', email: 'kim@x.test' } };
+assert.deepEqual(maskInviter(inv), { id: 'i1', invitedById: null, invitedBy: { id: null, firstName: 'Kim', lastName: 'Lee', email: null } });
+assert.deepEqual(maskInviter({ id: 'i2', invitedById: 'u1' }), { id: 'i2', invitedById: null }, 'a row without invitedBy');
+assert.equal(inv.invitedBy.email, 'kim@x.test', 'input not mutated');
 
 console.log('playerPrivacy.test.ts passed');

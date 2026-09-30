@@ -66,7 +66,7 @@ async function setup() {
     data: { userId: owner.id, type: 'BUG', subject: 'x', description: 'x', attachments: { create: { kind: 'FILE', storagePath: 'x/y.pdf', originalName: 'y.pdf', mimeType: 'application/pdf', sizeBytes: 1 } } },
     include: { attachments: true },
   });
-  return { invitation, feedback, team, owner, assistant, manager, staffCode, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, p2, pDel, match, matchDel, event, channel, message, approval };
+  return { invitation, invitee, feedback, team, owner, assistant, manager, staffCode, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, p2, pDel, match, matchDel, event, channel, message, approval };
 }
 
 const ROWS: Row[] = [
@@ -225,6 +225,21 @@ async function main() {
     const ownMsgs = await call(base, 'GET', `/api/v1/channels/${f.channel.id}/messages`, f.owner.token);
     const own = (ownMsgs.body as Record<string, any>[]).find((m) => m.id === f.message.id);
     assert.equal(own?.senderId, f.owner.id, 'the sender sees their own id');
+    // 9.0.4: an invitee (who may be a minor) gets the inviter's name only.
+    const second = await prisma.invitation.create({
+      data: { email: f.invitee.email, teamId: f.team.id, invitedById: f.owner.id, role: 'PLAYER', token: `${f.invitation.token}-2`, expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+    const invites = (await call(base, 'GET', '/api/v1/users/me/invitations', f.invitee.token)).body as Record<string, any>[];
+    assert.ok(invites.length >= 1, 'the invitee sees their invitations');
+    for (const inv of invites) {
+      assert.equal(inv.invitedById, null, 'no inviter account id');
+      assert.equal(inv.invitedBy.id, null, 'no inviter account id');
+      assert.equal(inv.invitedBy.email, null, 'no inviter email');
+      assert.equal(typeof inv.invitedBy.firstName, 'string', "the inviter's name stays");
+    }
+    const declined = await call(base, 'POST', `/api/v1/invitations/${second.token}/decline`, f.invitee.token);
+    assert.equal(declined.status, 200);
+    assert.equal(declined.body.invitedById, null, 'decline returns no inviter id');
     const managed = await call(base, 'GET', `/api/v1/teams/${f.team.id}/members`, f.manager.token);
     assert.ok((managed.body as { user: { id: unknown; role?: unknown } }[]).every((m) => typeof m.user.id === 'string' && 'role' in m.user),
       'a manager sees every account id and role');
