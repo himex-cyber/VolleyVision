@@ -36,7 +36,7 @@ export async function getTeamChannel(req: Request, res: Response, next: NextFunc
 export async function listChannelMessages(req: Request, res: Response, next: NextFunction) {
   try {
     const { limit, before, after } = req.query;
-    const messages = await listMessages(req.params.channelId, {
+    const messages = await listMessages(req.params.channelId, req.user!.userId, {
       limit: typeof limit === 'string' ? parseInt(limit, 10) : undefined,
       before: typeof before === 'string' ? before : undefined,
       after: typeof after === 'string' ? after : undefined,

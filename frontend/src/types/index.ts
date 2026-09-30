@@ -218,7 +218,8 @@ export interface ChatChannel {
 }
 
 export interface ChatSender {
-  id: string;
+  // Null on other members' messages (9.0.3); own messages keep it.
+  id: string | null;
   firstName: string;
   lastName: string;
   profileImage: string | null;
@@ -240,7 +241,7 @@ export interface ChatAttachment {
 export interface ChatMessage {
   id: string;
   channelId: string;
-  senderId: string | null; // null = former member
+  senderId: string | null; // null = former member, or someone else's message (9.0.3)
   sender: ChatSender | null;
   body: string | null; // null = tombstone ("message deleted")
   attachments: ChatAttachment[];

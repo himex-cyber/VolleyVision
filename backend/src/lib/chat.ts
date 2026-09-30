@@ -82,7 +82,7 @@ export function canDeleteMessage(
 // ─── Serialization ────────────────────────────────────────────────────────────
 
 export interface SenderSummary {
-  id: string;
+  id: string | null;
   firstName: string;
   lastName: string;
   profileImage: string | null;
@@ -100,21 +100,39 @@ export interface SerializedMessage {
   createdAt: Date;
 }
 
+/** A message row as read from the database (extra columns are ignored). */
+export type MessageRow = Omit<SerializedMessage, 'sender'> & {
+  sender: { id: string; firstName: string; lastName: string; profileImage: string | null } | null;
+};
+
 /**
+ * An explicit field list, so internal columns (clientKey, deletedByUserId)
+ * never leave the server. Account ids are only on the caller's own messages,
+ * for every caller, moderators included (9.0.3): "is this mine?" still works
+ * in installed apps, and report and block work by message id. The sender's
+ * name stays, so a masked id doesn't read as "Former member" (sender == null).
+ *
  * Deleted messages are returned as tombstones — id/sender/timestamps survive so
  * the client renders "message deleted" and ordering stays stable, but body and
  * attachments are stripped. Never omit deleted messages from a page.
  */
-export function serializeMessage(msg: SerializedMessage): SerializedMessage {
-  if (!msg.deletedAt) return msg;
+export function serializeMessage(msg: MessageRow, callerId: string): SerializedMessage {
+  const own = msg.senderId !== null && msg.senderId === callerId;
+  const sender = msg.sender && {
+    id: own ? msg.sender.id : null,
+    firstName: msg.sender.firstName,
+    lastName: msg.sender.lastName,
+    profileImage: msg.sender.profileImage,
+  };
+  const deleted = !!msg.deletedAt;
   return {
     id: msg.id,
     channelId: msg.channelId,
-    senderId: msg.senderId,
-    sender: msg.sender,
-    body: null,
-    attachments: [],
-    editedAt: null,
+    senderId: own ? msg.senderId : null,
+    sender,
+    body: deleted ? null : msg.body,
+    attachments: deleted ? [] : msg.attachments,
+    editedAt: deleted ? null : msg.editedAt,
     deletedAt: msg.deletedAt,
     createdAt: msg.createdAt,
   };

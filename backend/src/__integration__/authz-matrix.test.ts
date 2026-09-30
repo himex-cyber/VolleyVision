@@ -212,6 +212,19 @@ async function main() {
       assert.equal(res.body.ownerId, f.owner.id, 'a manager and the owner see the owner id');
       assert.equal(typeof res.body.owner.email, 'string', 'a manager and the owner see the owner email');
     }
+    // 9.0.3: chat carries other members' names, never their account ids or internal columns.
+    for (const t of [f.users.viewer.token, f.users.player.token, f.manager.token]) {
+      const res = await call(base, 'GET', `/api/v1/channels/${f.channel.id}/messages`, t);
+      const msg = (res.body as Record<string, any>[]).find((m) => m.id === f.message.id);
+      assert.ok(msg, "the owner's message is listed");
+      assert.equal(msg.senderId, null, "another member's senderId is masked");
+      assert.equal(msg.sender.id, null, "another member's sender.id is masked");
+      assert.equal(typeof msg.sender.firstName, 'string', 'the sender keeps their name');
+      assert.ok(!('clientKey' in msg) && !('deletedByUserId' in msg), 'no internal columns');
+    }
+    const ownMsgs = await call(base, 'GET', `/api/v1/channels/${f.channel.id}/messages`, f.owner.token);
+    const own = (ownMsgs.body as Record<string, any>[]).find((m) => m.id === f.message.id);
+    assert.equal(own?.senderId, f.owner.id, 'the sender sees their own id');
     const managed = await call(base, 'GET', `/api/v1/teams/${f.team.id}/members`, f.manager.token);
     assert.ok((managed.body as { user: { id: unknown; role?: unknown } }[]).every((m) => typeof m.user.id === 'string' && 'role' in m.user),
       'a manager sees every account id and role');
