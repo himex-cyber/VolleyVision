@@ -6,10 +6,11 @@ import {
   getLinkedPlayers,
 } from '../services/playerPortal.service';
 import { AppError } from '../middleware/errorHandler';
+import { upcomingFrom } from '../lib/matchDate';
 
 export async function playerDashboardHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const dashboard = await getPlayerDashboard(req.user!.userId);
+    const dashboard = await getPlayerDashboard(req.user!.userId, upcomingFrom(req.query.localNow));
     res.json(dashboard);
   } catch (err) {
     next(err);

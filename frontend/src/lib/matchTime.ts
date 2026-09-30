@@ -12,6 +12,16 @@ export function formatMatchDate(
   return new Intl.DateTimeFormat(undefined, { ...options, timeZone: 'UTC' }).format(d);
 }
 
+/**
+ * The device's wall-clock time as a naive "YYYY-MM-DDTHH:mm", comparable with
+ * stored match dates. Sent as ?localNow= so "upcoming" means not started yet
+ * where the user is, not in UTC (9.0.6).
+ */
+export function localNow(now: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}`;
+}
+
 /** Value for `<input type="datetime-local">`: the stored wall-clock time. */
 export function toDateTimeLocal(value: string | Date): string {
   const d = new Date(value);

@@ -3,6 +3,7 @@ import { getToken, clearToken } from './tokenStorage';
 import { clearOfflineCache } from './offlineCache';
 import { setLeaveGuard } from './leaveGuard';
 import { isNative, nativePlatform } from './native';
+import { localNow } from './matchTime';
 import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, RotationData, MomentumData, AdvancedMetrics, DateRange, User, AuthResponse, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
@@ -416,7 +417,7 @@ export const profileApi = {
 
 // ─── Player Portal (Phase 5 Sprint 5) ────────────────────────────────────────
 export const playerPortalApi = {
-  dashboard: () => api.get<PlayerDashboard>('/player/dashboard').then((r) => r.data),
+  dashboard: () => api.get<PlayerDashboard>('/player/dashboard', { params: { localNow: localNow() } }).then((r) => r.data),
   stats: () => api.get('/player/stats').then((r) => r.data),
   bests: () => api.get<PlayerBests | null>('/player/bests').then((r) => r.data),
   teams: () => api.get<PlayerRecord[]>('/player/teams').then((r) => r.data),
@@ -424,7 +425,7 @@ export const playerPortalApi = {
 
 // ─── Coach Portal (Phase 5 Sprint 5) ─────────────────────────────────────────
 export const coachPortalApi = {
-  dashboard: () => api.get<CoachDashboard>('/coach/dashboard').then((r) => r.data),
+  dashboard: () => api.get<CoachDashboard>('/coach/dashboard', { params: { localNow: localNow() } }).then((r) => r.data),
   teams: () => api.get('/coach/teams').then((r) => r.data),
   stats: () => api.get('/coach/stats').then((r) => r.data),
 };
