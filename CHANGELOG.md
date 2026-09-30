@@ -6,9 +6,9 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 
 Phase 8 of the rebuild roadmap: analytics B, plus the match-time fix carried
 from Phase 8.0 (8.0.7). No migration. Deployed to production on 2026-09-30,
-together with v9.13.0. Share the v9.14.0
-Android build only after the backend is deployed: the app sends date ranges
-an older server ignores, so it would show every match under a date label.
+together with v9.13.0. The signed Android build (9.14.0, versionCode 5) is
+built; it hasn't been shared yet. It needs this server: an older one ignores
+the app's date ranges and would show every match under a date label.
 
 **Match times show as the time on the fixture**
 - **A 6 pm game now shows as 6 pm.** Match times were shown converted to the
@@ -52,9 +52,7 @@ an older server ignores, so it would show every match under a date label.
 
 Phase 8.0 of the rebuild roadmap: fixes carried over from the Phases 6–7
 review. No migration. Deployed to production on 2026-09-30 as part of
-v9.14.0. Share the v9.13.0 Android build only
-after the backend is deployed: it sends score changes the v9.12.0 server
-doesn't know (it still falls back to whole scores there, as before).
+v9.14.0. No Android build of v9.13.0 was shared; v9.14.0's includes it.
 
 **Scoring with more than one device**
 - **Manual +1 / −1 no longer wipes out another device's points.** The tracker
