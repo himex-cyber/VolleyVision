@@ -6,6 +6,8 @@ import { getApiErrorMessage } from '../lib/api';
 import PlayerRadarChart from '../components/charts/PlayerRadarChart';
 import TeamTrendChart from '../components/charts/TeamTrendChart';
 import PlayerRecordsManager from '../components/player/PlayerRecordsManager';
+import { Link } from 'react-router-dom';
+import { legalHref } from '../lib/legal';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Admin', COACH: 'Coach', PLAYER: 'Player', VIEWER: 'Viewer',
@@ -249,6 +251,17 @@ export default function ProfilePage() {
 
       {/* Linked player records (moved here from the Player Dashboard) */}
       <PlayerRecordsManager />
+
+      {/* Account (9.2/9.4): the legal pages and account deletion */}
+      <div className="card p-5">
+        <h2 className="font-display text-xl text-grey-900 mb-2">Account</h2>
+        <div className="flex flex-wrap gap-x-5">
+          <a href={legalHref('privacy')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-[44px] text-sm text-navy-700 font-medium">Privacy Policy</a>
+          <a href={legalHref('terms')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-[44px] text-sm text-navy-700 font-medium">Terms</a>
+          <a href={legalHref('support')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-[44px] text-sm text-navy-700 font-medium">Support</a>
+        </div>
+        <Link to="/profile/delete-account" className="inline-flex items-center min-h-[44px] text-sm text-error-strong font-medium">Delete account</Link>
+      </div>
     </div>
   );
 }

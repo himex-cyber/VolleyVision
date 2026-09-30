@@ -160,7 +160,10 @@ export default function MessageItem({
         </div>
 
         {isDeleted ? (
-          <p className="text-sm text-grey-600 italic mt-0.5">Message deleted</p>
+          <p className="text-sm text-grey-600 italic mt-0.5">
+            {/* No sender: its author deleted their account (9.4). */}
+            {message.sender ? 'Message deleted' : 'Message from a former member was removed'}
+          </p>
         ) : editing ? (
           <div className="mt-1">
             <textarea

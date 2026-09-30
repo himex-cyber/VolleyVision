@@ -4,7 +4,8 @@ import type { User } from '../types';
 import { authApi } from '../lib/api';
 import { getToken, setToken as storeToken, clearToken } from '../lib/tokenStorage';
 import { cacheUser, cachedUser, cachedUserId, clearOfflineCache } from '../lib/offlineCache';
-import { forgetSession } from '../lib/eventQueue';
+import { forgetSession, purgeUserQueue } from '../lib/eventQueue';
+import { setLeaveGuard } from '../lib/leaveGuard';
 
 /** The user id inside a stored JWT (read locally; the server still verifies it). */
 function tokenUserId(token: string): string | null {
@@ -34,6 +35,7 @@ interface AuthContextValue {
   logout: () => void;
   /** Re-fetches /auth/me — used after verifying an email so the banner drops. */
   refreshUser: () => Promise<void>;
+  onAccountDeleted: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -97,6 +99,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  // Account deleted (9.4): the token is already dead server-side, so no logout
+  // call. Unlike sign-out, this account's queued taps go too: nothing of it
+  // stays on the device. Other accounts' queues on a shared device stay. A
+  // full reload, not a route change: it drops every in-memory copy (query
+  // cache included), and RequireAuth can't redirect first and lose the notice.
+  const onAccountDeleted = useCallback(() => {
+    const id = user?.id;
+    clearToken();
+    clearOfflineCache();
+    if (id) purgeUserQueue(id);
+    else forgetSession();
+    try { sessionStorage.removeItem('vv_verify_banner_dismissed'); } catch { /* storage blocked: nothing kept */ }
+    setLeaveGuard(null);
+    window.location.replace('/login?deleted=1');
+  }, [user?.id]);
+
   const refreshUser = useCallback(async () => {
     if (!getToken()) return;
     const u = await authApi.me();
@@ -105,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, refreshUser, onAccountDeleted }}>
       {children}
     </AuthContext.Provider>
   );

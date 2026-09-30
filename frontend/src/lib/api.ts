@@ -420,6 +420,7 @@ export const profileApi = {
   update: (data: Partial<UserProfile>) =>
     api.patch<UserProfile>('/profile', data).then((r) => r.data),
   acceptTerms: () => api.post<{ termsRequired: boolean }>('/profile/accept-terms').then((r) => r.data),
+  deleteAccount: (password: string) => api.delete('/profile', { data: { password } }),
 };
 
 // ─── Player Portal (Phase 5 Sprint 5) ────────────────────────────────────────

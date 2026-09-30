@@ -25,9 +25,17 @@ export function adminScriptTarget(argv: string[], env: Env): AdminTarget {
         + 'or pass --prod to use backend/.env (production).',
     };
   }
-  // Blank, not unset: dotenv never overwrites a set variable, so local runs
-  // can't pick up production's storage keys from backend/.env.
-  return { apply, prod: false, env: { DIRECT_URL: direct, SUPABASE_URL: env.SUPABASE_URL ?? '', SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY ?? '' } };
+  // Blank, not unset: dotenv and Prisma Client never overwrite a set
+  // variable, so a local run can't pick up production's storage keys or its
+  // SMTP login from backend/.env (it once sent a real email that way).
+  return {
+    apply, prod: false,
+    env: {
+      DIRECT_URL: direct,
+      SUPABASE_URL: env.SUPABASE_URL ?? '', SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+      SMTP_HOST: env.SMTP_HOST ?? '', SMTP_USER: env.SMTP_USER ?? '', SMTP_PASS: env.SMTP_PASS ?? '',
+    },
+  };
 }
 
 /** Which database, without printing the URL (it holds the password). */

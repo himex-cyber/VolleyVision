@@ -202,6 +202,21 @@ export function forgetSession(): void {
   emit();
 }
 
+/**
+ * Account deletion (9.4): this account's queued taps and device keys go, from
+ * storage and memory. Other accounts on a shared device keep theirs.
+ */
+export function purgeUserQueue(userId: string): void {
+  const prefixes = [`${QUEUE_PREFIX}${userId}:`, `${DEVICE_KEYS_PREFIX}${userId}:`];
+  for (const prefix of prefixes) {
+    for (const k of storageKeys(prefix)) storageRemove(k);
+    for (const map of [memory, parsed, deviceKeysMemory, deviceKeysParsed]) {
+      for (const k of [...map.keys()]) if (k.startsWith(prefix)) map.delete(k);
+    }
+  }
+  forgetSession();
+}
+
 /** Whether Undo can work without a connection: a tap of ours to take back. */
 export function hasLocalUndo(userId: string, matchId: string): boolean {
   return undoNewest(read(userId, matchId)).result !== 'none' || (history.get(hKey(userId, matchId))?.length ?? 0) > 0;

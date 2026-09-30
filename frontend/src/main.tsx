@@ -99,6 +99,7 @@ const RedeemInvitationPage = lazy(() => import('./pages/RedeemInvitationPage'));
 const InvitationsPage = lazy(() => import('./pages/InvitationsPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage'));
 const TeamsPage = lazy(() => import('./pages/TeamsPage'));
 const TeamDetailPage = lazy(() => import('./pages/TeamDetailPage'));
 const MatchesPage = lazy(() => import('./pages/MatchesPage'));
@@ -174,6 +175,7 @@ function App() {
             <Route element={<RequireAuth />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/profile/delete-account" element={<DeleteAccountPage />} />
               {/* No more separate coach/player portals — old bookmarks land on the
                   unified dashboard. */}
               <Route path="/player" element={<Navigate to="/dashboard" replace />} />
