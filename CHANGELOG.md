@@ -2,6 +2,48 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.17.0 — unreleased
+
+Phase 9 of the rebuild roadmap: store readiness, for both app stores. One
+migration (`20260930183513_store_readiness`, additive). Not released yet: it's
+rehearsed on staging first, and the legal pages need Karlos's review and two
+facts (the database region, how long backups are kept) before a production
+deploy or a store build. Works with the Android 9.13.0+ apps, except that
+signing up in those older builds now fails (they don't send the new tick box;
+none are shared).
+
+**Terms and age**
+- **Signing up asks you to confirm you're 13 or older and agree to the Terms
+  and Privacy Policy.** There's no date of birth question. People under 13
+  don't get accounts; a coach can still add them to a roster.
+- **Existing accounts see a one-screen Terms step** the next time they sign in.
+  Until you accept, you can read team chat but not post in it; everything else
+  works. If you'd rather not agree, the step links to deleting your account.
+- **New pages:** Privacy Policy, Terms, Delete your account and Support, linked
+  from the account menu, the sign-in page, sign-up and Profile.
+
+**Delete your account**
+- **Profile → Account → Delete account** deletes your account straight away,
+  with your password. Your messages, photos and files are erased, and your
+  name comes off everything. Stats recorded for you stay with your teams as
+  "Former player", so their totals stay right. Teams you own must be
+  transferred or deleted first. You get an email confirming it.
+- Without the app: email support from your account's address.
+
+**Safer team chat**
+- **Report** a message: pick a reason, and it's reviewed within 48 hours.
+- **Block** a member: you stop seeing their messages in team chats (they
+  aren't told). Unblock under Profile → Blocked members.
+- A short list of offensive words is replaced with `****`.
+- Deleting a team now also clears the copies of its messages kept in reports.
+
+**The apps**
+- **The Android and iPhone apps keep your sign-in and unsynced taps in the
+  phone's own storage**, which the phone doesn't clear to free up space.
+  Updating moves what's already saved across.
+- The iPhone app declares that storage in its privacy manifest, and there's a
+  separate build for App Store and external testers, without the web inspector.
+
 ## v9.16.0 — 2026-10-01
 
 Phase 9.0 of the rebuild roadmap: fixes carried from the Phase 8.5 review,
