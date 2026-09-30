@@ -6,7 +6,7 @@ import { checkSetCompletion, loadScoreState } from '../lib/scoring';
 // Re-add `completeSet, leadingSide` here if the endSet controller below is
 // ever restored. `completeSet` is still very much live — lib/scoring.ts calls
 // it for automatic set completion; it's just no longer used from this file.
-import { resetMatchScore } from '../lib/setOperations';
+import { resetMatchScore, parseSetScoresEdit } from '../lib/setOperations';
 import type { MatchScoreState } from '../lib/setOperations';
 import { logAudit } from '../lib/audit';
 import { maskOtherUserIds } from '../lib/playerPrivacy';
@@ -108,6 +108,10 @@ export async function updateMatch(req: Request, res: Response, next: NextFunctio
       throw new AppError(400, 'Invalid match status.');
     }
     if (matchDate && !parseMatchDate(matchDate)) throw new AppError(400, INVALID_MATCH_DATE);
+    if (setScores !== undefined) {
+      const edit = parseSetScoresEdit(setScores);
+      if ('error' in edit) throw new AppError(400, edit.error);
+    }
     const existing = await prisma.match.findUnique({ where: { id: req.params.id }, select: { teamId: true } });
     if (!existing) throw new AppError(404, 'Match not found.');
     const userId = req.user!.userId;
@@ -156,7 +160,11 @@ export async function deleteMatch(req: Request, res: Response, next: NextFunctio
 // survives recalculateMatchState after undo/delete operations.
 export async function updateScore(req: Request, res: Response, next: NextFunction) {
   try {
-    const { homeScore, awayScore, homeSetsWon, awaySetsWon, homeDelta: homeChange, awayDelta: awayChange } = req.body;
+    const { homeScore, awayScore, homeDelta: homeChange, awayDelta: awayChange } = req.body;
+    // 9.0.5: the next replay erased them anyway, and no app sends them.
+    if (req.body.homeSetsWon != null || req.body.awaySetsWon != null) {
+      throw new AppError(400, 'Sets won are worked out from the set scores.');
+    }
 
     // 8.0.1: a delta is applied to the score read under the lock. An absolute
     // score built from a copy fetched earlier erases whatever another device
@@ -169,7 +177,7 @@ export async function updateScore(req: Request, res: Response, next: NextFunctio
       }
     }
     // Number() used to take negatives, fractions and "abc" (a Prisma 500).
-    for (const [name, value] of Object.entries({ homeScore, awayScore, homeSetsWon, awaySetsWon })) {
+    for (const [name, value] of Object.entries({ homeScore, awayScore })) {
       if (value != null && (!Number.isInteger(value) || value < 0 || value > 999)) {
         throw new AppError(400, `${name} must be a whole number from 0 to 999.`);
       }
@@ -201,12 +209,7 @@ export async function updateScore(req: Request, res: Response, next: NextFunctio
 
       const updated = await tx.match.update({
         where: { id: req.params.id },
-        data: {
-          homeScore: nextHome,
-          awayScore: nextAway,
-          ...(homeSetsWon != null ? { homeSetsWon: Number(homeSetsWon) } : {}),
-          ...(awaySetsWon != null ? { awaySetsWon: Number(awaySetsWon) } : {}),
-        },
+        data: { homeScore: nextHome, awayScore: nextAway },
       });
 
       // Check if the manual update completed a set. If it did, mark the very

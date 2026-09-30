@@ -38,9 +38,7 @@ export function currentSetNumber(state: Pick<MatchScoreState, 'homeSetsWon' | 'a
 
 /**
  * Whichever side currently leads the running score, or null if it's tied.
- *
- * No live caller today — kept for the commented-out endSet controller in
- * controllers/matches.ts, which uses it to pick the set's winner.
+ * Also picks each set's winner in a setScores edit (parseSetScoresEdit).
  */
 export function leadingSide(state: Pick<MatchScoreState, 'homeScore' | 'awayScore'>): Side | null {
   if (state.homeScore > state.awayScore) return 'home';
@@ -107,4 +105,34 @@ export function reverseEventScore(
   if (team === 'home') return { ...state, homeScore: Math.max(0, state.homeScore - 1) };
   if (team === 'away') return { ...state, awayScore: Math.max(0, state.awayScore - 1) };
   return state;
+}
+
+/**
+ * A coach's edit of the finished-set scores (9.0.5, PATCH /matches/:id and its
+ * approval). Up to 5 sets numbered from 1, whole scores 0–999, no ties, and no
+ * set after one side has 3. Each set goes to the higher score: not the 25/15
+ * win rule, so a forfeit such as 18–12 still counts.
+ */
+export function parseSetScoresEdit(
+  raw: unknown,
+): { setScores: SetScoreEntry[]; homeSetsWon: number; awaySetsWon: number } | { error: string } {
+  if (!Array.isArray(raw)) return { error: 'setScores must be a list of sets.' };
+  if (raw.length > 5) return { error: 'A match has at most 5 sets.' };
+  const won = { home: 0, away: 0 };
+  const setScores: SetScoreEntry[] = [];
+  for (const [i, entry] of raw.entries()) {
+    const { set, home, away } = (entry ?? {}) as Record<string, unknown>;
+    const whole = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 999;
+    if (set !== i + 1 || !whole(home) || !whole(away)) {
+      return { error: `Set ${i + 1} needs its number and two whole scores from 0 to 999.` };
+    }
+    if (won.home === SETS_TO_WIN_MATCH || won.away === SETS_TO_WIN_MATCH) {
+      return { error: `The match was already won before set ${i + 1}.` };
+    }
+    const winner = leadingSide({ homeScore: home, awayScore: away });
+    if (!winner) return { error: `Set ${i + 1} can't be a tie.` };
+    won[winner]++;
+    setScores.push({ set: i + 1, home, away });
+  }
+  return { setScores, homeSetsWon: won.home, awaySetsWon: won.away };
 }

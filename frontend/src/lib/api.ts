@@ -169,8 +169,9 @@ export const playersApi = {
 };
 
 // ─── Matches ──────────────────────────────────────────────────────────────────
-/** Absolutes are what installed apps send; the tracker sends deltas (8.0.1). */
-export type ScoreUpdate = Partial<Pick<Match, 'homeScore' | 'awayScore' | 'homeSetsWon' | 'awaySetsWon'>> & {
+/** Absolutes are what installed apps send; the tracker sends deltas (8.0.1).
+ *  Sets won aren't accepted: they come from the set scores (9.0.5). */
+export type ScoreUpdate = Partial<Pick<Match, 'homeScore' | 'awayScore'>> & {
   homeDelta?: number;
   awayDelta?: number;
 };
