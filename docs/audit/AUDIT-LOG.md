@@ -1036,3 +1036,25 @@ CI's audit; it also clears the three moderate ones recorded since Phase 6. Only 
 **Verified:** backend `tsc`, 74 unit test files, build; frontend `tsc`, lint, build; `check-ios-prod` 27 cases,
 `check-android-prod` 9; CI `ios-config` green. Not verifiable here: the Codemagic build and the iPhone itself
 (device: pending, Part C4).
+
+### Production deploy: v9.15.0 (2026-09-30)
+
+Karlos's go-ahead after `.\backup.ps1` and the Netlify change (C3). No migration.
+
+1. **Backup (Karlos):** `vv-backup-2026-09-30-1743.sql`; `deploy.ps1`'s check found and named it.
+2. **Netlify env (Karlos, C3):** `CORS_EXTRA_ORIGINS` = `https://localhost,capacitor://localhost` in every context
+   (read back with the CLI before the deploy; a first attempt hadn't saved).
+3. **Deploy:** from a clean `main` at `v9.15.0` (`9bd1979`): migrations up to date, build and publish live (deploy
+   `6abc9436c703852db86e9e1e`), smoke check passed (health and db ok, CSP header, unknown team 404).
+
+**Live checks:**
+- `X-Client: android/9.12.0` on `/api/v1/auth/me` → 426 `APP_OUTDATED`; `android/9.14.0`, `ios/9.15.0` and no header →
+  the usual 401 (the new function code is live despite the CLI's "functions from cache" line).
+- A preflight from `capacitor://localhost` with `authorization, content-type, x-client` is allowed with those headers;
+  `capacitor://evil` gets no allow-origin; `https://localhost` still does.
+- The production bundle contains the update message, `getPlatform`, "Pick an earlier start date", "Open attachment"
+  and "Back to home". `/health`: `{"status":"ok","db":"ok"}`.
+- Sentry: no unresolved issues in the hour of the deploy.
+- Not checked live (covered by the integration tests): the members-list masking for a signed-in player; a real email
+  through nodemailer 10 (Karlos triggers one password reset).
+
