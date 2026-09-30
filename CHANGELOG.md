@@ -9,14 +9,16 @@ app). No migration. Deployed to production on 2026-09-30. The Android app's vers
 shared with this release (the next one is versionCode 6).
 
 **VolleyVision for iPhone (TestFlight, invite-only)**
-- **The app now runs on iPhone**, with everything the Android app does: tracking
-  online and offline (taps survive the app being closed), dashboards and date
-  filters, team chat with photos from the camera or library, and Copy Report.
-  It's iPhone only, needs iOS 16.4 or later, and for now reaches invited
-  testers only, through Apple's TestFlight app.
-- It fits notched iPhones and the Dynamic Island, and every screen has an
-  on-screen way back (iPhones have no Back button). CSV downloads and printing
-  stay on the website for now, and links in emails open the website.
+- **The iPhone app is ready in code**, built to do what the Android app does:
+  tracking online and offline (taps survive the app being closed), dashboards
+  and date filters, team chat with photos from the camera or library, and Copy
+  Report. It's iPhone only, needs iOS 16.4 or later, and will reach invited
+  testers only, through Apple's TestFlight app. None of this has run on an
+  iPhone yet: it's pending the first TestFlight build.
+- It's laid out for notched iPhones and the Dynamic Island, and screens are
+  meant to have an on-screen way back (iPhones have no Back button); both are
+  on the device checklist for the first build. CSV downloads and printing stay
+  on the website for now, and links in emails open the website.
 - It needs this server version: the server has to accept the iPhone app's
   requests before it can sign in.
 

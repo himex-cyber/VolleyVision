@@ -44,7 +44,8 @@ workflows:
       - name: Use the signing profiles
         # Internal TestFlight only, enforced by Apple: this build has the web
         # inspector on, so it can never go to an external group or review.
-        # Phase 9 drops this together with CAP_IOS_INSPECTABLE.
+        # Store and external builds come from the ios-release workflow, which
+        # has neither this option nor CAP_IOS_INSPECTABLE.
         script: |
           xcode-project use-profiles --project ios/App/App.xcodeproj --custom-export-options='{"testFlightInternalTestingOnly": true}'
       - name: App version from android/app/build.gradle (the one version source)
@@ -57,11 +58,12 @@ workflows:
           sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $V;/" ios/App/App.xcodeproj/project.pbxproj
           echo "Marketing version $V"
       - name: Build number = latest TestFlight build + 1
-        # No build on TestFlight yet: the lookup prints nothing, so this is 1.
-        # A lookup error (key, Apple ID, API down) falls back to Codemagic's
-        # BUILD_NUMBER, this workflow's own build count: every upload comes from
-        # here, so it is never below the latest TestFlight number + 1, and a
-        # failed lookup can't reuse a number.
+        # With no build on TestFlight yet the CLI most likely exits non-zero, so
+        # the first build takes the fallback. The fallback (also used when the
+        # key, Apple ID or API fails) is Codemagic's BUILD_NUMBER, this
+        # workflow's run count. It counts failed runs too, so the first upload
+        # may be 3, not 1; that's fine, Apple only needs it to go up. Every
+        # upload comes from here, so it never reuses a number.
         script: |
           set -e
           case "$APP_STORE_APPLE_ID" in
@@ -80,8 +82,11 @@ workflows:
         # Swift Package Manager project: --project, not --workspace, and no pod install.
         script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme App
     artifacts:
-      # Relative to the clone, not to working_directory.
+      # Publishing uploads the .ipa it finds here. Codemagic's docs resolve
+      # paths from the clone, but working_directory may apply; list both so a
+      # wrong guess doesn't waste a 20-minute build.
       - frontend/build/ios/ipa/*.ipa
+      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
     publishing:
       email:
