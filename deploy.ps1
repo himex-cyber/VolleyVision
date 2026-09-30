@@ -131,6 +131,15 @@ if ($Target -eq 'staging') {
     }
     Write-Host "Today's backup: $($bk.FullName)"
   }
+  # The legal pages must match the app and name a real support address (9.2).
+  $ErrorActionPreference = 'Continue'
+  & node (Join-Path $PSScriptRoot 'frontend/scripts/check-legal.mjs') --release
+  $legalExitCode = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($legalExitCode -ne 0) {
+    Write-Host "DEPLOY ABORTED: the legal pages check failed (see above)."
+    exit 1
+  }
 }
 
 if (-not $SkipMigrationCheck) {
