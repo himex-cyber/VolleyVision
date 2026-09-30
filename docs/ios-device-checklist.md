@@ -32,7 +32,12 @@ Build number tested: ______  iPhone model: ______  iOS version: ______
 
 For each screen, check there's a visible way back or home (a Back link, the logo, or the menu), and that swiping from
 the left edge does **not** go back.
-- [ ] Team dashboard, Matches list, Roster, Chat
+- [ ] Teams list, team dashboard, Matches list, Roster, Chat
+  Notes:
+- [ ] A match's Stats dashboard
+  Notes:
+- [ ] Signed out: sign-in → **Create account** → back to sign in, and sign-in → **Forgot password** → back to sign in.
+  After creating an account, the Welcome page has a way on to your teams.
   Notes:
 - [ ] A match: Track, Events, Watch, and "Back to Matches"
   Notes:
@@ -73,7 +78,8 @@ the left edge does **not** go back.
   Notes:
 - [ ] **Copy Report** on a match dashboard, then paste into Notes: the report text appears.
   Notes:
-- [ ] **Copy join code** on the team page, then paste it somewhere: the code appears.
+- [ ] **Copy the join code:** on the team page's Roster section, tap **Copy** next to "Player code", then paste
+  it somewhere: the code appears.
   Notes:
 
 ## 5. Chat
