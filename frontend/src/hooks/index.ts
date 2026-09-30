@@ -217,6 +217,9 @@ export function useMatches(teamId: string, filters?: { opponent?: string; status
     queryKey: ['matches', teamId, filters],
     queryFn: () => matchesApi.listByTeam(teamId, filters),
     enabled: !!teamId,
+    // A refusal (400 for a bad date range, 426 for an outdated app) comes back
+    // the same every time; only a failure without an answer or a 5xx is retried.
+    retry: (n, e) => !(axios.isAxiosError(e) && e.response && e.response.status < 500) && n < 1,
   });
 }
 

@@ -22,13 +22,15 @@ export const DEVICE_KEYS_PREFIX = 'vv_keys:';
 const qKey = (userId: string, matchId: string) => `${QUEUE_PREFIX}${userId}:${matchId}`;
 // The API sends no Retry-After, so a 429 waits a flat 30 s.
 const RATE_LIMIT_BACKOFF_MS = 30_000;
+// An outdated app gets the same 426 until it's updated; the page it's on says so.
+const OUTDATED_BACKOFF_MS = 10 * 60_000;
 // This device's own keys per match, for the two-device warning (6.11), kept
 // for the few most recent matches only.
 const MAX_DEVICE_KEYS = 3000;
 const MAX_DEVICE_KEY_MATCHES = 10;
 
 /** crypto.randomUUID needs a secure context (and iOS 15.4+); a LAN test over http has neither. */
-function newKey(): string {
+export function newKey(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   const b = crypto.getRandomValues(new Uint8Array(16));
   return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
@@ -334,6 +336,7 @@ function handleFailure(userId: string, matchId: string, keys: string[], failure:
   }
   if (failure.kind === 'network') setReachable(false);
   if (failure.kind === 'rate') backoffUntil = Date.now() + RATE_LIMIT_BACKOFF_MS;
+  if (failure.kind === 'outdated') backoffUntil = Date.now() + OUTDATED_BACKOFF_MS;
   return true;
 }
 

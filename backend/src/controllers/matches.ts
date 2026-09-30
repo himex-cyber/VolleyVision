@@ -168,6 +168,12 @@ export async function updateScore(req: Request, res: Response, next: NextFunctio
         throw new AppError(400, `${name} must be a whole number from -100 to 100.`);
       }
     }
+    // Number() used to take negatives, fractions and "abc" (a Prisma 500).
+    for (const [name, value] of Object.entries({ homeScore, awayScore, homeSetsWon, awaySetsWon })) {
+      if (value != null && (!Number.isInteger(value) || value < 0 || value > 999)) {
+        throw new AppError(400, `${name} must be a whole number from 0 to 999.`);
+      }
+    }
 
     const match = await withMatchLock(req.params.id, async (tx) => {
       const existing = await tx.match.findUnique({

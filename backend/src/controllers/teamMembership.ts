@@ -12,6 +12,7 @@ import {
 import { linkPlayerRecord, unlinkPlayerRecord } from '../services/playerPortal.service';
 import { canManageMembers } from '../services/permission.service';
 import { logAudit } from '../lib/audit';
+import { maskMembers } from '../lib/playerPrivacy';
 
 // HEAD_COACH is deliberately absent: it only changes via ownership transfer.
 const VALID_ROLES = new Set<string>([
@@ -39,9 +40,9 @@ export async function listMembers(req: Request, res: Response, next: NextFunctio
   try {
     const members = await getTeamMembers(req.params.id);
     // Emails are contact details — many players are minors — so only members
-    // who can manage the roster see them. Everyone else gets names and roles.
-    const canSeeEmails = req.user ? await canManageMembers(req.user.userId, req.params.id) : false;
-    res.json(canSeeEmails ? members : members.map((m) => ({ ...m, user: { ...m.user, email: undefined } })));
+    // who can manage the roster see them, and account ids and global roles too.
+    const canManage = req.user ? await canManageMembers(req.user.userId, req.params.id) : false;
+    res.json(maskMembers(members, canManage, req.user?.userId ?? null));
   } catch (err) { next(err); }
 }
 

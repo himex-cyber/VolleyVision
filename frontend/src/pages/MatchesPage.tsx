@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { formatMatchDate, toDateTimeLocal } from '../lib/matchTime';
+import { getApiErrorMessage } from '../lib/api';
 import { useTeam, useMatches, useCreateMatch, useUpdateMatch, useDeleteMatch, useHasPermission } from '../hooks';
 import { isPendingApproval, type Match, type MatchStatus } from '../types';
 import TeamSubNav from '../components/ui/TeamSubNav';
@@ -26,14 +27,18 @@ export default function MatchesPage() {
   const canTrack = useHasPermission(teamId!, 'TRACK_MATCH');
 
   const [filters, setFilters] = useState({ opponent: '', status: '', from: '', to: '' });
+  // A backwards range is left out of the query: the server rejects it with a 400.
+  // Date.parse, not a string compare: a five-digit year sorts wrongly as text
+  // (the server refuses it anyway; NaN compares false, so that path shows its 400).
+  const badRange = Date.parse(filters.from) > Date.parse(filters.to);
   const activeFilters = {
     opponent: filters.opponent || undefined,
     status:   filters.status   || undefined,
-    from:     filters.from     || undefined,
-    to:       filters.to       || undefined,
+    from:     (!badRange && filters.from) || undefined,
+    to:       (!badRange && filters.to)   || undefined,
   };
 
-  const { data: matches, isLoading } = useMatches(teamId!, activeFilters);
+  const { data: matches, isLoading, isError, error } = useMatches(teamId!, activeFilters);
   const createMatch = useCreateMatch();
   const updateMatch = useUpdateMatch();
   const deleteMatch = useDeleteMatch();
@@ -143,12 +148,13 @@ export default function MatchesPage() {
         </div>
         <div>
           <label className="block text-xs text-grey-600 mb-1">From</label>
-          <input type="date" className="input text-sm" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
+          <input type="date" className="input text-sm" value={filters.from} max={filters.to || undefined} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
         </div>
         <div>
           <label className="block text-xs text-grey-600 mb-1">To</label>
-          <input type="date" className="input text-sm" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+          <input type="date" className="input text-sm" value={filters.to} min={filters.from || undefined} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
         </div>
+        {badRange && <p className="sm:col-span-4 text-error text-xs">The start date is after the end date. Pick an earlier start date to filter by dates.</p>}
         {(filters.opponent || filters.status || filters.from || filters.to) && (
           <div className="sm:col-span-4">
             <button className="text-xs text-grey-600 hover:text-grey-900 transition-colors" onClick={() => setFilters({ opponent: '', status: '', from: '', to: '' })}>
@@ -191,6 +197,8 @@ export default function MatchesPage() {
       {/* Matches list */}
       {isLoading ? (
         <p className="text-grey-600 text-sm">Loading…</p>
+      ) : isError ? (
+        <p className="text-error text-sm">{getApiErrorMessage(error, "Couldn't load matches. Check your connection and try again.")}</p>
       ) : matches?.length === 0 ? (
         <div className="card p-12 text-center">
           <p className="text-grey-600">No matches yet — record your first match to unlock your stats.</p>

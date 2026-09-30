@@ -9,6 +9,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { chatApi } from '../lib/api';
+import { newKey } from '../lib/eventQueue';
 import { useAuth } from '../context/AuthContext';
 import type { ChatAttachment, ChatMessage } from '../types';
 
@@ -177,7 +178,7 @@ export function usePostMessage(channelId: string | undefined) {
   });
 
   const send = useCallback(
-    (body: string) => mutation.mutate({ body, tempId: `temp-${crypto.randomUUID()}` }),
+    (body: string) => mutation.mutate({ body, tempId: `temp-${newKey()}` }),
     [mutation],
   );
 
@@ -285,7 +286,7 @@ export function useUploadMessage(channelId: string | undefined) {
 
   const sendWithFiles = useCallback(
     (body: string | undefined, files: File[]) => {
-      const tempId = `temp-${crypto.randomUUID()}`;
+      const tempId = `temp-${newKey()}`;
       pending.current.set(tempId, {
         body,
         files,

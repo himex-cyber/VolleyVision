@@ -2,6 +2,41 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.15.0 — Unreleased
+
+Phase 8.5.0 (fixes carried from the Phase 8 review) and Phase 8.5 (the iPhone
+app). No migration.
+
+**Privacy**
+- **The team members list no longer shows other members' account ids, or
+  who is a site administrator, to players and viewers.** Only members who
+  can manage the roster get those, as with email addresses; everyone else
+  gets names, photos and team roles, plus their own account id. Nothing on
+  screen changes. This corrects v9.13.0's note: its "other players' account
+  ids are no longer sent" covered the match, team and roster pages, but not
+  the members list.
+
+**Old Android app versions are asked to update**
+- **Android app versions older than 9.13.0 now get "Please update the app"
+  instead of working.** They sent whole scores rather than points added, which
+  could wipe out points recorded on another device, and they moved a match's
+  time whenever it was edited. None are known to be installed. The website and
+  newer apps are unaffected. Taps an outdated app has waiting are kept, not
+  thrown away: after updating, tap Retry on them to send them.
+
+**Fixes**
+- **The matches list says what's wrong instead of going blank.** A start date
+  after the end date now shows a note under the dates and the filter waits for
+  a valid range, and if the list can't load you see why.
+- **Opening a feedback attachment works when the browser blocks pop-ups.** The
+  first tap gets the file ready and then shows an "Open attachment" link. In
+  the apps it opens straight in the phone's browser.
+- **A score that isn't a whole number from 0 to 999 is refused with a clear
+  message** instead of being saved as a negative number or failing with an
+  error.
+- Chat messages now send from browsers that don't offer the newer random-id
+  function (older phones, or a site opened over plain http).
+
 ## v9.14.0 — 2026-09-30
 
 Phase 8 of the rebuild roadmap: analytics B, plus the match-time fix carried
