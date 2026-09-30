@@ -218,7 +218,8 @@ export interface ChatChannel {
 }
 
 export interface ChatSender {
-  id: string;
+  // Null on other members' messages (9.0.3); own messages keep it.
+  id: string | null;
   firstName: string;
   lastName: string;
   profileImage: string | null;
@@ -240,7 +241,7 @@ export interface ChatAttachment {
 export interface ChatMessage {
   id: string;
   channelId: string;
-  senderId: string | null; // null = former member
+  senderId: string | null; // null = former member, or someone else's message (9.0.3)
   sender: ChatSender | null;
   body: string | null; // null = tombstone ("message deleted")
   attachments: ChatAttachment[];
@@ -292,11 +293,12 @@ export type EventType =
 
 export type MatchStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
+// id and email are null for members who can't manage the roster (9.0.2).
 export interface TeamOwner {
-  id: string;
+  id: string | null;
   firstName: string;
   lastName: string;
-  email: string;
+  email: string | null;
 }
 
 export interface Team {
@@ -306,7 +308,8 @@ export interface Team {
   season: string;
   // Every team has an owner — a team is only ever visible to its owner, its
   // accepted members, or a global ADMIN. There is no public-team concept.
-  ownerId: string;
+  // Null for members who can't manage the roster (9.0.2); use /my-role's isOwner.
+  ownerId: string | null;
   owner?: TeamOwner | null;
   createdAt: string;
   updatedAt: string;
@@ -677,7 +680,8 @@ export interface Invitation {
   id: string;
   email: string;
   teamId: string;
-  invitedById: string;
+  // Null in the invitee's own views (9.0.4); staff lists keep it.
+  invitedById: string | null;
   role: TeamRole;
   status: InvitationStatus;
   token: string;
@@ -688,7 +692,7 @@ export interface Invitation {
   acceptedAt: string | null;
   createdAt: string;
   team?: { id: string; name: string; division?: string; season: string };
-  invitedBy?: { id: string; firstName: string; lastName: string; email: string };
+  invitedBy?: { id: string | null; firstName: string; lastName: string; email: string | null };
 }
 
 // ─── Point flow: rotations, momentum, advanced metrics (7.9) ─────────────────

@@ -1,4 +1,5 @@
 import { HOME_POINT_SET, AWAY_POINT_SET, scoringTeam } from '../lib/scoringRules';
+import { ATTACK_ATTEMPT_TYPES } from '../lib/analytics';
 import { selectTopPerformer, PerformerPlayer, PerformerEvent } from './performer.service';
 import { calculateMomentum } from './momentum.service';
 import { calculateRotations } from './rotation.service';
@@ -115,9 +116,7 @@ export function generateMatchReport(
       : null;
 
   // ── Attack Insights ──────────────────────────────────────────────────────
-  const attackEvents = events.filter((e) =>
-    ['KILL', 'ATTACK_ERROR', 'ATTACK_ATTEMPT'].includes(e.eventType),
-  );
+  const attackEvents = events.filter((e) => ATTACK_ATTEMPT_TYPES.includes(e.eventType));
   const kills = attackEvents.filter((e) => e.eventType === 'KILL').length;
   const attackErrors = attackEvents.filter((e) => e.eventType === 'ATTACK_ERROR').length;
   const killRate =
@@ -142,9 +141,7 @@ export function generateMatchReport(
   // ── Heat Map Highlight ───────────────────────────────────────────────────
   // Counted like the court map it links to (lib/heatmap.ts): tips and free
   // balls are attack attempts there too, so the two agree.
-  const zoneAttackEvents = events.filter((e) =>
-    ['KILL', 'ATTACK_ERROR', 'ATTACK_ATTEMPT', 'TIP', 'FREE_BALL'].includes(e.eventType),
-  );
+  const zoneAttackEvents = events.filter((e) => ATTACK_ATTEMPT_TYPES.includes(e.eventType));
   const zoneCounts: Record<number, number> = {};
   for (const e of zoneAttackEvents) {
     if (e.courtZone != null && e.courtZone >= 1 && e.courtZone <= 6) {

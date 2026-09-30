@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { MatchStatus } from '@prisma/client';
+import { maskOwner } from '../lib/playerPrivacy';
+import { Permission, roleHasPermission } from '../lib/rolePermissions';
 
 const teamSummaryInclude = {
   _count: { select: { players: true, matches: true } },
@@ -21,7 +23,11 @@ export async function getCoachMemberTeams(userId: string) {
     },
     orderBy: { joinedAt: 'desc' },
   });
-  return memberships.map((m) => ({ ...m.team, memberRole: m.role }));
+  // Owner id only for members who manage the roster (9.0.2); never the owner here.
+  return memberships.map((m) => ({
+    ...maskOwner(m.team, roleHasPermission(m.role, Permission.MANAGE_MEMBERS), userId),
+    memberRole: m.role,
+  }));
 }
 
 export async function getCoachingStats(userId: string) {
@@ -89,7 +95,7 @@ export async function getCoachRecentMatches(userId: string, limit = 5) {
 // The soonest scheduled match of EACH team the user owns or belongs to: the
 // home page's team cards show one per team, and a global "5 soonest" list
 // left a team whose next match wasn't among them showing none.
-export async function getCoachUpcomingMatches(userId: string) {
+export async function getCoachUpcomingMatches(userId: string, from: Date = new Date()) {
   const [ownedTeams, memberships] = await Promise.all([
     prisma.team.findMany({ where: { ownerId: userId }, select: { id: true } }),
     prisma.teamMembership.findMany({ where: { userId }, select: { teamId: true } }),
@@ -105,7 +111,7 @@ export async function getCoachUpcomingMatches(userId: string) {
     where: {
       teamId: { in: teamIds },
       status: MatchStatus.SCHEDULED,
-      matchDate: { gte: new Date() },
+      matchDate: { gte: from },
     },
     orderBy: { matchDate: 'asc' },
     distinct: ['teamId'],
@@ -120,13 +126,14 @@ export async function getCoachUpcomingMatches(userId: string) {
   });
 }
 
-export async function getCoachDashboard(userId: string) {
+/** `from`: see lib/matchDate upcomingFrom. */
+export async function getCoachDashboard(userId: string, from?: Date) {
   const [ownedTeams, memberTeams, coachingStats, recentMatches, upcomingMatches] = await Promise.all([
     getCoachOwnedTeams(userId),
     getCoachMemberTeams(userId),
     getCoachingStats(userId),
     getCoachRecentMatches(userId),
-    getCoachUpcomingMatches(userId),
+    getCoachUpcomingMatches(userId, from),
   ]);
 
   return { ownedTeams, memberTeams, coachingStats, recentMatches, upcomingMatches };

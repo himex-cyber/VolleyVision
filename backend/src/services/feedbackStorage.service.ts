@@ -165,18 +165,3 @@ export async function signAttachmentUrl(storagePath: string, ttlSeconds = 3600):
   }
   return data.signedUrl;
 }
-
-/**
- * Compensating cleanup (e.g. DB write failed after upload). Cleanup must never
- * mask the original failure, so errors are logged, not thrown — an orphaned
- * object costs storage; a thrown cleanup error costs the real error message.
- */
-export async function deleteObjects(paths: string[]): Promise<void> {
-  if (paths.length === 0) return;
-  try {
-    const { error } = await getSupabaseClient().storage.from(BUCKET).remove(paths);
-    if (error) console.error(`Supabase cleanup failed for ${paths.length} object(s):`, error.message);
-  } catch (err) {
-    console.error('Supabase cleanup threw:', err);
-  }
-}

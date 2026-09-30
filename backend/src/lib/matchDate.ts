@@ -24,3 +24,19 @@ export function parseMatchDate(value: unknown): Date | null {
   }
   return date;
 }
+
+const FOURTEEN_HOURS = 14 * 60 * 60 * 1000; // the widest UTC offsets are -12 and +14
+
+/**
+ * What "now" means when listing upcoming matches (9.0.6). Match dates are
+ * wall-clock time kept as UTC, so they must be compared with the device's wall
+ * clock, not UTC now (an NZ game stayed "upcoming" ~13 h after it started).
+ * Only a naive value is taken: parseMatchDate would turn a Z or offset string
+ * into real UTC, which defeats the point. Anything else, or anything more than
+ * 14 hours from real now, falls back to real now (old apps send nothing).
+ */
+export function upcomingFrom(localNow: unknown, now: Date = new Date()): Date {
+  if (typeof localNow !== 'string' || !NAIVE.test(localNow)) return now;
+  const local = parseMatchDate(localNow);
+  return local && Math.abs(local.getTime() - now.getTime()) <= FOURTEEN_HOURS ? local : now;
+}

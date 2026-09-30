@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { resolveUploadContentType } from '../lib/fileSignature';
+import { removeStoredFiles } from '../lib/storageCleanup';
 import {
   afterCursorWhere,
   beforeCursorWhere,
@@ -22,7 +23,6 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   assertAcceptable,
   buildObjectKey,
-  deleteObjects,
   imageDimensions,
   signAttachmentUrls,
   uploadAttachment,
@@ -102,7 +102,7 @@ export interface ListMessagesOptions {
  * LATEST page. Soft-deleted messages come back as tombstones — never omitted,
  * so ordering and cursors stay stable.
  */
-export async function listMessages(channelId: string, opts: ListMessagesOptions = {}) {
+export async function listMessages(channelId: string, callerId: string, opts: ListMessagesOptions = {}) {
   const limit = clampPageSize(opts.limit);
 
   let cursorWhere: Prisma.MessageWhereInput = {};
@@ -125,17 +125,17 @@ export async function listMessages(channelId: string, opts: ListMessagesOptions 
     take: limit,
   });
   if (fetchDescending) rows.reverse();
-  return withSignedUrls(rows.map(serializeMessage));
+  return withSignedUrls(rows.map((m) => serializeMessage(m, callerId)));
 }
 
 /** Resend with a known Idempotency-Key → the existing message, not a duplicate. */
-async function findByClientKey(channelId: string, clientKey: string) {
+async function findByClientKey(channelId: string, clientKey: string, callerId: string) {
   const existing = await prisma.message.findUnique({
     where: { channelId_clientKey: { channelId, clientKey } },
     include: messageInclude,
   });
   if (!existing) return null;
-  const [dto] = await withSignedUrls([serializeMessage(existing)]);
+  const [dto] = await withSignedUrls([serializeMessage(existing, callerId)]);
   return dto;
 }
 
@@ -147,7 +147,7 @@ export async function postMessage(
 ) {
   const body = requireValidBody(rawBody);
   if (clientKey) {
-    const existing = await findByClientKey(channelId, clientKey);
+    const existing = await findByClientKey(channelId, clientKey, senderId);
     if (existing) return existing;
   }
   try {
@@ -155,11 +155,11 @@ export async function postMessage(
       data: { channelId, senderId, body, clientKey: clientKey ?? null },
       include: messageInclude,
     });
-    return serializeMessage(message);
+    return serializeMessage(message, senderId);
   } catch (err) {
     // Two racing sends with the same key: the loser reads the winner's row.
     if (clientKey && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      const existing = await findByClientKey(channelId, clientKey);
+      const existing = await findByClientKey(channelId, clientKey, senderId);
       if (existing) return existing;
     }
     throw err;
@@ -194,7 +194,7 @@ export async function postMessageWithAttachments(
 
   // Idempotent retry: bail out BEFORE re-uploading any bytes.
   if (clientKey) {
-    const existing = await findByClientKey(channelId, clientKey);
+    const existing = await findByClientKey(channelId, clientKey, senderId);
     if (existing) return existing;
   }
 
@@ -258,13 +258,13 @@ export async function postMessageWithAttachments(
       },
       include: messageInclude,
     });
-    const [dto] = await withSignedUrls([serializeMessage(message)]);
+    const [dto] = await withSignedUrls([serializeMessage(message, senderId)]);
     return dto;
   } catch (err) {
-    await deleteObjects(uploaded.map((u) => u.storagePath));
+    await removeStoredFiles(uploaded.map((u) => u.storagePath));
     // A concurrent retry with the same key won the race — return its message.
     if (clientKey && err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      const existing = await findByClientKey(channelId, clientKey);
+      const existing = await findByClientKey(channelId, clientKey, senderId);
       if (existing) return existing;
     }
     throw err;
@@ -282,13 +282,16 @@ export async function editMessage(messageId: string, userId: string, rawBody: un
   if (rejection) throw new AppError(rejection.status, rejection.error);
 
   const body = requireValidBody(rawBody);
-  const message = await prisma.message.update({
-    where: { id: messageId },
+  // Only while it's still live: a delete committed since the read above must
+  // not get its text written back (9.0.8 erases deleted messages).
+  const { count } = await prisma.message.updateMany({
+    where: { id: messageId, deletedAt: null },
     data: { body, editedAt: new Date() },
-    include: messageInclude,
   });
+  if (count === 0) throw new AppError(409, 'This message is no longer available.');
+  const message = await prisma.message.findUniqueOrThrow({ where: { id: messageId }, include: messageInclude });
   // An edited message keeps its attachments — re-sign them for the response.
-  const [dto] = await withSignedUrls([serializeMessage(message)]);
+  const [dto] = await withSignedUrls([serializeMessage(message, userId)]);
   return dto;
 }
 
@@ -304,15 +307,22 @@ export async function softDeleteMessage(messageId: string, userId: string, isMod
     include: messageInclude,
   });
   if (!existing) throw new AppError(404, 'Message not found.');
-  if (existing.deletedAt) return { tombstone: serializeMessage(existing), didDelete: false };
+  if (existing.deletedAt) return { tombstone: serializeMessage(existing, userId), didDelete: false };
   if (!canDeleteMessage(existing, userId, isModerator)) {
     throw new AppError(403, 'You can only delete your own messages.');
   }
 
-  const message = await prisma.message.update({
-    where: { id: messageId },
-    data: { deletedAt: new Date(), deletedByUserId: userId },
-    include: messageInclude,
-  });
-  return { tombstone: serializeMessage(message), didDelete: true };
+  // 9.0.8: a deleted message is erased, not hidden: its text and attachment
+  // rows go in the same write, and the files right after. The row stays as a
+  // tombstone so the conversation keeps its order.
+  const [, message] = await prisma.$transaction([
+    prisma.messageAttachment.deleteMany({ where: { messageId } }),
+    prisma.message.update({
+      where: { id: messageId },
+      data: { body: null, deletedAt: new Date(), deletedByUserId: userId },
+      include: messageInclude,
+    }),
+  ]);
+  await removeStoredFiles(existing.attachments.map((a) => a.storagePath));
+  return { tombstone: serializeMessage(message, userId), didDelete: true };
 }

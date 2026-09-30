@@ -141,7 +141,7 @@ describe('replayTimeline from a start state', () => {
   it('adds queued taps to the server score', () => {
     const start = { homeScore: 10, awayScore: 8, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }] };
     const r = replayTimeline([kill(1), oppKill(2), kill(3)], start);
-    assert.deepEqual(r, { homeScore: 12, awayScore: 9, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }], completed: false, closers: { events: [], adjustments: [] } });
+    assert.deepEqual(r, { homeScore: 12, awayScore: 9, homeSetsWon: 1, awaySetsWon: 0, setScores: [{ set: 1, home: 25, away: 20 }], completed: false, closers: { events: [], adjustments: [] }, sets: { events: new Map(), adjustments: new Map() } });
     assert.equal(start.setScores.length, 1, 'the start state is not mutated');
   });
 
@@ -199,6 +199,42 @@ describe('replayTimeline — closers', () => {
     const r = replayTimeline([evt('KILL')], { homeScore: 24, awayScore: 0, homeSetsWon: 0, awaySetsWon: 0, setScores: [] });
     assert.equal(r.homeSetsWon, 1);
     assert.deepEqual(r.closers, { events: [], adjustments: [] });
+  });
+});
+
+describe("replayTimeline — each item's set (9.0.5)", () => {
+  const at = new Date(0);
+  const k = (id: string): ReplayItem => ({ kind: 'event', id, eventType: 'KILL', isOpponentEvent: false, at });
+  const a = (id: string, homeDelta: number): ReplayItem => ({ kind: 'adjustment', id, homeDelta, awayDelta: 0, at });
+
+  it('numbers every item by the set it was played in, the closer included', () => {
+    const items = [...Array.from({ length: 24 }, (_, i) => k(`e${i}`)), a('adj1', 1), k('next'), a('adj2', 1)];
+    const r = replayTimeline(items);
+    assert.equal(r.sets.events.get('e0'), 1);
+    assert.equal(r.sets.adjustments.get('adj1'), 1, 'the set-closing adjustment belongs to the set it closed');
+    assert.equal(r.sets.events.get('next'), 2);
+    assert.equal(r.sets.adjustments.get('adj2'), 2);
+  });
+
+  it('numbers non-scoring events and zero adjustments too', () => {
+    const items = [...Array.from({ length: 25 }, (_, i) => k(`e${i}`)),
+      { kind: 'event', id: 'dig', eventType: 'DIG', isOpponentEvent: false, at } as ReplayItem, a('zero', 0)];
+    const r = replayTimeline(items);
+    assert.equal(r.sets.events.get('dig'), 2);
+    assert.equal(r.sets.adjustments.get('zero'), 2);
+  });
+
+  it('items after the match ends keep the final set', () => {
+    const r = replayTimeline([k('last'), k('after'), a('adjAfter', 1)], { homeScore: 24, awayScore: 0, homeSetsWon: 2, awaySetsWon: 0, setScores: [] });
+    assert.equal(r.completed, true);
+    assert.equal(r.sets.events.get('last'), 3);
+    assert.equal(r.sets.events.get('after'), 3);
+    assert.equal(r.sets.adjustments.get('adjAfter'), 3);
+  });
+
+  it('items without ids are not numbered', () => {
+    const r = replayTimeline([evt('KILL')]);
+    assert.equal(r.sets.events.size, 0);
   });
 });
 

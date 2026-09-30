@@ -140,7 +140,7 @@ export default function ProfilePage() {
           {(profile.city || profile.country) && (
             <><span className="text-grey-600">Location</span><span className="text-grey-900">{[profile.city, profile.country].filter(Boolean).join(', ')}</span></>
           )}
-          {profile.dateOfBirth && (<><span className="text-grey-600">Date of Birth</span><span className="text-grey-900">{new Date(profile.dateOfBirth).toLocaleDateString()}</span></>)}
+          {profile.dateOfBirth && (<><span className="text-grey-600">Date of Birth</span><span className="text-grey-900">{new Date(profile.dateOfBirth).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span></>)}
           {profile.heightCm != null && (<><span className="text-grey-600">Height</span><span className="text-grey-900">{profile.heightCm} cm</span></>)}
           {profile.weightKg != null && (<><span className="text-grey-600">Weight</span><span className="text-grey-900">{profile.weightKg} kg</span></>)}
           <span className="text-grey-600">Member since</span>

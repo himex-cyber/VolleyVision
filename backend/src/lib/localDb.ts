@@ -6,7 +6,7 @@
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1'];
 
-const isLocal = (url: string) => {
+export const isLocal = (url: string) => {
   try { return LOCAL_HOSTS.includes(new URL(url).hostname); } catch { return false; }
 };
 

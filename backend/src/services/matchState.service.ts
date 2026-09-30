@@ -32,20 +32,20 @@ export async function recalculateMatchState(matchId: string, db: Prisma.Transact
   const [events, adjustments] = await Promise.all([
     db.event.findMany({
       where: { matchId },
-      select: { id: true, eventType: true, isOpponentEvent: true, recordedAt: true },
+      select: { id: true, eventType: true, isOpponentEvent: true, recordedAt: true, setNumber: true },
       // id breaks ties: taps sharing a timestamp must replay the same way every
       // time (cuids roughly follow insert order, like the increment path).
       orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
     }),
     db.scoreAdjustment.findMany({
       where: { matchId },
-      select: { id: true, homeDelta: true, awayDelta: true, createdAt: true },
+      select: { id: true, homeDelta: true, awayDelta: true, createdAt: true, setNumber: true },
       orderBy: { createdAt: 'asc' },
     }),
   ]);
 
   const timeline = buildTimeline(events, adjustments);
-  const { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers } =
+  const { homeScore, awayScore, homeSetsWon, awaySetsWon, setScores, completed, closers, sets } =
     replayTimeline(timeline);
 
   const newStatus =
@@ -75,6 +75,22 @@ export async function recalculateMatchState(matchId: string, db: Prisma.Transact
     db.event.updateMany({ where: { matchId, completedSet: false, id: { in: closers.events } }, data: { completedSet: true } }),
     db.scoreAdjustment.updateMany({ where: { matchId, completedSet: true, id: { notIn: closers.adjustments } }, data: { completedSet: false } }),
     db.scoreAdjustment.updateMany({ where: { matchId, completedSet: false, id: { in: closers.adjustments } }, data: { completedSet: true } }),
+  ]);
+
+  // 9.0.5: set numbers follow the replay too. Reset Set deletes adjustments by
+  // setNumber, and per-set analytics group by it, so a late tap that moves a
+  // boundary would otherwise leave items filed under the wrong set.
+  const moved = (rows: { id: string; setNumber: number }[], replayed: Map<string, number>) => {
+    const bySet = new Map<number, string[]>();
+    for (const row of rows) {
+      const set = replayed.get(row.id);
+      if (set !== undefined && set !== row.setNumber) bySet.set(set, [...(bySet.get(set) ?? []), row.id]);
+    }
+    return [...bySet];
+  };
+  await Promise.all([
+    ...moved(events, sets.events).map(([setNumber, ids]) => db.event.updateMany({ where: { id: { in: ids } }, data: { setNumber } })),
+    ...moved(adjustments, sets.adjustments).map(([setNumber, ids]) => db.scoreAdjustment.updateMany({ where: { id: { in: ids } }, data: { setNumber } })),
   ]);
 }
 

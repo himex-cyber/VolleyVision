@@ -66,13 +66,14 @@ async function setup() {
     data: { userId: owner.id, type: 'BUG', subject: 'x', description: 'x', attachments: { create: { kind: 'FILE', storagePath: 'x/y.pdf', originalName: 'y.pdf', mimeType: 'application/pdf', sizeBytes: 1 } } },
     include: { attachments: true },
   });
-  return { invitation, feedback, team, owner, assistant, manager, staffCode, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, p2, pDel, match, matchDel, event, channel, message, approval };
+  return { invitation, invitee, feedback, team, owner, assistant, manager, staffCode, users: { outsider, viewer, player } as Record<Who, TestUser>, statMembership, p1, p2, pDel, match, matchDel, event, channel, message, approval };
 }
 
 const ROWS: Row[] = [
   // ── Team reads ──
   { name: 'GET team', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}`, expect: READ },
-  { name: 'GET team owner', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/owner`, expect: READ },
+  // 9.0.2: the owner route is gone (it sent the owner's email and global role to every member).
+  { name: 'GET team owner (removed)', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/owner`, expect: { outsider: 404, viewer: 404, player: 404 } },
   { name: 'GET team members', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/members`, expect: READ },
   { name: 'GET my-role', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/my-role`, expect: READ },
   { name: 'GET matches by team', method: 'GET', path: (f) => `/api/v1/matches/by-team/${f.team.id}`, expect: READ },
@@ -188,6 +189,78 @@ async function main() {
       }
       assert.ok((res.body as { user: { id: unknown } }[]).some((m) => m.user.id === me), `${who} lost their own id`);
     }
+    // 9.0.2: the team owner's email and account id, on every team read.
+    for (const who of ['viewer', 'player'] as const) {
+      const token = f.users[who].token;
+      const rows: { id: string; ownerId: unknown; owner?: Record<string, unknown> | null }[] = [
+        (await call(base, 'GET', `/api/v1/teams/${f.team.id}`, token)).body,
+        ...((await call(base, 'GET', '/api/v1/teams', token)).body as { id: string }[]).filter((t) => t.id === f.team.id),
+      ] as never;
+      assert.equal(rows.length, 2, `${who}: team detail and list row`);
+      for (const t of rows) {
+        assert.equal(t.ownerId, null, `${who} saw the owner's account id`);
+        assert.equal(t.owner?.id, null, `${who} saw the owner's account id`);
+        assert.equal(t.owner?.email, null, `${who} saw the owner's email`);
+        assert.equal(typeof t.owner?.firstName, 'string', `${who} lost the owner's name`);
+      }
+      const mine = (await call(base, 'GET', '/api/v1/users/me/teams', token)).body as { team: { id: string; ownerId: unknown } }[];
+      assert.ok(mine.some((m) => m.team.id === f.team.id), `${who}: /users/me/teams lists the team`);
+      assert.ok(mine.every((m) => m.team.ownerId === null), `${who} saw the owner's account id in /users/me/teams`);
+      // 9.0.10 (Opus review): the match detail and the coach portal carry team rows too.
+      const match = (await call(base, 'GET', `/api/v1/matches/${f.match.id}`, token)).body;
+      assert.equal(match.team.ownerId, null, `${who} saw the owner's account id on a match`);
+      const portal = (await call(base, 'GET', '/api/v1/coach/teams', token)).body as { member: { id: string; ownerId: unknown }[] };
+      const dash = (await call(base, 'GET', '/api/v1/coach/dashboard', token)).body as { memberTeams: { id: string; ownerId: unknown }[] };
+      for (const t of [...portal.member, ...dash.memberTeams].filter((x) => x.id === f.team.id)) {
+        assert.equal(t.ownerId, null, `${who} saw the owner's account id in the coach portal`);
+      }
+      assert.ok(portal.member.some((t) => t.id === f.team.id), `${who}: /coach/teams lists the team`);
+    }
+    assert.equal((await call(base, 'GET', `/api/v1/matches/${f.match.id}`, f.manager.token)).body.team.ownerId, f.owner.id, 'a manager sees it on a match');
+    for (const t of [f.manager.token, f.owner.token]) {
+      const res = await call(base, 'GET', `/api/v1/teams/${f.team.id}`, t);
+      assert.equal(res.body.ownerId, f.owner.id, 'a manager and the owner see the owner id');
+      assert.equal(typeof res.body.owner.email, 'string', 'a manager and the owner see the owner email');
+    }
+    // 9.0.3: chat carries other members' names, never their account ids or internal columns.
+    for (const t of [f.users.viewer.token, f.users.player.token, f.manager.token]) {
+      const res = await call(base, 'GET', `/api/v1/channels/${f.channel.id}/messages`, t);
+      const msg = (res.body as Record<string, any>[]).find((m) => m.id === f.message.id);
+      assert.ok(msg, "the owner's message is listed");
+      assert.equal(msg.senderId, null, "another member's senderId is masked");
+      assert.equal(msg.sender.id, null, "another member's sender.id is masked");
+      assert.equal(typeof msg.sender.firstName, 'string', 'the sender keeps their name');
+      assert.ok(!('clientKey' in msg) && !('deletedByUserId' in msg), 'no internal columns');
+    }
+    const ownMsgs = await call(base, 'GET', `/api/v1/channels/${f.channel.id}/messages`, f.owner.token);
+    const own = (ownMsgs.body as Record<string, any>[]).find((m) => m.id === f.message.id);
+    assert.equal(own?.senderId, f.owner.id, 'the sender sees their own id');
+    // 9.0.4: an invitee (who may be a minor) gets the inviter's name only.
+    const second = await prisma.invitation.create({
+      data: { email: f.invitee.email, teamId: f.team.id, invitedById: f.owner.id, role: 'PLAYER', token: `${f.invitation.token}-2`, expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+    const invites = (await call(base, 'GET', '/api/v1/users/me/invitations', f.invitee.token)).body as Record<string, any>[];
+    assert.ok(invites.length >= 1, 'the invitee sees their invitations');
+    for (const inv of invites) {
+      assert.equal(inv.invitedById, null, 'no inviter account id');
+      assert.equal(inv.invitedBy.id, null, 'no inviter account id');
+      assert.equal(inv.invitedBy.email, null, 'no inviter email');
+      assert.equal(typeof inv.invitedBy.firstName, 'string', "the inviter's name stays");
+    }
+    const declined = await call(base, 'POST', `/api/v1/invitations/${second.token}/decline`, f.invitee.token);
+    assert.equal(declined.status, 200);
+    assert.equal(declined.body.invitedById, null, 'decline returns no inviter id');
+    // 9.0.8: deleting a message erases its text and attachment rows (the files
+    // follow after commit; no storage runs here).
+    const doomed = await prisma.message.create({
+      data: { channelId: f.channel.id, senderId: f.owner.id, body: 'take this back',
+        attachments: { create: { kind: 'FILE', storagePath: `teams/${f.team.id}/x.pdf`, fileName: 'x.pdf', mimeType: 'application/pdf', sizeBytes: 1, uploadedByUserId: f.owner.id } } },
+    });
+    assert.equal((await call(base, 'DELETE', `/api/v1/messages/${doomed.id}`, f.owner.token)).status, 200);
+    const erased = await prisma.message.findUniqueOrThrow({ where: { id: doomed.id }, include: { attachments: true } });
+    assert.equal(erased.body, null, 'the text is erased');
+    assert.equal(erased.attachments.length, 0, 'the attachment rows are gone');
+    assert.ok(erased.deletedAt, 'the tombstone stays');
     const managed = await call(base, 'GET', `/api/v1/teams/${f.team.id}/members`, f.manager.token);
     assert.ok((managed.body as { user: { id: unknown; role?: unknown } }[]).every((m) => typeof m.user.id === 'string' && 'role' in m.user),
       'a manager sees every account id and role');

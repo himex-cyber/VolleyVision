@@ -127,7 +127,8 @@ describe('canDeleteMessage', () => {
 // ─── Tombstones ───────────────────────────────────────────────────────────────
 
 describe('serializeMessage', () => {
-  const base: SerializedMessage = {
+  // A raw row as Prisma returns it: extra columns the API must never send.
+  const base = {
     id: 'm1',
     channelId: 'c1',
     senderId: 'u1',
@@ -135,17 +136,38 @@ describe('serializeMessage', () => {
     body: 'set point!',
     attachments: [{ id: 'a1' }],
     editedAt: new Date('2026-07-17T09:00:00Z'),
-    deletedAt: null,
+    deletedAt: null as Date | null,
     createdAt: new Date('2026-07-17T08:00:00Z'),
+    clientKey: 'key-1',
+    deletedByUserId: null as string | null,
   };
 
-  it('returns a live message untouched', () => {
-    assert.equal(serializeMessage(base), base);
+  it('returns the sender their own message with ids, and no internal columns', () => {
+    const own: SerializedMessage = serializeMessage(base, 'u1');
+    assert.deepEqual(own, {
+      id: 'm1', channelId: 'c1', senderId: 'u1',
+      sender: { id: 'u1', firstName: 'Mia', lastName: 'Taufa', profileImage: null },
+      body: 'set point!', attachments: [{ id: 'a1' }], editedAt: base.editedAt, deletedAt: null, createdAt: base.createdAt,
+    });
+  });
+
+  it("masks other members' account ids but keeps the name (9.0.3)", () => {
+    const other = serializeMessage(base, 'u2');
+    assert.equal(other.senderId, null);
+    assert.deepEqual(other.sender, { id: null, firstName: 'Mia', lastName: 'Taufa', profileImage: null });
+    assert.ok(!('clientKey' in other) && !('deletedByUserId' in other));
+  });
+
+  it('keeps a former member (null sender) as null', () => {
+    const former = serializeMessage({ ...base, senderId: null, sender: null }, 'u2');
+    assert.equal(former.sender, null);
+    assert.equal(former.senderId, null);
   });
 
   it('strips body and attachments from a deleted message but keeps identity + timeline fields', () => {
     const deletedAt = new Date('2026-07-17T10:00:00Z');
-    const tombstone = serializeMessage({ ...base, deletedAt });
+    const moderated = { ...base, deletedAt, deletedByUserId: 'mod' };
+    const tombstone = serializeMessage(moderated, 'u1');
     assert.equal(tombstone.body, null);
     assert.deepEqual(tombstone.attachments, []);
     assert.equal(tombstone.editedAt, null);
@@ -153,6 +175,8 @@ describe('serializeMessage', () => {
     assert.equal(tombstone.senderId, 'u1');
     assert.equal(tombstone.deletedAt, deletedAt);
     assert.equal(tombstone.createdAt, base.createdAt);
+    assert.ok(!('deletedByUserId' in tombstone), 'who deleted it is never sent');
+    assert.equal(serializeMessage({ ...base, deletedAt }, 'u2').senderId, null, 'tombstones mask too');
   });
 });
 

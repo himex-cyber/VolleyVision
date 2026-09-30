@@ -175,4 +175,9 @@ jobs:
       - name: iOS prod-config check
         run: node scripts/check-ios-prod.mjs
       - name: The committed ios/ project matches a fresh sync
-        run: git diff --exit-code -- ios
+        # status, not diff: a sync that adds a new untracked file must fail too.
+        run: |
+          if [ -n "$(git status --porcelain -- ios)" ]; then
+            git status --porcelain -- ios
+            echo "ios/ differs from a fresh sync: run npm run ios:prod and commit the result"; exit 1
+          fi

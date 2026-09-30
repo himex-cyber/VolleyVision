@@ -51,14 +51,19 @@ function count(events: AnalyticsEvent[], eventType: EventType) {
   return events.reduce((total, event) => total + Number(event.eventType === eventType), 0);
 }
 
+/**
+ * What counts as an attack attempt: TIP and FREE_BALL are non-scoring attack
+ * actions, so they count. The match report uses this too (9.0.7), so its kill
+ * rate matches the Advanced panel (lib/advancedMetrics.ts) and the court map.
+ */
+export const ATTACK_ATTEMPT_TYPES: readonly string[] = [
+  EventType.KILL, EventType.ATTACK_ERROR, EventType.ATTACK_ATTEMPT, EventType.TIP, EventType.FREE_BALL,
+];
+
 export function calculateStats(events: AnalyticsEvent[]): StatLine {
   const kills = count(events, EventType.KILL);
   const attackErrors = count(events, EventType.ATTACK_ERROR);
-  const tips = count(events, EventType.TIP);
-  const freeBalls = count(events, EventType.FREE_BALL);
-  // TIP and FREE_BALL are non-scoring attack actions — they count as attempts.
-  const attackAttempts =
-    kills + attackErrors + count(events, EventType.ATTACK_ATTEMPT) + tips + freeBalls;
+  const attackAttempts = events.filter((e) => ATTACK_ATTEMPT_TYPES.includes(e.eventType)).length;
   const aces = count(events, EventType.ACE);
   const serviceErrors = count(events, EventType.SERVICE_ERROR);
   const serveAttempts = aces + serviceErrors + count(events, EventType.SERVE_IN);
@@ -77,8 +82,8 @@ export function calculateStats(events: AnalyticsEvent[]): StatLine {
     attackAttempts,
     hittingPercentage:
       attackAttempts > 0 ? round((kills - attackErrors) / attackAttempts) : null,
-    tips,
-    freeBalls,
+    tips: count(events, EventType.TIP),
+    freeBalls: count(events, EventType.FREE_BALL),
     aces,
     serviceErrors,
     serveAttempts,

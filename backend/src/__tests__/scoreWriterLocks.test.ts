@@ -101,7 +101,9 @@ async function main() {
   // 8.5.0.3: absolutes too, 400 rather than a negative score or a Prisma 500.
   for (const body of [{ homeDelta: 1.5 }, { homeDelta: '1' }, { awayDelta: 101 },
     { homeScore: -1 }, { awayScore: 2.5 }, { homeScore: 'abc' }, { homeScore: '5' }, { awayScore: 1e10 },
-    { homeSetsWon: -1 }, { awaySetsWon: 1.5 }, { homeSetsWon: 'x' }, { homeDelta: 1, homeScore: -3 }]) {
+    { homeSetsWon: -1 }, { awaySetsWon: 1.5 }, { homeSetsWon: 'x' }, { homeDelta: 1, homeScore: -3 },
+    // 9.0.5: sets won come from the set scores, even valid-looking ones.
+    { homeSetsWon: 1 }, { awaySetsWon: 0, homeDelta: 1 }]) {
     world();
     const r = await call(updateScore, { params: { id: 'M' }, body });
     assert.equal(r.error?.statusCode, 400, `400 for ${JSON.stringify(body)}`);
@@ -205,6 +207,18 @@ async function main() {
     db.match.update = async () => ({});
     await applyUpdateMatch('M', { opponent: 'Hawks' });
     assert.equal(rawCallsMade().length, 0, 'a name change needs no lock');
+  }
+  // 9.0.5: a set-score edit sets sets won and the override, so a replay can't undo it.
+  {
+    world();
+    let data: any;
+    db.match.update = async (a: any) => { data = a.data; return {}; };
+    db.match.findUnique = async () => ({ status: 'COMPLETED' });
+    await applyUpdateMatch('M', { setScores: [{ set: 1, home: 25, away: 20 }, { set: 2, home: 18, away: 12 }] });
+    assert.deepEqual([data.homeSetsWon, data.awaySetsWon, data.manualScoreOverride], [2, 0, true]);
+    assert.equal(data.status, 'IN_PROGRESS', 'two sets reopen a completed match');
+    assert.deepEqual(data.setScores, [{ set: 1, home: 25, away: 20 }, { set: 2, home: 18, away: 12 }]);
+    await assert.rejects(applyUpdateMatch('M', { setScores: [{ set: 1, home: 20, away: 20 }] }), (e: any) => e.statusCode === 400);
   }
 
   // 8.0.3: a replay moves the completedSet marks to the items that close

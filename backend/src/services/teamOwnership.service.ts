@@ -10,7 +10,6 @@ const ownerSelect = {
   firstName: true,
   lastName: true,
   email: true,
-  role: true,
   profileImage: true,
 } as const;
 
@@ -122,12 +121,3 @@ export async function verifyOwnership(teamId: string, userId: string): Promise<v
   if (team.ownerId !== userId) throw new AppError(403, 'You do not own this team.');
 }
 
-/** Returns the owner of a team. */
-export async function getTeamOwner(teamId: string) {
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { owner: { select: ownerSelect } },
-  });
-  if (!team) throw new AppError(404, 'Team not found.');
-  return team.owner;
-}
