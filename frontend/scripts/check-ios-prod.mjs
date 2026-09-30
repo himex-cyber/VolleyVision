@@ -73,6 +73,12 @@ if (!existsSync(pbxPath)) {
   if (targets.length !== 4 || targets.some((v) => v !== '16.4')) problems.push(`project.pbxproj: IPHONEOS_DEPLOYMENT_TARGET must be 16.4 in all four configurations, found ${targets.join(', ') || 'none'}`);
 }
 
+// The App Store rejects an app icon with an alpha channel. PNG byte 25 is the
+// colour type: 2 is RGB; 4 and 6 carry alpha, 3 (palette) can.
+const iconPath = path.join(root, 'App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png');
+if (!existsSync(iconPath)) problems.push(`${iconPath} is missing`);
+else if (readFileSync(iconPath)[25] !== 2) problems.push('AppIcon-512@2x.png is not plain RGB: flatten it (see assets/README.md)');
+
 for (const w of warnings) console.warn(`WARNING: ${w}`);
 if (problems.length) {
   console.error(`iOS prod-config check FAILED:\n  - ${problems.join('\n  - ')}`);

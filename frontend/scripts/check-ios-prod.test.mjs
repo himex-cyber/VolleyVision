@@ -20,11 +20,17 @@ const goodPlist = {
 const goodPbx = [1, 2, 3, 4].map(() => 'IPHONEOS_DEPLOYMENT_TARGET = 16.4;').join('\n')
   + '\nTARGETED_DEVICE_FAMILY = 1;\nTARGETED_DEVICE_FAMILY = 1;\n';
 
-function project({ config, info = goodPlist, rawInfo, pbx = goodPbx }) {
+// Just enough of a PNG header: byte 25 is the colour type (2 = RGB, 6 = RGBA).
+const png = (colourType) => { const b = Buffer.alloc(33); b[25] = colourType; return b; };
+
+function project({ config, info = goodPlist, rawInfo, pbx = goodPbx, icon = png(2) }) {
   const root = mkdtempSync(path.join(tmpdir(), 'vv-ios-'));
   const app = path.join(root, 'App/App');
   mkdirSync(app, { recursive: true });
   mkdirSync(path.join(root, 'App/App.xcodeproj'), { recursive: true });
+  const iconDir = path.join(app, 'Assets.xcassets/AppIcon.appiconset');
+  mkdirSync(iconDir, { recursive: true });
+  if (icon) writeFileSync(path.join(iconDir, 'AppIcon-512@2x.png'), icon);
   if (pbx != null) writeFileSync(path.join(root, 'App/App.xcodeproj/project.pbxproj'), pbx);
   if (config) writeFileSync(path.join(app, 'capacitor.config.json'), JSON.stringify(config));
   if (rawInfo !== undefined) writeFileSync(path.join(app, 'Info.plist'), rawInfo);
@@ -55,6 +61,9 @@ const cases = [
   ['iPad support fails', { config: {}, pbx: goodPbx.replace('TARGETED_DEVICE_FAMILY = 1;', 'TARGETED_DEVICE_FAMILY = "1,2";') }, 1],
   ['iOS 15 fails', { config: {}, pbx: goodPbx.replace('16.4', '15.0') }, 1],
   ['a missing project fails', { config: {}, pbx: null }, 1],
+  // 8.5.4: the App Store rejects an app icon with an alpha channel.
+  ['an icon with alpha fails', { config: {}, icon: png(6) }, 1],
+  ['a missing icon fails', { config: {}, icon: null }, 1],
   ['a missing Info.plist fails', { config: {}, info: null }, 1],
   ['an Info.plist that does not parse fails', { config: {}, rawInfo: '<plist><dict><key>x</key>' }, 1],
 ];
