@@ -172,6 +172,9 @@ enum FeedbackType {
   BUG
   FEATURE_REQUEST
   GENERAL
+  // 9.1: a chat message reported by a member. Created only by
+  // POST /messages/:id/report, never through POST /feedback.
+  MESSAGE_REPORT
 }
 
 enum FeedbackSeverity {
@@ -280,6 +283,16 @@ model User {
 
   // Feedback tab
   feedback     Feedback[]
+
+  // 9.1: which Terms version the user accepted, and when. Null for accounts
+  // from before v9.17.0 until they accept on their next sign-in; posting in
+  // chat needs it (Play's user-generated-content policy).
+  termsAcceptedAt DateTime? @map("terms_accepted_at")
+  termsVersion    String?   @map("terms_version")
+
+  // 9.1: members this user has blocked in chat, and who blocked them.
+  blocksMade     UserBlock[] @relation("BlocksMade")
+  blocksReceived UserBlock[] @relation("BlocksReceived")
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -795,6 +808,10 @@ model Feedback {
   // Route the user was on when they submitted — cheap debugging context.
   pageContext String?           @map("page_context")
 
+  // 9.1: the message a MESSAGE_REPORT is about. No foreign key: the report
+  // (with its snapshot) must outlive the message's removal.
+  reportedMessageId String?     @map("reported_message_id")
+
   attachments FeedbackAttachment[]
 
   createdAt   DateTime          @default(now())
@@ -802,7 +819,23 @@ model Feedback {
 
   @@index([userId])
   @@index([status])
+  @@index([reportedMessageId])
   @@map("feedback")
+}
+
+// 9.1: a chat block. The blocker stops seeing the blocked member's messages;
+// nothing else changes (team membership, stats and tracking are untouched).
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId String   @map("blocker_id")
+  blockedId String   @map("blocked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  blocker   User     @relation("BlocksMade", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("user_blocks")
 }
 
 model FeedbackAttachment {

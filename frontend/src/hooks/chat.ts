@@ -8,7 +8,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { chatApi } from '../lib/api';
+import { chatApi, isTermsRequiredError } from '../lib/api';
 import { newKey } from '../lib/eventQueue';
 import { useAuth } from '../context/AuthContext';
 import type { ChatAttachment, ChatMessage } from '../types';
@@ -133,7 +133,7 @@ function serverErrorMessage(err: unknown): string | undefined {
 
 export function usePostMessage(channelId: string | undefined) {
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const mutation = useMutation({
     // The tempId doubles as the Idempotency-Key: a retry reuses it, so the
@@ -167,6 +167,9 @@ export function usePostMessage(channelId: string | undefined) {
       );
     },
     onError: (err, { tempId }) => {
+      // The account hasn't accepted the Terms: refreshing the user brings up
+      // the Terms step (RequireAuth); the message stays here to retry.
+      if (isTermsRequiredError(err)) void refreshUser();
       qc.setQueryData<ChatMessage[]>(messagesKey(channelId!), (cur = []) =>
         cur.map((m) =>
           m.id === tempId
@@ -218,7 +221,7 @@ interface PendingUpload {
 
 export function useUploadMessage(channelId: string | undefined) {
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   // Failed payloads keep their File objects so retry can re-send them.
   const pending = useRef(new Map<string, PendingUpload>());
 
@@ -274,6 +277,9 @@ export function useUploadMessage(channelId: string | undefined) {
       );
     },
     onError: (err, { tempId }) => {
+      // The account hasn't accepted the Terms: refreshing the user brings up
+      // the Terms step (RequireAuth); the message stays here to retry.
+      if (isTermsRequiredError(err)) void refreshUser();
       qc.setQueryData<ChatMessage[]>(messagesKey(channelId!), (cur = []) =>
         cur.map((m) =>
           m.id === tempId
@@ -334,6 +340,7 @@ export function useUploadMessage(channelId: string | undefined) {
 
 export function useEditMessage(channelId: string | undefined) {
   const qc = useQueryClient();
+  const { refreshUser } = useAuth();
   return useMutation({
     mutationFn: (vars: { messageId: string; body: string }) =>
       chatApi.editMessage(vars.messageId, vars.body),
@@ -345,7 +352,8 @@ export function useEditMessage(channelId: string | undefined) {
       );
       return { previous };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
+      if (isTermsRequiredError(err)) void refreshUser(); // brings up the Terms step (9.3)
       if (ctx?.previous) qc.setQueryData(messagesKey(channelId ?? ''), ctx.previous);
     },
     onSuccess: (serverMessage) => {

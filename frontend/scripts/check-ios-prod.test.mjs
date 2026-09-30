@@ -38,7 +38,7 @@ function project({ config, info = goodPlist, rawInfo, pbx = goodPbx, icon = png(
   else if (info) writeFileSync(path.join(app, 'Info.plist'), plist.build(JSON.parse(JSON.stringify(info))));
   return root;
 }
-const run = (root) => spawnSync(process.execPath, [script, root], { encoding: 'utf8' });
+const run = (root, ...flags) => spawnSync(process.execPath, [script, ...flags, root], { encoding: 'utf8' });
 
 const cases = [
   ['a clean prod sync passes', { config: { appId: 'x' } }, 0],
@@ -100,8 +100,12 @@ for (const [name, spec, expected] of cases) {
     const r = run(root);
     assert.equal(r.status, 0, 'the inspector alone does not fail');
     assert.match(r.stdout + r.stderr, /WARNING.*inspect/i, 'but it warns');
+    // 9.9: the App Store workflow runs the check with --release, where it fails.
+    const release = run(root, '--release');
+    assert.equal(release.status, 1, 'a release build with the inspector on fails');
+    assert.match(release.stderr, /inspector/i);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 }
-console.log(`check-ios-prod.test.mjs passed (${cases.length + 2} cases)`);
+console.log(`check-ios-prod.test.mjs passed (${cases.length + 3} cases)`);

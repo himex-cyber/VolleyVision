@@ -5,7 +5,7 @@ export interface ErrorResponse {
   status: number;
   // retryable (6.5): only a serialization conflict. The offline queue resends
   // those; any other 409 is a real refusal it must show, not retry forever.
-  body: { error: string; code?: string; retryable?: boolean };
+  body: { error: string; code?: string; retryable?: boolean; [detail: string]: unknown };
 }
 
 export function mapErrorToResponse(err: Error): ErrorResponse {
@@ -19,6 +19,9 @@ export function mapErrorToResponse(err: Error): ErrorResponse {
     return {
       status: anyErr.statusCode,
       body: {
+        // Structured extras a client acts on, e.g. the teams blocking an
+        // account deletion (9.4). First, so they can never replace the rest.
+        ...(anyErr.details && typeof anyErr.details === 'object' ? anyErr.details : {}),
         error: err.message,
         ...(anyErr.code ? { code: anyErr.code } : {}),
         ...(anyErr.code === 'SERIALIZATION_CONFLICT' ? { retryable: true } : {}),
@@ -29,6 +32,12 @@ export function mapErrorToResponse(err: Error): ErrorResponse {
   // Prisma unique constraint violation
   if (anyErr.code === 'P2002') {
     return { status: 409, body: { error: 'A record with those details already exists.' } };
+  }
+
+  // Prisma foreign key refused the write: a row it points at went away
+  // mid-request, e.g. a message sent while its author deleted their account.
+  if (anyErr.code === 'P2003') {
+    return { status: 409, body: { error: 'This changed while you were working. Refresh and try again.' } };
   }
 
   // Prisma record not found

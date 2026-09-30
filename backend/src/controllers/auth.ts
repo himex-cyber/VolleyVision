@@ -12,9 +12,14 @@ import { verifyEmail as verifyEmailService, resendVerification as resendVerifica
 
 export async function register(req: Request, res: Response, next: NextFunction) {
   try {
-    const { email, password, firstName, lastName, signupIntent } = req.body;
+    const { email, password, firstName, lastName, signupIntent, acceptTerms } = req.body;
     if (!email || !password || !firstName || !lastName) {
       throw new AppError(400, 'email, password, firstName, and lastName are required.');
+    }
+    // 9.3: 13+ and the Terms, ticked on the form. App builds older than
+    // v9.17.0 don't send it and get this 400 (none are shared).
+    if (acceptTerms !== true) {
+      throw new AppError(400, "Please confirm you're 13 or older and accept the Terms.");
     }
     // A JSON body can carry any type; a non-string reached .trim() and 500'd.
     if (typeof email !== 'string' || typeof password !== 'string' || !isEmailAddress(normalizeEmail(email))) {

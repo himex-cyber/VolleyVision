@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getProfile, updateProfile } from '../services/profile.service';
+import { acceptTerms } from '../services/auth.service';
+import { deleteAccountWithPassword } from '../services/accountDeletion.service';
 
 export async function getProfileHandler(req: Request, res: Response, next: NextFunction) {
   try {
@@ -20,6 +22,25 @@ export async function updateProfileHandler(req: Request, res: Response, next: Ne
       preferredPosition,
     });
     res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /api/v1/profile/accept-terms (9.3): the one-screen Terms step after sign-in. */
+export async function acceptTermsHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await acceptTerms(req.user!.userId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** DELETE /api/v1/profile (9.4): the caller's own account, with their password. */
+export async function deleteAccountHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    await deleteAccountWithPassword(req.user!.userId, req.body?.password);
+    res.status(204).send();
   } catch (err) {
     next(err);
   }

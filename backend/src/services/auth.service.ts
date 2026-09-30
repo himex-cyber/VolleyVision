@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import { sendPasswordResetEmail } from '../lib/mailer';
 import { normalizeEmail } from '../lib/email';
+import { CURRENT_TERMS_VERSION, TERMS_REQUIRED_MESSAGE, termsRequired } from '../lib/terms';
 import {
   CONSUMED_RESET_FIELDS,
   RESET_TOKEN_BYTES,
@@ -48,6 +49,32 @@ export interface AuthResponse {
     profileImage: string | null;
     signupIntent: string | null;
     emailVerified: boolean;
+    // 9.3, additive: when the Terms were accepted and which version, and
+    // whether the app must ask (never accepted, or an older version).
+    termsAcceptedAt: Date | null;
+    termsVersion: string | null;
+    termsRequired: boolean;
+  };
+}
+
+type UserRow = {
+  id: string; email: string; firstName: string; lastName: string; role: string; profileImage: string | null;
+  signupIntent: string | null; emailVerifiedAt: Date | null; termsAcceptedAt: Date | null; termsVersion: string | null;
+};
+
+function toAuthUser(user: UserRow): AuthResponse['user'] {
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    profileImage: user.profileImage,
+    signupIntent: user.signupIntent ?? null,
+    emailVerified: user.emailVerifiedAt != null,
+    termsAcceptedAt: user.termsAcceptedAt,
+    termsVersion: user.termsVersion,
+    termsRequired: termsRequired(user),
   };
 }
 
@@ -120,6 +147,9 @@ export async function registerUser(
       ...(intent ? { signupIntent: intent } : {}),
       emailVerificationTokenHash: tokenHash,
       emailVerificationExpiresAt: expiresAt,
+      // The controller refused the signup unless the 13+ / Terms box was ticked.
+      termsAcceptedAt: new Date(),
+      termsVersion: CURRENT_TERMS_VERSION,
     },
   });
 
@@ -132,16 +162,7 @@ export async function registerUser(
 
   return {
     token,
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      profileImage: user.profileImage,
-      signupIntent: user.signupIntent ?? null,
-      emailVerified: user.emailVerifiedAt != null,
-    },
+    user: toAuthUser(user),
   };
 }
 
@@ -160,16 +181,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
 
   return {
     token,
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      profileImage: user.profileImage,
-      signupIntent: user.signupIntent ?? null,
-      emailVerified: user.emailVerifiedAt != null,
-    },
+    user: toAuthUser(user),
   };
 }
 
@@ -296,9 +308,27 @@ export async function getCurrentUser(userId: string) {
       signupIntent: true,
       createdAt: true,
       emailVerifiedAt: true,
+      termsAcceptedAt: true,
+      termsVersion: true,
     },
   });
   if (!user) throw new AppError(404, 'User not found.');
   const { emailVerifiedAt, ...rest } = user;
-  return { ...rest, emailVerified: emailVerifiedAt != null };
+  return { ...rest, emailVerified: emailVerifiedAt != null, termsRequired: termsRequired(user) };
+}
+
+/** POST /profile/accept-terms (9.3): the current Terms, accepted now. */
+export async function acceptTerms(userId: string) {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { termsAcceptedAt: new Date(), termsVersion: CURRENT_TERMS_VERSION },
+    select: { termsAcceptedAt: true, termsVersion: true },
+  });
+  return { ...user, termsRequired: false };
+}
+
+/** Posting in team chat needs the current Terms (9.3); 403 TERMS_REQUIRED otherwise. */
+export async function assertTermsAccepted(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { termsAcceptedAt: true, termsVersion: true } });
+  if (!user || termsRequired(user)) throw new AppError(403, TERMS_REQUIRED_MESSAGE, 'TERMS_REQUIRED');
 }

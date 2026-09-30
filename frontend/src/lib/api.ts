@@ -79,6 +79,11 @@ export function isEmailNotVerifiedError(err: unknown): boolean {
   return axios.isAxiosError(err) && err.response?.data?.code === 'EMAIL_NOT_VERIFIED';
 }
 
+/** True when posting in chat was refused until the Terms are accepted (9.3). */
+export function isTermsRequiredError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.data?.code === 'TERMS_REQUIRED';
+}
+
 /** True when a request failed because of our own rate limiting (429) —
  *  used by resend-verification-email flows to show a distinct message. */
 export function isRateLimitedError(err: unknown): boolean {
@@ -103,8 +108,9 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
+  // acceptTerms: the 13+ / Terms tick box (9.3); the form won't submit without it.
   register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) =>
-    api.post<AuthResponse>('/auth/register', data).then((r) => r.data),
+    api.post<AuthResponse>('/auth/register', { ...data, acceptTerms: true }).then((r) => r.data),
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>('/auth/login', data).then((r) => r.data),
   logout: () => api.post('/auth/logout').then((r) => r.data),
@@ -413,6 +419,8 @@ export const profileApi = {
   get: () => api.get<UserProfile>('/profile').then((r) => r.data),
   update: (data: Partial<UserProfile>) =>
     api.patch<UserProfile>('/profile', data).then((r) => r.data),
+  acceptTerms: () => api.post<{ termsRequired: boolean }>('/profile/accept-terms').then((r) => r.data),
+  deleteAccount: (password: string) => api.delete('/profile', { data: { password } }),
 };
 
 // ─── Player Portal (Phase 5 Sprint 5) ────────────────────────────────────────

@@ -22,6 +22,10 @@ describe('parseType', () => {
     }
   });
 
+  it('refuses MESSAGE_REPORT: reports come only from POST /messages/:id/report (9.1)', () => {
+    assert.throws(() => parseType('MESSAGE_REPORT'), (err: any) => err.statusCode === 400);
+  });
+
   it('rejects a missing value', () => {
     try {
       parseType(undefined);

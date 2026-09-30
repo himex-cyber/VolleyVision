@@ -228,10 +228,16 @@ TestFlight group with automatic distribution. Then replace the three `REPLACE_WI
 the key's name in Codemagic, the app's numeric Apple ID, and the email for build results. None of them is secret;
 the key itself, certificates and profiles live only in Codemagic.
 
-**Starting a build:** Codemagic → the VolleyVision app → **Start new build** → branch `main`, workflow
-`ios-testflight`. Nothing starts a build automatically (no `triggering:` section), which keeps it inside the free
-500 macOS minutes a month; a build takes about 10–20 minutes. Once Apple has processed the upload, the build
-reaches the internal group's iPhones through TestFlight on its own.
+**Starting a build:** Codemagic → the VolleyVision app → **Start new build** → branch `main`, and the workflow:
+- **`ios-testflight`** for your own iPhone (internal testers). The web inspector is on, and Apple keeps the build
+  internal-only.
+- **`ios-release`** for external TestFlight testers and App Store review. No inspector (the prod-config check fails
+  the build if it's on), and the build number must come from TestFlight, so run `ios-testflight` at least once
+  first. It only uploads; submitting for review is done in App Store Connect.
+
+Nothing starts a build automatically (no `triggering:` section), which keeps it inside the free 500 macOS minutes a
+month; a build takes about 10–20 minutes. Once Apple has processed an `ios-testflight` upload, the build reaches the
+internal group's iPhones through TestFlight on its own.
 
 **If the first build fails before any script runs:** errors such as "integration not found" or "no matching
 profiles" come from Codemagic's own set-up, before the placeholder guard gets a chance. They mean the Apple and
@@ -247,7 +253,7 @@ Codemagic set-up above isn't finished (the API key's name, the certificate or th
   (see developer.apple.com/news/upcoming-requirements), move the pin to the lowest Xcode that meets it and that
   Capacitor supports, and check Codemagic lists it. Keep the project in Xcode's classic `.pbxproj` format.
 - **Web inspector:** the TestFlight workflow sets `CAP_IOS_INSPECTABLE=1`, so inspect.dev on Windows can show the
-  app's console over USB. It is off in any other build and must be off for external testing or the App Store.
+  app's console over USB. It is off in any other build; `ios-release` checks it with `check-ios-prod.mjs --release`.
 - **Production API:** needs `capacitor://localhost` in `CORS_EXTRA_ORIGINS` (see Building the Android app).
 - **Device checks:** `docs/ios-device-checklist.md`.
 - **Not yet:** push notifications, universal links (emails open the website in Safari), CSV and Print (hidden in

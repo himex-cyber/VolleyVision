@@ -91,6 +91,22 @@ function clientIp(req: Request): string {
  * (or a held-down Enter key) can't flood a channel. 10 burst, ~2/second
  * sustained: `max / windowMs` = 10/5000ms, the original hand-rolled numbers.
  */
+/** Deleting your account (9.4): 5 an hour, every attempt counted, so the password can't be guessed through it. */
+export const accountDeleteRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyFn: (req) => (req.user?.userId ? `account-delete:user:${req.user.userId}` : null),
+  message: 'Too many attempts. Wait an hour and try again.',
+});
+
+/** Accepting the Terms (9.3): one write per sign-in in practice. */
+export const termsAcceptRateLimit = createRateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyFn: (req) => (req.user?.userId ? `terms:user:${req.user.userId}` : null),
+  message: 'Too many attempts. Wait a few minutes and try again.',
+});
+
 export const chatPostRateLimit = createRateLimit({
   windowMs: 5_000,
   max: 10,

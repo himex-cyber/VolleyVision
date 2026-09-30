@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage } from '../lib/api';
 
@@ -11,6 +11,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Just deleted their account (9.4, DeleteAccountPage).
+  const deleted = new URLSearchParams(useLocation().search).has('deleted');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -47,6 +49,11 @@ export default function LoginPage() {
           <h1 className="text-lg font-semibold text-chalk-100 mb-1">Welcome back</h1>
           <p className="text-chalk-500 text-sm mb-6">Sign in to your account</p>
 
+          {deleted && !error && (
+            <div className="mb-4 px-4 py-3 rounded-xl bg-success/10 text-success-strong text-sm" role="status">
+              Your account has been deleted. Thanks for using VolleyVision.
+            </div>
+          )}
           {error && (
             <div className="mb-4 px-4 py-3 rounded-xl bg-error/30 border border-error text-error text-sm">
               {error}

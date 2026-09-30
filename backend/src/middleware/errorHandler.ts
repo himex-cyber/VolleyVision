@@ -9,7 +9,9 @@ export class AppError extends Error {
     // on (e.g. EMAIL_NOT_VERIFIED) rather than string-match the message.
     // Optional and additive — every existing AppError without one keeps
     // returning exactly { error } as before.
-    public code?: string
+    public code?: string,
+    // Extra fields for the response body (e.g. `teams` on ACCOUNT_HAS_TEAMS).
+    public details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'AppError';

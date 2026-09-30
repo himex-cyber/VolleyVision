@@ -42,6 +42,23 @@ describe('mapErrorToResponse', () => {
     assert.deepEqual(mapErrorToResponse(err), { status: 404, body: { error: 'Record not found.' } });
   });
 
+  it('maps Prisma P2003 (a foreign key refused the write) to 409 (9.4)', () => {
+    // e.g. a message sent while its author's account is being deleted.
+    const err = Object.assign(new Error('Foreign key constraint failed'), { code: 'P2003' });
+    assert.deepEqual(mapErrorToResponse(err), {
+      status: 409, body: { error: 'This changed while you were working. Refresh and try again.' },
+    });
+  });
+
+  it("passes an AppError's details through, next to code (9.4)", () => {
+    const err = Object.assign(new Error('Transfer or delete these teams first: A.'), {
+      statusCode: 409, code: 'ACCOUNT_HAS_TEAMS', details: { teams: [{ id: 't1', name: 'A', reason: 'owner' }] },
+    });
+    assert.deepEqual(mapErrorToResponse(err).body, {
+      error: 'Transfer or delete these teams first: A.', code: 'ACCOUNT_HAS_TEAMS', teams: [{ id: 't1', name: 'A', reason: 'owner' }],
+    });
+  });
+
   it('hides the real message for an unrecognized error, returning a generic 500', () => {
     const err = new Error('some internal detail that should not leak');
     assert.deepEqual(mapErrorToResponse(err), { status: 500, body: { error: 'An unexpected error occurred.' } });
