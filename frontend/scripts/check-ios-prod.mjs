@@ -76,6 +76,22 @@ if (!existsSync(pbxPath)) {
   if (!families.length || families.some((v) => v !== '1')) problems.push(`project.pbxproj: TARGETED_DEVICE_FAMILY must be 1 (iPhone only), found ${families.join(', ') || 'none'}`);
   const targets = values('IPHONEOS_DEPLOYMENT_TARGET');
   if (!targets.length || targets.some((v) => v !== '16.4')) problems.push(`project.pbxproj: IPHONEOS_DEPLOYMENT_TARGET must be 16.4 everywhere, found ${targets.join(', ') || 'none'}`);
+  if (!pbx.includes('/* PrivacyInfo.xcprivacy in Resources */')) problems.push('project.pbxproj: PrivacyInfo.xcprivacy is not in the App target\'s Resources');
+}
+
+// 9.8: Capacitor Preferences is UserDefaults, a "required reason" API. Apple
+// rejects an upload whose privacy manifest doesn't declare it (CA92.1: the
+// app's own data, read and written only by the app).
+const privacyPath = path.join(root, 'App/App/PrivacyInfo.xcprivacy');
+if (!existsSync(privacyPath)) {
+  problems.push(`${privacyPath} is missing`);
+} else {
+  let manifest = null;
+  try { manifest = plist.parse(readFileSync(privacyPath, 'utf8')); } catch { problems.push('PrivacyInfo.xcprivacy does not parse'); }
+  const userDefaults = manifest?.NSPrivacyAccessedAPITypes?.find?.((t) => t.NSPrivacyAccessedAPIType === 'NSPrivacyAccessedAPICategoryUserDefaults');
+  if (manifest && !userDefaults?.NSPrivacyAccessedAPITypeReasons?.includes('CA92.1')) {
+    problems.push('PrivacyInfo.xcprivacy: UserDefaults must be declared with reason CA92.1');
+  }
 }
 
 // The App Store rejects an app icon with an alpha channel. PNG byte 25 is the

@@ -8,6 +8,7 @@ import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { features } from './config/features';
 import { isNative, initNative } from './lib/native';
+import { hydrateStorage } from './lib/nativeStorage';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
 import QueueFlusher from './components/tracking/QueueFlusher';
@@ -235,12 +236,16 @@ window.addEventListener('vite:preloadError', (event) => {
 // the app from every screen, so it's reported rather than dropped.
 if (isNative()) initNative().catch((err) => Sentry.captureException(err));
 
-trimCachedMatches();
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </React.StrictMode>
-);
+// Storage first (9.8): in the apps the token and taps come from native
+// Preferences, loaded before anything reads them. No top-level await (Vite's
+// default build target rejects it), so the render waits in a .then.
+hydrateStorage().then(() => {
+  trimCachedMatches();
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>
+  );
+});

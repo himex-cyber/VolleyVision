@@ -110,6 +110,19 @@ the left edge does **not** go back.
 - [ ] **Sign out:** you land on the sign-in page. Reopen the app: still signed out.
   Notes:
 
+## 7a. Staying signed in, and store-readiness screens (v9.17.0)
+
+- [ ] **Updating keeps you signed in:** with an older build installed and signed in, and a few taps queued in
+  airplane mode, install the new build. Open it: still signed in, and the taps are still waiting (they sync once
+  you're back online). The sign-in and taps moved from browser storage to the phone's own storage.
+- [ ] **Closing the app keeps taps:** queue taps in airplane mode, swipe the app away, reopen it: they're still there.
+- [ ] **Terms:** an account that hasn't accepted the Terms sees the one-screen Terms step; the Terms and Privacy
+  links open in Safari.
+- [ ] **Report and block:** on someone else's chat message, Report shows the reason form and the thank-you; Block
+  hides their messages; Profile → Blocked members unblocks.
+- [ ] **Delete account:** Profile → Account → Delete account shows the explanation; with a throwaway account,
+  deleting it lands on "Your account has been deleted", and reopening the app shows the sign-in page.
+
 ## 8. Anything else
 
 Anything that looked wrong, slow or confusing, with screenshots:
