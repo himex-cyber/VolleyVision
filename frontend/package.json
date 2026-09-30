@@ -13,12 +13,14 @@
     "build:native:local": "tsc && vite build --mode native-local",
     "build:native:prod": "tsc && vite build --mode native-prod",
     "android:local": "node scripts/android.mjs local",
-    "android:prod": "node scripts/android.mjs prod"
+    "android:prod": "node scripts/android.mjs prod",
+    "ios:prod": "node scripts/ios.mjs prod"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",
     "@capacitor/app": "8.1.1",
     "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2",
     "@sentry/react": "^10.73.0",
     "@tanstack/react-query": "^5.14.0",
     "axios": "^1.6.2",

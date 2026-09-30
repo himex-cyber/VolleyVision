@@ -180,7 +180,17 @@ async function main() {
       const res = await call(base, 'GET', `/api/v1/teams/${f.team.id}/members`, f.users[who].token);
       assert.equal(res.status, 200);
       assert.ok(!JSON.stringify(res.body).includes('@integration.test'), `${who} saw member emails`);
+      // 8.5.0.1: nor other members' account ids or anyone's global role.
+      const me = f.users[who].id;
+      for (const m of res.body as { user: Record<string, unknown> }[]) {
+        assert.ok(m.user.id === null || m.user.id === me, `${who} saw another member's account id`);
+        assert.ok(!('role' in m.user), `${who} saw a global role`);
+      }
+      assert.ok((res.body as { user: { id: unknown } }[]).some((m) => m.user.id === me), `${who} lost their own id`);
     }
+    const managed = await call(base, 'GET', `/api/v1/teams/${f.team.id}/members`, f.manager.token);
+    assert.ok((managed.body as { user: { id: unknown; role?: unknown } }[]).every((m) => typeof m.user.id === 'string' && 'role' in m.user),
+      'a manager sees every account id and role');
 
     // P2.1: below FULL_ACCESS on invitations, the staff code isn't returned...
     const codes = await call(base, 'GET', `/api/v1/teams/${f.team.id}/join-codes`, f.assistant.token);

@@ -104,10 +104,13 @@ function ApprovalQueueCard({ teamId }: { teamId: string }) {
 // Select + confirm control for linking a player record to a team member — a
 // separate "Link" click after picking, unlike Unlink which is a one-step
 // window.confirm (linking isn't destructive, so it doesn't need one).
+// Managers always get account ids; the type says so once the list is filtered.
+type LinkableMember = TeamMember & { user: { id: string } };
+
 function LinkMemberSelect({
   members, pending, onLink,
 }: {
-  members: TeamMember[];
+  members: LinkableMember[];
   pending: boolean;
   onLink: (userId: string) => void;
 }) {
@@ -189,7 +192,9 @@ export default function TeamDetailPage() {
   // refuses anyone else (400 for other roles, 409 for a second record), so
   // they're excluded from the picker up front.
   const linkedUserIds = new Set((team?.players ?? []).map((p) => p.userId).filter((id): id is string => id != null));
-  const availableMembers = (members ?? []).filter((m) => m.role === 'PLAYER' && !linkedUserIds.has(m.user.id));
+  const availableMembers = (members ?? []).filter(
+    (m): m is LinkableMember => m.role === 'PLAYER' && m.user.id != null && !linkedUserIds.has(m.user.id),
+  );
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

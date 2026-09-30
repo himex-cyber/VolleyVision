@@ -4,6 +4,7 @@
 import dotenv from 'dotenv';
 import * as Sentry from '@sentry/node';
 import { scrubUrl } from './lib/scrubUrl';
+import { clientTag } from './lib/clientVersion';
 
 // index.ts also calls dotenv.config(), but only after its own imports
 // evaluate; this file runs first, so it self-loads env the same way
@@ -52,11 +53,15 @@ type ScrubbableEvent = {
   };
   spans?: Array<{ data?: Record<string, unknown> }>;
   breadcrumbs?: Array<{ data?: Record<string, unknown> }>;
+  tags?: Record<string, unknown>;
 };
 
 function scrubRequest<T extends ScrubbableEvent>(event: T): T {
   const request = event.request;
   if (request) {
+    // Per event, not Sentry.setTag: a module-level tag would be shared by every
+    // request the function serves.
+    event.tags = { ...event.tags, client: clientTag(request.headers) };
     delete request.data;
     delete request.cookies;
     delete request.query_string;

@@ -30,6 +30,22 @@ export function maskOtherUserIds<T extends WithUser>(players: T[], isStaff: bool
   return isStaff ? players : players.map((p) => (isCaller(p.userId, callerId) ? p : { ...p, userId: null }));
 }
 
+type MemberRow = { user: { id: string | null; email?: unknown; role?: unknown } };
+
+/**
+ * Members list rows for this caller (8.5.0.1). Only members who can manage
+ * the roster get emails, account ids and the global role (who is an ADMIN).
+ * Everyone else keeps their own id, which the "(you)" label reads; other ids
+ * are null rather than removed, as in maskOtherUserIds.
+ */
+export function maskMembers<T extends MemberRow>(members: T[], canManage: boolean, callerId: string | null): T[] {
+  if (canManage) return members;
+  return members.map((m) => {
+    const { email: _email, role: _role, ...user } = m.user;
+    return { ...m, user: { ...user, id: isCaller(user.id, callerId) ? user.id : null } };
+  });
+}
+
 type EventWithPlayer = {
   playerId: string | null;
   notes: string | null;

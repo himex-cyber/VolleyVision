@@ -1,14 +1,22 @@
-// The Android app (Capacitor) runs this same SPA in a WebView. The native
+// The Android and iOS apps (Capacitor) run this same SPA in a WebView. The native
 // bridge sets window.Capacitor before our code loads, so this needs no import.
 // Never import @capacitor/* statically from code on the web entry path: the
 // web build must not pull it in. Dynamic-import it inside `if (isNative())`.
 import { confirmLeave } from './leaveGuard';
 
-export const isNative = (): boolean =>
-  (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() === true;
+type CapacitorGlobal = { isNativePlatform?: () => boolean; getPlatform?: () => string };
+const capacitor = () => (window as unknown as { Capacitor?: CapacitorGlobal }).Capacitor;
+
+export const isNative = (): boolean => capacitor()?.isNativePlatform?.() === true;
+
+/** 'android' or 'ios' in the apps, 'web' in a browser. */
+export const nativePlatform = (): string => capacitor()?.getPlatform?.() ?? 'web';
 
 /** Native-only setup, called from main.tsx inside `if (isNative())`. */
 export async function initNative(): Promise<void> {
+  // iPhones have no Back button (every screen has an in-app way back), and
+  // swipe-back stays off: it would skip the tracker's leave guard.
+  if (nativePlatform() !== 'android') return;
   // Dynamic import: the web bundle never loads @capacitor/app.
   const { App } = await import('@capacitor/app');
   // Android's back gesture/button walks the app's history, and leaves the app

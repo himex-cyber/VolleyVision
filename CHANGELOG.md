@@ -2,12 +2,61 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
+## v9.15.0 — 2026-09-30
+
+Phase 8.5.0 (fixes carried from the Phase 8 review) and Phase 8.5 (the iPhone
+app). No migration. Released, not yet deployed. The Android app's version is 9.15.0 too; no Android build is
+shared with this release (the next one is versionCode 6).
+
+**VolleyVision for iPhone (TestFlight, invite-only)**
+- **The app now runs on iPhone**, with everything the Android app does: tracking
+  online and offline (taps survive the app being closed), dashboards and date
+  filters, team chat with photos from the camera or library, and Copy Report.
+  It's iPhone only, needs iOS 16.4 or later, and for now reaches invited
+  testers only, through Apple's TestFlight app.
+- It fits notched iPhones and the Dynamic Island, and every screen has an
+  on-screen way back (iPhones have no Back button). CSV downloads and printing
+  stay on the website for now, and links in emails open the website.
+- It needs this server version: the server has to accept the iPhone app's
+  requests before it can sign in.
+
+**Privacy**
+- **The team members list no longer shows other members' account ids, or
+  who is a site administrator, to players and viewers.** Only members who
+  can manage the roster get those, as with email addresses; everyone else
+  gets names, photos and team roles, plus their own account id. Nothing on
+  screen changes. This corrects v9.13.0's note: its "other players' account
+  ids are no longer sent" covered the match, team and roster pages, but not
+  the members list.
+
+**Old Android app versions are asked to update**
+- **Android app versions older than 9.13.0 now get "Please update the app"
+  instead of working.** They sent whole scores rather than points added, which
+  could wipe out points recorded on another device, and they moved a match's
+  time whenever it was edited. None are known to be installed. The website and
+  newer apps are unaffected. Taps an outdated app has waiting are kept, not
+  thrown away: after updating, tap Retry on them to send them.
+
+**Fixes**
+- **The matches list says what's wrong instead of going blank.** A start date
+  after the end date now shows a note under the dates and the filter waits for
+  a valid range, and if the list can't load you see why.
+- **Opening a feedback attachment works when the browser blocks pop-ups.** The
+  first tap gets the file ready and then shows an "Open attachment" link. In
+  the apps it opens straight in the phone's browser.
+- **A score that isn't a whole number from 0 to 999 is refused with a clear
+  message** instead of being saved as a negative number or failing with an
+  error.
+- Chat messages now send from browsers that don't offer the newer random-id
+  function (older phones, or a site opened over plain http).
+
 ## v9.14.0 — 2026-09-30
 
 Phase 8 of the rebuild roadmap: analytics B, plus the match-time fix carried
-from Phase 8.0 (8.0.7). No migration. Not deployed yet. Share the v9.14.0
-Android build only after the backend is deployed: the app sends date ranges
-an older server ignores, so it would show every match under a date label.
+from Phase 8.0 (8.0.7). No migration. Deployed to production on 2026-09-30,
+together with v9.13.0. The signed Android build (9.14.0, versionCode 5) is
+built; it hasn't been shared yet. It needs this server: an older one ignores
+the app's date ranges and would show every match under a date label.
 
 **Match times show as the time on the fixture**
 - **A 6 pm game now shows as 6 pm.** Match times were shown converted to the
@@ -50,9 +99,8 @@ an older server ignores, so it would show every match under a date label.
 ## v9.13.0 — 2026-09-30
 
 Phase 8.0 of the rebuild roadmap: fixes carried over from the Phases 6–7
-review. No migration. Not deployed yet. Share the v9.13.0 Android build only
-after the backend is deployed: it sends score changes the v9.12.0 server
-doesn't know (it still falls back to whole scores there, as before).
+review. No migration. Deployed to production on 2026-09-30 as part of
+v9.14.0. No Android build of v9.13.0 was shared; v9.14.0's includes it.
 
 **Scoring with more than one device**
 - **Manual +1 / −1 no longer wipes out another device's points.** The tracker

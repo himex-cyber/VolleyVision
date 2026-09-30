@@ -965,3 +965,74 @@ read as 6 pm on their dates; no row needed changing. Approved by Karlos (G7).
 6/6; `npm audit --omit=dev --audit-level=high` clean (nodemailer moderate only, G3). Emulator (VV_Light, local
 debug build): the filter works, CSV and Print hidden, Copy Report works, 5 offline taps synced once.
 
+### Production deploy: v9.13.0 and v9.14.0 (2026-09-30)
+
+Karlos asked Claude to deploy once Netlify had credits for one more build. v9.13.0 was never deployed on its own. No
+migrations in either release.
+
+1. **Backup (Karlos):** `.\backup.ps1` wrote `vv-backup-2026-09-30-1156.sql` (347 KB, the same size as the 29 Sept
+   backups). `deploy.ps1`'s new check found it and named it before deploying.
+2. **Clean build:** `main` = `v9.14.0` (`31bf261`), tree clean; backend `tsc`, 72 unit test files and build, frontend
+   `tsc`, lint and build all passed locally first.
+3. **Deploy:** `deploy.ps1`: today's backup found, migrations up to date, build and publish live (deploy
+   `6abc51c416226397d191825b`), smoke check passed (health and db ok, CSP header, unknown team 404).
+
+**Live checks:**
+- `/health`: `{"status":"ok","db":"ok"}`.
+- A bad date from an outsider is still a 404: `/analytics/teams/nope?from=bad`, `/analytics/teams/nope/zones?to=2026-02-30`,
+  `/analytics/players/nope?from=bad`, `/matches/by-team/nope?from=bad`.
+- Without a token, `PATCH /matches/nope/score` (with a delta) and `POST /matches` answer 401.
+- The production bundle contains the date filter ("Loading these dates…", "No matches in these dates"), the CSV
+  helper (`Hit % (0–1)`, "Download CSV"), "Print / Save PDF", and the UTC match-time formatter.
+- Sentry: no unresolved issues in the hour after the deploy.
+
+### Phase 8.5.0 of the rebuild roadmap: carry-over fixes (branch `rebuild/p8-5-0-carryover`, 2026-09-30)
+
+Why: the independent review of v9.13.0–v9.14.0 found the members list still sending every member's account id and
+global role, old Android builds that erase points and shift match times, a 500 on non-numeric absolute scores, a blank
+matches list on a 400, and iOS blockers in shared code. Released with Phase 8.5 as v9.15.0. No migration.
+
+| Item | Change | Test (fails before) |
+|---|---|---|
+| 8.5.0.1 (G2) | `GET /teams/:id/members`: without `MANAGE_MEMBERS` (or signed out) no emails, no global `user.role`, and `user.id` null except on the caller's own row (`maskMembers`) | `playerPrivacy.test.ts`, `teamMembershipController.test.ts`, authz matrix shape check (shown failing without the fix) |
+| 8.5.0.2 (G2) | `middleware/minClientVersion` on `/api/v1` after CORS: `X-Client: android/<v>` below 9.13.0 → 426 `APP_OUTDATED`; no header, unparsable, `unknown` and iOS pass (`lib/clientVersion`). Client: one message, no retry of a 426; the offline queue keeps taps (`'outdated'`, both cores) and backs off 10 min | `clientVersion.test.ts`, `http.minClientVersion.test.ts`, `eventQueueCore.test.ts` |
+| 8.5.0.3 | Absolute `homeScore`/`awayScore`/`homeSetsWon`/`awaySetsWon`: whole numbers 0–999, else 400 (was a 500 or a negative score) | `scoreWriterLocks.test.ts` |
+| 8.5.0.4 | Matches list: from/to cross-linked, backwards range left out with a hint, error shown before the empty state, 4xx not retried | browser |
+| 8.5.0.5 | Chat temp ids via `newKey()`; feedback attachment: web renders a real link after the first tap (dropped before the signed URL expires), apps `location.assign`; `X-Client` is `<platform>/<version>`; Sentry events tagged `client` per event from the parsed header | `clientVersion.test.ts` (tag); browser |
+| 8.5.0.6 | CHANGELOG (corrects v9.13.0's account-id note); findings recorded | — |
+
+**Reviews:** `/code-review high` 6 (5 fixed; 1 skipped: no frontend test runner for the queue's `outdated` path);
+`/security-review` none; phase-end Opus audit PASS with 2 low (release-note wording for old queues; brand-voice hints),
+both fixed.
+
+**Verified:** backend `tsc`, 74 unit test files, build; frontend `tsc`, lint, build; integration 6/6 on local
+postgres:17; CI 4/4.
+
+### Phase 8.5 of the rebuild roadmap: the iPhone app (branch `rebuild/p8-5-ios`, 2026-09-30)
+
+Why: an iPhone build for Karlos through internal TestFlight. There is no Mac, so the app is built, signed and uploaded
+only on Codemagic; Karlos runs the device checks. Released as v9.15.0. No migration.
+
+| Item | Change | Check |
+|---|---|---|
+| 8.5.1 (G3) | `@capacitor/ios` 8.5.2 exact; `npx cap add ios`: Swift Package Manager project (`App.xcodeproj` + `CapApp-SPM`, no CocoaPods), bundle id `app.volleyvision`, committed as generated | CI `ios-config` (no drift after a sync) |
+| 8.5.2 | `npm run ios:prod` (`scripts/ios.mjs`, prod only, clears `CAP_ENV`); `scripts/check-ios-prod.mjs` | `check-ios-prod.test.mjs` (27 cases) |
+| 8.5.3 | `Info.plist`: `ITSAppUsesNonExemptEncryption` false, camera and photo-library texts, `UIRequiredDeviceCapabilities` arm64; pbxproj: iPhone only, iOS 16.4; `CapApp-SPM` `.iOS(.v16)` | the check (fails on each going missing) |
+| 8.5.4 | Icon flattened onto navy (RGB, no alpha or tRNS) and light/dark splashes from the brand assets | the check |
+| 8.5.5 | Hardware Back listener Android-only; invitation page "Back to home" when signed in; safe areas unchanged (`min-h-screen` already subtracts the insets) | device checklist |
+| 8.5.6 | `ios.webContentsDebuggingEnabled` only when `CAP_IOS_INSPECTABLE=1` (the TestFlight workflow); the check warns | the check |
+| 8.5.7 | CORS: `capacitor://localhost` allowed when configured; production needs it in `CORS_EXTRA_ORIGINS` (Karlos, C3) | `http.cors.test.ts` |
+| 8.5.8 | `codemagic.yaml` `ios-testflight`: manual only, Xcode 26.6 pinned, Node 24, App Store signing, version from `build.gradle`, build number = latest TestFlight + 1 (Codemagic's `BUILD_NUMBER` if the lookup fails), exported for internal TestFlight only, upload without review; stops at once while a placeholder is left | Opus config review against Codemagic's docs |
+| 8.5.9 | CI `ios-config` on Ubuntu: the check's test, a prod sync, the check, no drift in `ios/` | green on PR #57 |
+| 8.5.10 | README "Building the iOS app", `docs/ios-device-checklist.md`, CLAUDE.md | — |
+
+**Reviews:** `/code-review high` 6, all fixed; Opus Codemagic/Xcode config review PASS (1 medium: lock the
+inspector build to internal TestFlight; 2 low), fixed; `/security-review` none; phase-end Opus audit PASS with 3 low
+(two device-checklist wordings, fixed; `plist` used from @capacitor/cli's dependencies rather than pinned, recorded).
+
+**Dependency (G3, Karlos):** nodemailer 9.1.1 → 10.0.12 for a new high advisory (GHSA-v53p-9fqp-m79j) that failed
+CI's audit; it also clears the three moderate ones recorded since Phase 6. Only breaking change for us: Node 20+.
+
+**Verified:** backend `tsc`, 74 unit test files, build; frontend `tsc`, lint, build; `check-ios-prod` 27 cases,
+`check-android-prod` 9; CI `ios-config` green. Not verifiable here: the Codemagic build and the iPhone itself
+(device: pending, Part C4).
