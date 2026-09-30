@@ -70,14 +70,16 @@ if (!existsSync(pbxPath)) {
   const families = values('TARGETED_DEVICE_FAMILY');
   if (!families.length || families.some((v) => v !== '1')) problems.push(`project.pbxproj: TARGETED_DEVICE_FAMILY must be 1 (iPhone only), found ${families.join(', ') || 'none'}`);
   const targets = values('IPHONEOS_DEPLOYMENT_TARGET');
-  if (targets.length !== 4 || targets.some((v) => v !== '16.4')) problems.push(`project.pbxproj: IPHONEOS_DEPLOYMENT_TARGET must be 16.4 in all four configurations, found ${targets.join(', ') || 'none'}`);
+  if (!targets.length || targets.some((v) => v !== '16.4')) problems.push(`project.pbxproj: IPHONEOS_DEPLOYMENT_TARGET must be 16.4 everywhere, found ${targets.join(', ') || 'none'}`);
 }
 
 // The App Store rejects an app icon with an alpha channel. PNG byte 25 is the
-// colour type: 2 is RGB; 4 and 6 carry alpha, 3 (palette) can.
+// colour type: 2 is RGB; 4 and 6 carry alpha, 3 (palette) can, and a tRNS
+// chunk adds transparency to any of them.
 const iconPath = path.join(root, 'App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png');
-if (!existsSync(iconPath)) problems.push(`${iconPath} is missing`);
-else if (readFileSync(iconPath)[25] !== 2) problems.push('AppIcon-512@2x.png is not plain RGB: flatten it (see assets/README.md)');
+const icon = existsSync(iconPath) ? readFileSync(iconPath) : null;
+if (!icon) problems.push(`${iconPath} is missing`);
+else if (icon[25] !== 2 || icon.includes('tRNS')) problems.push('AppIcon-512@2x.png is not plain RGB: flatten it (see assets/README.md)');
 
 for (const w of warnings) console.warn(`WARNING: ${w}`);
 if (problems.length) {

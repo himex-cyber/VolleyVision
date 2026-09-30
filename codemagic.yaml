@@ -28,6 +28,13 @@ workflows:
         # The app's numeric Apple ID from App Store Connect (Part C2); not a secret.
         APP_STORE_APPLE_ID: REPLACE_WITH_APPLE_ID
     scripts:
+      - name: No placeholders left in codemagic.yaml
+        # Fails in seconds rather than after a 15-minute build.
+        script: |
+          # Split so this line doesn't match itself.
+          if grep -n "REPLACE""_WITH_" ../codemagic.yaml; then
+            echo "Fill in the placeholder values listed above (README: Building the iOS app)"; exit 1
+          fi
       - name: Install dependencies
         script: npm ci
       - name: Build the web app and sync it into ios/ (web inspector on, internal TestFlight only)
@@ -46,14 +53,22 @@ workflows:
           sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $V;/" ios/App/App.xcodeproj/project.pbxproj
           echo "Marketing version $V"
       - name: Build number = latest TestFlight build + 1
-        # The very first build has nothing on TestFlight yet, hence the 0.
+        # When the lookup fails (the very first build has nothing on TestFlight
+        # yet), fall back to Codemagic's BUILD_NUMBER, this workflow's own build
+        # count: every upload comes from here, so it is never below the latest
+        # TestFlight number + 1, and a failed lookup can't reuse a number.
         script: |
           set -e
           case "$APP_STORE_APPLE_ID" in
             ''|*[!0-9]*) echo "Set APP_STORE_APPLE_ID in codemagic.yaml to the app's numeric Apple ID"; exit 1 ;;
           esac
-          N=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || { echo "No TestFlight build found; starting from 0" >&2; echo 0; })
-          N=$((N + 1))
+          if LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID"); then
+            N=$((LATEST + 1))
+          else
+            echo "TestFlight lookup failed or found no build; using Codemagic's BUILD_NUMBER ($BUILD_NUMBER)" >&2
+            N=$BUILD_NUMBER
+          fi
+          case "$N" in ''|*[!0-9]*) echo "Bad build number: $N"; exit 1 ;; esac
           sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $N;/" ios/App/App.xcodeproj/project.pbxproj
           echo "Build number $N"
       - name: Build the signed .ipa

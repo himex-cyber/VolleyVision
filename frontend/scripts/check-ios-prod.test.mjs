@@ -21,7 +21,7 @@ const goodPbx = [1, 2, 3, 4].map(() => 'IPHONEOS_DEPLOYMENT_TARGET = 16.4;').joi
   + '\nTARGETED_DEVICE_FAMILY = 1;\nTARGETED_DEVICE_FAMILY = 1;\n';
 
 // Just enough of a PNG header: byte 25 is the colour type (2 = RGB, 6 = RGBA).
-const png = (colourType) => { const b = Buffer.alloc(33); b[25] = colourType; return b; };
+const png = (colourType, extra = '') => { const b = Buffer.alloc(33); b[25] = colourType; return Buffer.concat([b, Buffer.from(extra)]); };
 
 function project({ config, info = goodPlist, rawInfo, pbx = goodPbx, icon = png(2) }) {
   const root = mkdtempSync(path.join(tmpdir(), 'vv-ios-'));
@@ -60,9 +60,11 @@ const cases = [
   ['no export compliance key fails', { config: {}, info: { ...goodPlist, ITSAppUsesNonExemptEncryption: undefined } }, 1],
   ['iPad support fails', { config: {}, pbx: goodPbx.replace('TARGETED_DEVICE_FAMILY = 1;', 'TARGETED_DEVICE_FAMILY = "1,2";') }, 1],
   ['iOS 15 fails', { config: {}, pbx: goodPbx.replace('16.4', '15.0') }, 1],
+  ['another target on 16.4 passes', { config: {}, pbx: goodPbx + 'IPHONEOS_DEPLOYMENT_TARGET = 16.4;\n' }, 0],
   ['a missing project fails', { config: {}, pbx: null }, 1],
   // 8.5.4: the App Store rejects an app icon with an alpha channel.
   ['an icon with alpha fails', { config: {}, icon: png(6) }, 1],
+  ['an RGB icon with a transparency chunk fails', { config: {}, icon: png(2, '....tRNS') }, 1],
   ['a missing icon fails', { config: {}, icon: null }, 1],
   ['a missing Info.plist fails', { config: {}, info: null }, 1],
   ['an Info.plist that does not parse fails', { config: {}, rawInfo: '<plist><dict><key>x</key>' }, 1],
@@ -71,6 +73,20 @@ for (const [name, spec, expected] of cases) {
   const root = project(spec);
   try {
     assert.equal(run(root).status, expected, name);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+// A truncated Info.plist fails because it doesn't parse, not only because the
+// keys checked later are missing.
+{
+  const truncated = plist.build(goodPlist).replace(/<\/dict>\s*<\/plist>\s*$/, '');
+  const root = project({ config: {}, rawInfo: truncated });
+  try {
+    const r = run(root);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /does not parse/, 'reported as a parse failure');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -88,4 +104,4 @@ for (const [name, spec, expected] of cases) {
     rmSync(root, { recursive: true, force: true });
   }
 }
-console.log(`check-ios-prod.test.mjs passed (${cases.length + 1} cases)`);
+console.log(`check-ios-prod.test.mjs passed (${cases.length + 2} cases)`);
