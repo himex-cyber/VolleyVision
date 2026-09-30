@@ -1,0 +1,77 @@
+# Codemagic builds the iPhone app: there is no Mac here, so this is its only
+# build. No `triggering:` section, so a push never starts a build; Karlos starts
+# it by hand, which keeps us inside the free 500 macOS minutes a month.
+# Signing and the upload use the App Store Connect API key Karlos added to
+# Codemagic (README "Building the iOS app"). No key, certificate or profile is
+# in this repo.
+workflows:
+  ios-testflight:
+    name: iOS internal TestFlight
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    # Every script step runs in a new shell from here; a `cd` doesn't carry over.
+    working_directory: frontend
+    integrations:
+      # The name Karlos gave the API key in Codemagic (Part C2).
+      app_store_connect: REPLACE_WITH_CODEMAGIC_KEY_NAME
+    environment:
+      # Apple takes uploads only from Xcode 26+ (the iOS 26 SDK) since 28 Apr
+      # 2026. Pinned to a 26.x rather than `latest`: Xcode 27.2's JSON project
+      # format breaks `cap sync` (ionic-team/capacitor#8607). Move the pin when
+      # Apple raises its minimum or that bug is fixed.
+      xcode: "26.6" # quoted: unquoted YAML would read a later 26.10 as 26.1
+      node: 24 # .nvmrc
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.volleyvision
+      vars:
+        # The app's numeric Apple ID from App Store Connect (Part C2); not a secret.
+        APP_STORE_APPLE_ID: REPLACE_WITH_APPLE_ID
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+      - name: Build the web app and sync it into ios/ (web inspector on, internal TestFlight only)
+        script: CAP_IOS_INSPECTABLE=1 npm run ios:prod
+      - name: iOS prod-config check
+        script: node scripts/check-ios-prod.mjs
+      - name: Use the signing profiles
+        script: xcode-project use-profiles --project ios/App/App.xcodeproj
+      - name: App version from android/app/build.gradle (the one version source)
+        # Not agvtool: the project has no VERSIONING_SYSTEM, and Info.plist
+        # reads $(MARKETING_VERSION). BSD sed on the Mac, hence -i ''.
+        script: |
+          set -e
+          V=$(grep -oE 'versionName "[^"]+"' android/app/build.gradle | cut -d'"' -f2)
+          if [ -z "$V" ]; then echo "No versionName in android/app/build.gradle"; exit 1; fi
+          sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $V;/" ios/App/App.xcodeproj/project.pbxproj
+          echo "Marketing version $V"
+      - name: Build number = latest TestFlight build + 1
+        # The very first build has nothing on TestFlight yet, hence the 0.
+        script: |
+          set -e
+          case "$APP_STORE_APPLE_ID" in
+            ''|*[!0-9]*) echo "Set APP_STORE_APPLE_ID in codemagic.yaml to the app's numeric Apple ID"; exit 1 ;;
+          esac
+          N=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || { echo "No TestFlight build found; starting from 0" >&2; echo 0; })
+          N=$((N + 1))
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $N;/" ios/App/App.xcodeproj/project.pbxproj
+          echo "Build number $N"
+      - name: Build the signed .ipa
+        # Swift Package Manager project: --project, not --workspace, and no pod install.
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme App
+    artifacts:
+      # Relative to the clone, not to working_directory.
+      - frontend/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      email:
+        recipients:
+          - REPLACE_WITH_EMAIL
+        notify:
+          success: true
+          failure: true
+      # Upload only. No submit_to_testflight (that sends the build to external
+      # Beta App Review) and no beta_groups: the internal group has automatic
+      # distribution, so the build reaches Karlos once Apple has processed it.
+      app_store_connect:
+        auth: integration
