@@ -2,7 +2,7 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.16.0 — 2026-09-30
+## v9.16.0 — 2026-10-01
 
 Phase 9.0 of the rebuild roadmap: fixes carried from the Phase 8.5 review,
 before the store work in v9.17.0. No migration. Released, not yet deployed.
