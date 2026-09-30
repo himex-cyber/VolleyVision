@@ -6,8 +6,8 @@ import { logAudit } from '../lib/audit';
 import { syncOwnerMembership } from '../services/teamMembership.service';
 import { generateTeamJoinCode } from '../services/teamJoinCode.service';
 import { assertRoomForAnotherTeam } from '../services/teamOwnership.service';
-import { isGlobalAdmin, seesEveryPlayer } from '../services/permission.service';
-import { maskOtherUserIds } from '../lib/playerPrivacy';
+import { isGlobalAdmin, seesEveryPlayer, canManageMembers, Permission, roleHasPermission } from '../services/permission.service';
+import { maskOtherUserIds, maskOwner } from '../lib/playerPrivacy';
 
 const ownerSelect = {
   id: true,
@@ -43,7 +43,15 @@ export async function getTeams(req: Request, res: Response, next: NextFunction) 
       },
       orderBy: { name: 'asc' },
     });
-    res.json(teams);
+    // Per team (9.0.2): one membership read for the whole list, not one per team.
+    const roles = new Map((await prisma.teamMembership.findMany({
+      where: { userId, teamId: { in: teams.map((t) => t.id) } },
+      select: { teamId: true, role: true },
+    })).map((m) => [m.teamId, m.role]));
+    res.json(teams.map((t) => {
+      const role = roles.get(t.id);
+      return maskOwner(t, !!role && roleHasPermission(role, Permission.MANAGE_MEMBERS), userId);
+    }));
   } catch (err) {
     next(err);
   }
@@ -61,7 +69,8 @@ export async function getTeam(req: Request, res: Response, next: NextFunction) {
     });
     if (!team) throw new AppError(404, 'Team not found.');
     const callerId = req.user?.userId ?? null;
-    res.json({ ...team, players: maskOtherUserIds(team.players, await seesEveryPlayer(callerId, team.id), callerId) });
+    const canManage = callerId ? await canManageMembers(callerId, team.id) : false;
+    res.json(maskOwner({ ...team, players: maskOtherUserIds(team.players, await seesEveryPlayer(callerId, team.id), callerId) }, canManage, callerId));
   } catch (err) {
     next(err);
   }
@@ -112,6 +121,8 @@ export async function createTeam(req: Request, res: Response, next: NextFunction
   }
 }
 
+// Create and update return the owner unmasked: only the owner creates, and
+// MANAGE_TEAM (head coach, manager) implies MANAGE_MEMBERS.
 export async function updateTeam(req: Request, res: Response, next: NextFunction) {
   try {
     const { name, division, season } = req.body;

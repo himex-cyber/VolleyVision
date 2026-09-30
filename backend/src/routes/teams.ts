@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getTeams, getTeam, createTeam, updateTeam, deleteTeam } from '../controllers/teams';
-import { myTeams, transferTeam, teamOwner } from '../controllers/teamOwnership';
+import { myTeams, transferTeam } from '../controllers/teamOwnership';
 import { listMembers, updateMember, deleteMember, linkPlayerRecordHandler, unlinkPlayerRecordHandler } from '../controllers/teamMembership';
 import { createTeamInvitation, listTeamInvitations } from '../controllers/invitation';
 import { listTeamJoinCodes, regenerateTeamJoinCode } from '../controllers/teamJoinCode';
@@ -42,8 +42,8 @@ router.get('/:id/my-role', requireAuth, visibleByTeamParam('id'), async (req, re
   }
 });
 
-// Ownership actions
-router.get('/:id/owner', optionalAuth, visibleByTeamParam('id'), teamOwner);
+// Ownership actions. (GET /:id/owner was removed in 9.0.2: no app called it, and
+// it sent the owner's email and global role to every member.)
 router.post('/:id/transfer', requireAuth, requireTeamPermission(Permission.TRANSFER_OWNERSHIP), transferTeam);
 
 // Membership management

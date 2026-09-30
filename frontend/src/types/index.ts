@@ -292,11 +292,12 @@ export type EventType =
 
 export type MatchStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
+// id and email are null for members who can't manage the roster (9.0.2).
 export interface TeamOwner {
-  id: string;
+  id: string | null;
   firstName: string;
   lastName: string;
-  email: string;
+  email: string | null;
 }
 
 export interface Team {
@@ -306,7 +307,8 @@ export interface Team {
   season: string;
   // Every team has an owner — a team is only ever visible to its owner, its
   // accepted members, or a global ADMIN. There is no public-team concept.
-  ownerId: string;
+  // Null for members who can't manage the roster (9.0.2); use /my-role's isOwner.
+  ownerId: string | null;
   owner?: TeamOwner | null;
   createdAt: string;
   updatedAt: string;

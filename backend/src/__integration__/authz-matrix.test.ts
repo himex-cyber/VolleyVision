@@ -72,7 +72,8 @@ async function setup() {
 const ROWS: Row[] = [
   // ── Team reads ──
   { name: 'GET team', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}`, expect: READ },
-  { name: 'GET team owner', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/owner`, expect: READ },
+  // 9.0.2: the owner route is gone (it sent the owner's email and global role to every member).
+  { name: 'GET team owner (removed)', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/owner`, expect: { outsider: 404, viewer: 404, player: 404 } },
   { name: 'GET team members', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/members`, expect: READ },
   { name: 'GET my-role', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/my-role`, expect: READ },
   { name: 'GET matches by team', method: 'GET', path: (f) => `/api/v1/matches/by-team/${f.team.id}`, expect: READ },
@@ -187,6 +188,29 @@ async function main() {
         assert.ok(!('role' in m.user), `${who} saw a global role`);
       }
       assert.ok((res.body as { user: { id: unknown } }[]).some((m) => m.user.id === me), `${who} lost their own id`);
+    }
+    // 9.0.2: the team owner's email and account id, on every team read.
+    for (const who of ['viewer', 'player'] as const) {
+      const token = f.users[who].token;
+      const rows: { id: string; ownerId: unknown; owner?: Record<string, unknown> | null }[] = [
+        (await call(base, 'GET', `/api/v1/teams/${f.team.id}`, token)).body,
+        ...((await call(base, 'GET', '/api/v1/teams', token)).body as { id: string }[]).filter((t) => t.id === f.team.id),
+      ] as never;
+      assert.equal(rows.length, 2, `${who}: team detail and list row`);
+      for (const t of rows) {
+        assert.equal(t.ownerId, null, `${who} saw the owner's account id`);
+        assert.equal(t.owner?.id, null, `${who} saw the owner's account id`);
+        assert.equal(t.owner?.email, null, `${who} saw the owner's email`);
+        assert.equal(typeof t.owner?.firstName, 'string', `${who} lost the owner's name`);
+      }
+      const mine = (await call(base, 'GET', '/api/v1/users/me/teams', token)).body as { team: { id: string; ownerId: unknown } }[];
+      assert.ok(mine.some((m) => m.team.id === f.team.id), `${who}: /users/me/teams lists the team`);
+      assert.ok(mine.every((m) => m.team.ownerId === null), `${who} saw the owner's account id in /users/me/teams`);
+    }
+    for (const t of [f.manager.token, f.owner.token]) {
+      const res = await call(base, 'GET', `/api/v1/teams/${f.team.id}`, t);
+      assert.equal(res.body.ownerId, f.owner.id, 'a manager and the owner see the owner id');
+      assert.equal(typeof res.body.owner.email, 'string', 'a manager and the owner see the owner email');
     }
     const managed = await call(base, 'GET', `/api/v1/teams/${f.team.id}/members`, f.manager.token);
     assert.ok((managed.body as { user: { id: unknown; role?: unknown } }[]).every((m) => typeof m.user.id === 'string' && 'role' in m.user),

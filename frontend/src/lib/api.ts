@@ -3,7 +3,7 @@ import { getToken, clearToken } from './tokenStorage';
 import { clearOfflineCache } from './offlineCache';
 import { setLeaveGuard } from './leaveGuard';
 import { isNative, nativePlatform } from './native';
-import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, RotationData, MomentumData, AdvancedMetrics, DateRange, User, AuthResponse, TeamOwner, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
+import type { Team, Player, Match, Event, MatchAnalytics, TeamAnalytics, PlayerAnalytics, MatchReport, ZoneMap, RotationData, MomentumData, AdvancedMetrics, DateRange, User, AuthResponse, TeamMember, TeamRole, UserTeamMembership, Invitation, UserProfile, PlayerBests, PlayerDashboard, PlayerRecord, CoachDashboard, PlayerTeamsResponse, PendingApproval, ApprovalRequest, ApprovalStatus } from '../types';
 export interface TeamTrend {
   matchId: string;
   opponent: string;
@@ -137,7 +137,6 @@ export const teamsApi = {
   delete: (id: string) => api.delete(`/teams/${id}`),
   // Phase 5 Sprint 2 — ownership
   myTeams: () => api.get<Team[]>('/teams/my-teams').then((r) => r.data),
-  owner: (id: string) => api.get<TeamOwner | null>(`/teams/${id}/owner`).then((r) => r.data),
   transfer: (id: string, newOwnerEmail: string) =>
     api.post<Team>(`/teams/${id}/transfer`, { newOwnerEmail }).then((r) => r.data),
   // Phase 4 — staff-only player record linking (players can no longer self-link/unlink).
