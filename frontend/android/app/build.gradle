@@ -84,5 +84,10 @@ tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
             workingDir rootProject.projectDir.parentFile
             commandLine 'node', 'scripts/check-android-prod.mjs'
         }
+        // A store build must name a real support address on its legal pages (9.2).
+        project.exec {
+            workingDir rootProject.projectDir.parentFile
+            commandLine 'node', 'scripts/check-legal.mjs', '--release'
+        }
     }
 }

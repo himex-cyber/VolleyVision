@@ -1,19 +1,23 @@
-// Single abstraction point for auth-token persistence.
-//
-// The web app uses localStorage; the future React Native client will swap
-// this module's internals for SecureStore without touching any callers.
-// Nothing outside this file may read or write the token key directly.
+// Single abstraction point for auth-token persistence. Nothing outside this
+// file may read or write the token key directly. The web uses localStorage;
+// the apps use native Preferences once hydrated (9.8, nativeStorage.ts).
+import { nativeStore } from './nativeStorage';
 
 const TOKEN_KEY = 'vv_token';
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  const native = nativeStore();
+  return native ? native.get(TOKEN_KEY) : localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  const native = nativeStore();
+  if (native) native.set(TOKEN_KEY, token);
+  else localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+  const native = nativeStore();
+  if (native) native.remove(TOKEN_KEY);
+  else localStorage.removeItem(TOKEN_KEY);
 }

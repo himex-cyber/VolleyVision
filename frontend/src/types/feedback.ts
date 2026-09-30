@@ -1,7 +1,9 @@
 // Feedback tab — client-side mirrors of the backend Feedback models
 // (backend/prisma/schema.prisma + feedback.service.ts serialization).
 
-export type FeedbackType = 'BUG' | 'FEATURE_REQUEST' | 'GENERAL';
+// MESSAGE_REPORT rows come only from reporting a chat message (9.5); users
+// can't pick it on the feedback form (TYPE_OPTIONS leaves it out).
+export type FeedbackType = 'BUG' | 'FEATURE_REQUEST' | 'GENERAL' | 'MESSAGE_REPORT';
 export type FeedbackSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 export type FeedbackStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'WONT_FIX';
 
@@ -24,6 +26,8 @@ export interface Feedback {
   status: FeedbackStatus;
   adminNotes: string | null;
   pageContext: string | null;
+  /** The reported chat message (MESSAGE_REPORT only). */
+  reportedMessageId?: string | null;
   attachments: FeedbackAttachment[];
   createdAt: string;
   updatedAt: string;

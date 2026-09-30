@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage } from '../lib/api';
+import LegalLinks from '../components/legal/LegalLinks';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -103,6 +104,7 @@ export default function LoginPage() {
             Create one
           </Link>
         </p>
+        <LegalLinks className="mt-6" />
       </div>
     </div>
   );

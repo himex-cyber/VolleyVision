@@ -18,12 +18,19 @@ const goodPlist = {
 };
 // Both build configurations of the project and of the App target.
 const goodPbx = [1, 2, 3, 4].map(() => 'IPHONEOS_DEPLOYMENT_TARGET = 16.4;').join('\n')
-  + '\nTARGETED_DEVICE_FAMILY = 1;\nTARGETED_DEVICE_FAMILY = 1;\n';
+  + '\nTARGETED_DEVICE_FAMILY = 1;\nTARGETED_DEVICE_FAMILY = 1;\n'
+  + 'A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B /* PrivacyInfo.xcprivacy */; };\n';
+
+// 9.8: native Preferences are UserDefaults, a required-reason API.
+const goodPrivacy = {
+  NSPrivacyTracking: false,
+  NSPrivacyAccessedAPITypes: [{ NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryUserDefaults', NSPrivacyAccessedAPITypeReasons: ['CA92.1'] }],
+};
 
 // Just enough of a PNG header: byte 25 is the colour type (2 = RGB, 6 = RGBA).
 const png = (colourType, extra = '') => { const b = Buffer.alloc(33); b[25] = colourType; return Buffer.concat([b, Buffer.from(extra)]); };
 
-function project({ config, info = goodPlist, rawInfo, pbx = goodPbx, icon = png(2) }) {
+function project({ config, info = goodPlist, rawInfo, pbx = goodPbx, icon = png(2), privacy = goodPrivacy }) {
   const root = mkdtempSync(path.join(tmpdir(), 'vv-ios-'));
   const app = path.join(root, 'App/App');
   mkdirSync(app, { recursive: true });
@@ -33,6 +40,7 @@ function project({ config, info = goodPlist, rawInfo, pbx = goodPbx, icon = png(
   if (icon) writeFileSync(path.join(iconDir, 'AppIcon-512@2x.png'), icon);
   if (pbx != null) writeFileSync(path.join(root, 'App/App.xcodeproj/project.pbxproj'), pbx);
   if (config) writeFileSync(path.join(app, 'capacitor.config.json'), JSON.stringify(config));
+  if (privacy) writeFileSync(path.join(app, 'PrivacyInfo.xcprivacy'), plist.build(privacy));
   if (rawInfo !== undefined) writeFileSync(path.join(app, 'Info.plist'), rawInfo);
   // JSON round trip: a key set to undefined is left out, as if never written.
   else if (info) writeFileSync(path.join(app, 'Info.plist'), plist.build(JSON.parse(JSON.stringify(info))));
@@ -68,6 +76,10 @@ const cases = [
   ['a missing icon fails', { config: {}, icon: null }, 1],
   ['a missing Info.plist fails', { config: {}, info: null }, 1],
   ['an Info.plist that does not parse fails', { config: {}, rawInfo: '<plist><dict><key>x</key>' }, 1],
+  // 9.8: the privacy manifest for UserDefaults (Preferences).
+  ['a missing privacy manifest fails', { config: {}, privacy: null }, 1],
+  ['a manifest without the UserDefaults reason fails', { config: {}, privacy: { NSPrivacyTracking: false, NSPrivacyAccessedAPITypes: [] } }, 1],
+  ['a manifest the app target does not ship fails', { config: {}, pbx: goodPbx.replace(/.*PrivacyInfo.*\n/, '') }, 1],
 ];
 for (const [name, spec, expected] of cases) {
   const root = project(spec);

@@ -6,6 +6,7 @@ import { getToken, setToken as storeToken, clearToken } from '../lib/tokenStorag
 import { cacheUser, cachedUser, cachedUserId, clearOfflineCache } from '../lib/offlineCache';
 import { forgetSession, purgeUserQueue } from '../lib/eventQueue';
 import { setLeaveGuard } from '../lib/leaveGuard';
+import { flushStorage } from '../lib/nativeStorage';
 
 /** The user id inside a stored JWT (read locally; the server still verifies it). */
 function tokenUserId(token: string): string | null {
@@ -95,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // match rosters don't.
     clearOfflineCache();
     forgetSession();
+    void flushStorage(); // the apps: the token removal reaches Preferences now
     setToken(null);
     setUser(null);
   }, []);
@@ -112,7 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     else forgetSession();
     try { sessionStorage.removeItem('vv_verify_banner_dismissed'); } catch { /* storage blocked: nothing kept */ }
     setLeaveGuard(null);
-    window.location.replace('/login?deleted=1');
+    // In the apps the removals above are queued native writes: let them land
+    // before the reload, or Preferences would keep the token and taps.
+    void flushStorage().finally(() => window.location.replace('/login?deleted=1'));
   }, [user?.id]);
 
   const refreshUser = useCallback(async () => {

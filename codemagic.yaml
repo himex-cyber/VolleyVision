@@ -39,6 +39,9 @@ workflows:
       - &install
         name: Install dependencies
         script: npm ci
+      - &legal
+        name: Legal pages match the app, with a real support address
+        script: node scripts/check-legal.mjs --release
       - name: Build the web app and sync it into ios/ (web inspector on, internal TestFlight only)
         script: CAP_IOS_INSPECTABLE=1 npm run ios:prod
       - name: iOS prod-config check
@@ -122,6 +125,7 @@ workflows:
     scripts:
       - *placeholder_guard
       - *install
+      - *legal
       - name: Build the web app and sync it into ios/ (no web inspector)
         script: npm run ios:prod
       - name: iOS prod-config check (release)

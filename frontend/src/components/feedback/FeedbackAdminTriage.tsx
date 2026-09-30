@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useAllFeedback, useUpdateFeedbackStatus } from '../../hooks';
-import { getApiErrorMessage } from '../../lib/api';
-import type { Feedback, FeedbackStatus } from '../../types/feedback';
+import { chatApi, getApiErrorMessage } from '../../lib/api';
+import type { Feedback, FeedbackStatus, FeedbackType } from '../../types/feedback';
 import { AttachmentChips, STATUS_LABELS, TYPE_BADGE, TYPE_LABELS, TYPE_OPTIONS } from './MyFeedbackList';
 
 const STATUS_OPTIONS: FeedbackStatus[] = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'WONT_FIX'];
+// Admins can filter by chat reports (9.5); the user form can't create them.
+const ADMIN_TYPE_OPTIONS: FeedbackType[] = [...TYPE_OPTIONS, 'MESSAGE_REPORT'];
 
 function AdminFeedbackRow({ fb }: { fb: Feedback }) {
   const updateStatus = useUpdateFeedbackStatus();
@@ -13,6 +15,26 @@ function AdminFeedbackRow({ fb }: { fb: Feedback }) {
   const [error, setError] = useState('');
 
   const dirty = status !== fb.status || notes.trim() !== (fb.adminNotes ?? '');
+  const [removing, setRemoving] = useState(false);
+
+  // A report's "Remove message": the moderation delete (it erases the text and
+  // files, 9.0.8), then the report is resolved.
+  async function removeMessage() {
+    if (!fb.reportedMessageId || !window.confirm('Remove this message from the team chat? This erases it for everyone.')) return;
+    setError('');
+    setRemoving(true);
+    try {
+      await chatApi.deleteMessage(fb.reportedMessageId);
+      const note = notes.trim() || 'The message was removed.';
+      await updateStatus.mutateAsync({ id: fb.id, data: { status: 'RESOLVED', adminNotes: note } });
+      setStatus('RESOLVED');
+      setNotes(note);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Couldn't remove the message. Try again."));
+    } finally {
+      setRemoving(false);
+    }
+  }
 
   async function save() {
     setError('');
@@ -51,6 +73,12 @@ function AdminFeedbackRow({ fb }: { fb: Feedback }) {
       <p className="text-grey-900 text-sm whitespace-pre-wrap">{fb.description}</p>
 
       <AttachmentChips feedback={fb} />
+
+      {fb.type === 'MESSAGE_REPORT' && fb.reportedMessageId && fb.status !== 'RESOLVED' && (
+        <button type="button" className="btn-secondary text-sm min-h-[44px] px-4 text-error-strong" disabled={removing} onClick={removeMessage}>
+          {removing ? 'Removing…' : 'Remove message'}
+        </button>
+      )}
 
       <div className="flex items-end gap-2">
         <div className="flex-1">
@@ -102,7 +130,7 @@ export default function FeedbackAdminTriage() {
           <label className="block text-xs text-grey-600 mb-1">Type</label>
           <select className="input text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
             <option value="">All types</option>
-            {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+            {ADMIN_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
           </select>
         </div>
       </div>
