@@ -122,7 +122,7 @@ function LinkMemberSelect({
       >
         <option value="">Choose a member…</option>
         {members.map((m) => (
-          <option key={m.id} value={m.user.id}>{m.user.firstName} {m.user.lastName}</option>
+          <option key={m.id} value={m.user.id ?? ''}>{m.user.firstName} {m.user.lastName}</option>
         ))}
       </select>
       <button
@@ -189,7 +189,7 @@ export default function TeamDetailPage() {
   // refuses anyone else (400 for other roles, 409 for a second record), so
   // they're excluded from the picker up front.
   const linkedUserIds = new Set((team?.players ?? []).map((p) => p.userId).filter((id): id is string => id != null));
-  const availableMembers = (members ?? []).filter((m) => m.role === 'PLAYER' && !linkedUserIds.has(m.user.id));
+  const availableMembers = (members ?? []).filter((m) => m.role === 'PLAYER' && m.user.id != null && !linkedUserIds.has(m.user.id));
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

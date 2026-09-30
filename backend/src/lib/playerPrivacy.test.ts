@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { visiblePlayers, redactEvents } from './playerPrivacy';
+import { visiblePlayers, redactEvents, maskMembers } from './playerPrivacy';
 
 const players = [
   { id: 'p1', firstName: 'Ann', userId: 'u1' },
@@ -53,5 +53,19 @@ assert.equal(keyedMine[1].notes, 'mine', 'own events otherwise unchanged');
 assert.equal(keyedMine[2].notes, 'opp', 'opponent events otherwise unchanged');
 // Rows without the field (older selects) don't gain one.
 assert.equal('clientKey' in redactEvents(events, false, 'u2')[2], false);
+
+// 8.5.0.1: the members list. Managers get every row whole. Anyone else gets
+// no emails, no global role, and only their own account id.
+const memberRows = [
+  { id: 'm1', role: 'HEAD_COACH', user: { id: 'u1', firstName: 'Ann', email: 'a@x.test', role: 'ADMIN', profileImage: null } },
+  { id: 'm2', role: 'PLAYER', user: { id: 'u2', firstName: 'Ben', email: 'b@x.test', role: 'PLAYER', profileImage: null } },
+];
+assert.deepEqual(maskMembers(memberRows, true, 'u1'), memberRows, 'managers see everything');
+const asBen = maskMembers(memberRows, false, 'u2');
+assert.deepEqual(asBen.map((m) => m.user.id), [null, 'u2'], 'only the caller keeps an account id');
+assert.ok(asBen.every((m) => !('role' in m.user) && !('email' in m.user)), 'no global role or email');
+assert.deepEqual(asBen.map((m) => m.role), ['HEAD_COACH', 'PLAYER'], 'team roles stay');
+assert.equal(asBen[0].user.firstName, 'Ann');
+assert.ok(maskMembers(memberRows, false, null).every((m) => m.user.id === null), 'anonymous: every id masked');
 
 console.log('playerPrivacy.test.ts passed');

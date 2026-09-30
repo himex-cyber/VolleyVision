@@ -19,11 +19,11 @@ export interface TeamMember {
   invitationAccess: AccessTier;
   matchAccess: AccessTier;
   user: {
-    id: string;
+    id: string | null; // null on other members' rows unless you can manage the roster
     firstName: string;
     lastName: string;
     email?: string; // only sent to members who can manage the roster
-    role: UserRole;
+    role?: UserRole; // global role; same rule as email
     profileImage: string | null;
   };
 }
