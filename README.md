@@ -198,13 +198,54 @@ Gradle needs it; set `JAVA_HOME` to it when running `gradlew` from a terminal).
 
 - **Signing:** copy `android/keystore.properties.example` to `android/keystore.properties` (gitignored) and fill it
   in. Keep the `.jks` outside the repo and back it up; losing it means the app can't be updated as the same app.
-- **Versions:** `versionName` in `android/app/build.gradle` is the one place the app version lives (the app reports
-  it as `X-Client: android/<version>`). Bump `versionCode` for every build shared with anyone.
+- **Versions:** `versionName` in `android/app/build.gradle` is the one place the app version lives, for the iPhone
+  app too (the app reports it as `X-Client: android/<version>`). Bump `versionCode` for every build shared with anyone.
 - **Production API:** Netlify needs `CORS_EXTRA_ORIGINS=https://localhost,capacitor://localhost` (the Android and iPhone apps' origins), or every app request fails.
 - **Icons and splash:** sources and the regeneration recipe are in `frontend/assets/`.
 - **Emails** (verify, reset, invite) open the website, not the app.
 - **Low-memory PCs:** the Play Store emulator images are heavy. A Google APIs ATD image with 1.5 GB RAM boots on 8 GB
   machines (it draws no screen; debug through `chrome://inspect` or the WebView DevTools socket).
+
+## Building the iOS app
+
+The iPhone app is the same frontend in a Capacitor 8 shell (`frontend/ios/`, a Swift Package Manager project:
+`ios/App/App.xcodeproj`, scheme `App`, no CocoaPods). It is iPhone only, iOS 16.4 and later, and goes out through
+**internal TestFlight** only for now. There is no Mac, so nothing iOS-specific builds locally: **Codemagic** builds,
+signs and uploads it (`codemagic.yaml`, workflow `ios-testflight`).
+
+| Command (in `frontend/`) | What it does |
+|---|---|
+| `npm run ios:prod` | Builds against production and syncs `ios/` (runs on Windows and Linux; no Xcode needed) |
+| `node scripts/check-ios-prod.mjs` | Fails on a remote server URL, cleartext, a non-default origin, App Transport Security exceptions, a missing permission text, iPad or an iOS target other than 16.4, or an icon with alpha; warns while the web inspector is on |
+
+CI's `ios-config` job runs both on Ubuntu and fails if the committed `ios/` differs from a fresh sync, so after
+changing `capacitor.config.ts`, a plugin or the Xcode project, run `npm run ios:prod` and commit what it changes.
+
+**Before the first build (Karlos, once):** an Apple Developer account (organisation, Himex Trading Ltd), the App ID
+`app.volleyvision`, the app in App Store Connect, an App Store Connect API key (App Manager) added to Codemagic, an
+Apple Distribution certificate and an App Store provisioning profile fetched into Codemagic, and an internal
+TestFlight group with automatic distribution. Then replace the three `REPLACE_WITH_*` values in `codemagic.yaml`:
+the key's name in Codemagic, the app's numeric Apple ID, and the email for build results. None of them is secret;
+the key itself, certificates and profiles live only in Codemagic.
+
+**Starting a build:** Codemagic → the VolleyVision app → **Start new build** → branch `main`, workflow
+`ios-testflight`. Nothing starts a build automatically (no `triggering:` section), which keeps it inside the free
+500 macOS minutes a month; a build takes about 10–20 minutes. Once Apple has processed the upload, the build
+reaches the internal group's iPhones through TestFlight on its own.
+
+- **Versions:** the app version is `versionName` in `frontend/android/app/build.gradle`, the same as Android's; the
+  build writes it into the Xcode project. The build number is the latest TestFlight build number plus one, looked
+  up during the build, so it never needs bumping by hand. The app reports itself as `X-Client: ios/<version>`.
+- **Xcode:** pinned to 26.6 in `codemagic.yaml`. Apple takes uploads only from Xcode 26 or later (since 28 April
+  2026), and Xcode 27.2's JSON project format breaks `cap sync`, so it isn't `latest`. When Apple raises its minimum
+  (see developer.apple.com/news/upcoming-requirements), move the pin to the lowest Xcode that meets it and that
+  Capacitor supports, and check Codemagic lists it. Keep the project in Xcode's classic `.pbxproj` format.
+- **Web inspector:** the TestFlight workflow sets `CAP_IOS_INSPECTABLE=1`, so inspect.dev on Windows can show the
+  app's console over USB. It is off in any other build and must be off for external testing or the App Store.
+- **Production API:** needs `capacitor://localhost` in `CORS_EXTRA_ORIGINS` (see Building the Android app).
+- **Device checks:** `docs/ios-device-checklist.md`.
+- **Not yet:** push notifications, universal links (emails open the website in Safari), CSV and Print (hidden in
+  the apps), and the App Store itself (Phase 9: account deletion, privacy policy link, chat reporting, age rating).
 
 ## Security
 
