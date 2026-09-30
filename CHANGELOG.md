@@ -5,7 +5,8 @@ All notable changes to VolleyVision, reconstructed from the repository's commit 
 ## v9.14.0 — 2026-09-30
 
 Phase 8 of the rebuild roadmap: analytics B, plus the match-time fix carried
-from Phase 8.0 (8.0.7). No migration. Not deployed yet. Share the v9.14.0
+from Phase 8.0 (8.0.7). No migration. Deployed to production on 2026-09-30,
+together with v9.13.0. Share the v9.14.0
 Android build only after the backend is deployed: the app sends date ranges
 an older server ignores, so it would show every match under a date label.
 
@@ -50,7 +51,8 @@ an older server ignores, so it would show every match under a date label.
 ## v9.13.0 — 2026-09-30
 
 Phase 8.0 of the rebuild roadmap: fixes carried over from the Phases 6–7
-review. No migration. Not deployed yet. Share the v9.13.0 Android build only
+review. No migration. Deployed to production on 2026-09-30 as part of
+v9.14.0. Share the v9.13.0 Android build only
 after the backend is deployed: it sends score changes the v9.12.0 server
 doesn't know (it still falls back to whole scores there, as before).
 

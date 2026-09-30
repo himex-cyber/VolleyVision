@@ -965,3 +965,24 @@ read as 6 pm on their dates; no row needed changing. Approved by Karlos (G7).
 6/6; `npm audit --omit=dev --audit-level=high` clean (nodemailer moderate only, G3). Emulator (VV_Light, local
 debug build): the filter works, CSV and Print hidden, Copy Report works, 5 offline taps synced once.
 
+### Production deploy: v9.13.0 and v9.14.0 (2026-09-30)
+
+Karlos asked Claude to deploy once Netlify had credits for one more build. v9.13.0 was never deployed on its own. No
+migrations in either release.
+
+1. **Backup (Karlos):** `.\backup.ps1` wrote `vv-backup-2026-09-30-1156.sql` (347 KB, the same size as the 29 Sept
+   backups). `deploy.ps1`'s new check found it and named it before deploying.
+2. **Clean build:** `main` = `v9.14.0` (`31bf261`), tree clean; backend `tsc`, 72 unit test files and build, frontend
+   `tsc`, lint and build all passed locally first.
+3. **Deploy:** `deploy.ps1`: today's backup found, migrations up to date, build and publish live (deploy
+   `6abc51c416226397d191825b`), smoke check passed (health and db ok, CSP header, unknown team 404).
+
+**Live checks:**
+- `/health`: `{"status":"ok","db":"ok"}`.
+- A bad date from an outsider is still a 404: `/analytics/teams/nope?from=bad`, `/analytics/teams/nope/zones?to=2026-02-30`,
+  `/analytics/players/nope?from=bad`, `/matches/by-team/nope?from=bad`.
+- Without a token, `PATCH /matches/nope/score` (with a delta) and `POST /matches` answer 401.
+- The production bundle contains the date filter ("Loading these dates…", "No matches in these dates"), the CSV
+  helper (`Hit % (0–1)`, "Download CSV"), "Print / Save PDF", and the UTC match-time formatter.
+- Sentry: no unresolved issues in the hour after the deploy.
+
