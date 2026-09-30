@@ -200,7 +200,7 @@ Gradle needs it; set `JAVA_HOME` to it when running `gradlew` from a terminal).
   in. Keep the `.jks` outside the repo and back it up; losing it means the app can't be updated as the same app.
 - **Versions:** `versionName` in `android/app/build.gradle` is the one place the app version lives (the app reports
   it as `X-Client: android/<version>`). Bump `versionCode` for every build shared with anyone.
-- **Production API:** Netlify needs `CORS_EXTRA_ORIGINS=https://localhost` (the app's origin), or every app request fails.
+- **Production API:** Netlify needs `CORS_EXTRA_ORIGINS=https://localhost,capacitor://localhost` (the Android and iPhone apps' origins), or every app request fails.
 - **Icons and splash:** sources and the regeneration recipe are in `frontend/assets/`.
 - **Emails** (verify, reset, invite) open the website, not the app.
 - **Low-memory PCs:** the Play Store emulator images are heavy. A Google APIs ATD image with 1.5 GB RAM boots on 8 GB
