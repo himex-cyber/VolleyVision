@@ -32,7 +32,7 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) => Promise<void>;
+  register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null; acceptTerms: boolean }) => Promise<void>;
   logout: () => void;
   /** Re-fetches /auth/me — used after verifying an email so the banner drops. */
   refreshUser: () => Promise<void>;
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
-  const register = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) => {
+  const register = useCallback(async (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null; acceptTerms: boolean }) => {
     const res = await authApi.register(data);
     storeToken(res.token);
     switchCache(res.user);

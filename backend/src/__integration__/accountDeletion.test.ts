@@ -121,6 +121,15 @@ async function main() {
     assert.equal(Number(ownerRows), 1, 'the scan works');
 
     assert.equal((await del(leaver.token, PASSWORD)).status, 401, 'the old session is dead');
+
+    // An unverified account never proved it owns its address: deleting it
+    // leaves a team's invitation to that address alone (security review).
+    const squatter = await makeUser('squatter');
+    await prisma.user.update({ where: { id: squatter.id }, data: { emailVerifiedAt: null, passwordHash: await bcrypt.hash(PASSWORD, 4) } });
+    const invite = await prisma.invitation.create({ data: { email: squatter.email, teamId: team.id, invitedById: owner.id, role: 'PLAYER', token: `${RUN}-squat`, expiresAt: new Date(Date.now() + 86_400_000) } });
+    assert.equal((await del(squatter.token, PASSWORD)).status, 204);
+    assert.ok(await prisma.invitation.findUnique({ where: { id: invite.id } }), "the team's invitation survives");
+    await prisma.invitation.delete({ where: { id: invite.id } });
     console.log('accountDeletion: all tests passed');
   } finally {
     await app.close();

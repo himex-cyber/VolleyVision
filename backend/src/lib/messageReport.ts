@@ -4,6 +4,7 @@
 // everything after the marker when the reported message's author leaves.
 export const SNAPSHOT_MARKER = '--- Snapshot ---';
 export const REMOVED_SNAPSHOT = '[removed: account deleted]';
+export const REMOVED_WITH_TEAM = '[removed: team deleted]';
 
 export const REPORT_REASONS = ['harassment', 'inappropriate', 'spam', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];

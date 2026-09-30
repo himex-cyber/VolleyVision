@@ -86,11 +86,6 @@ function clientIp(req: Request): string {
 
 // ─── Instances ────────────────────────────────────────────────────────────────
 
-/**
- * Team Chat + the feedback submit form — per-user bucket so a runaway client
- * (or a held-down Enter key) can't flood a channel. 10 burst, ~2/second
- * sustained: `max / windowMs` = 10/5000ms, the original hand-rolled numbers.
- */
 /** Deleting your account (9.4): 5 an hour, every attempt counted, so the password can't be guessed through it. */
 export const accountDeleteRateLimit = createRateLimit({
   windowMs: 60 * 60 * 1000,
@@ -123,6 +118,11 @@ export const termsAcceptRateLimit = createRateLimit({
   message: 'Too many attempts. Wait a few minutes and try again.',
 });
 
+/**
+ * Team Chat + the feedback submit form — per-user bucket so a runaway client
+ * (or a held-down Enter key) can't flood a channel. 10 burst, ~2/second
+ * sustained: `max / windowMs` = 10/5000ms, the original hand-rolled numbers.
+ */
 export const chatPostRateLimit = createRateLimit({
   windowMs: 5_000,
   max: 10,
