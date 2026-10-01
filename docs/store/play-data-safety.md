@@ -14,10 +14,10 @@ Facts: `data-inventory.md`. Where: Play Console → App content → Data safety.
 | Is all user data encrypted in transit? | **Yes** (HTTPS/TLS everywhere) |
 | Do you provide a way for users to request data deletion? | **Yes** |
 | Account creation method | Email and password |
-| Delete account URL | https://volleyvision-app.netlify.app/delete-account |
+| Delete account URL | https://volleyvision.co.nz/delete-account |
 | Partial deletion without deleting the account? | Yes: users can delete their own chat messages; coaches can delete player records. **Karlos to confirm** you want to state this. |
 | Independent security review | No |
-| Privacy policy URL | https://volleyvision-app.netlify.app/privacy |
+| Privacy policy URL | https://volleyvision.co.nz/privacy |
 
 ## Collected vs shared
 
@@ -59,7 +59,7 @@ Purposes are **App functionality** (plus **Account management** where noted). Do
 ## Data deletion details
 
 - In app: Profile → Account → Delete account.
-- Web: https://volleyvision-app.netlify.app/delete-account. Google requires this page to name the app and be easy to find.
+- Web: https://volleyvision.co.nz/delete-account. Google requires this page to name the app and be easy to find.
 - Deleted with the account: profile, messages and attachments, blocks, feedback, tokens, on-device data.
 - Kept after deletion: a player record linked to the account becomes "Former player" and keeps its stats. Audit log entries stay with the user shown as "deleted-user" and email and id removed. A moderation report keeps its reason and time, but the message snapshot is blanked if the reported person deletes their account.
 - Google says retained data must be explained to users, for example in the privacy policy. **Karlos to confirm** the delete-account page lists the same retained items as privacy.html.

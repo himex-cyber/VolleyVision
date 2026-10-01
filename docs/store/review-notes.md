@@ -28,7 +28,7 @@ How to reach the main features:
 - Tracking: open Matches, pick the open demo match, then Track. Tap a player and an action to log it.
 - Dashboards and stats: open Matches, then a finished match, or the Team tab.
 - Team chat: open the Chat tab (or the team's Chat). The demo team has a second member so you can see a conversation.
-- Account deletion: Profile, then Account, then Delete account. Please use a throwaway account to test it; the demo account is shared. Web page: https://volleyvision-app.netlify.app/delete-account
+- Account deletion: Profile, then Account, then Delete account. Please use a throwaway account to test it; the demo account is shared. Web page: https://volleyvision.co.nz/delete-account
 
 Sign-up is for people 13 and over (tick box, no date of birth asked). Coaches can also add player records (name, jersey, position, stats) for people without accounts.
 
@@ -37,9 +37,9 @@ User-generated content and safety (Guideline 1.2):
 - Filter: an objectionable-words filter runs on chat messages.
 - Report: long-press or use the menu on a message, then Report. Reports are reviewed within 48 hours by the developer.
 - Block: any member can be blocked from their messages. Blocked members' messages are hidden from you.
-- Contact: support@volleyvision.co.nz and https://volleyvision-app.netlify.app/support
+- Contact: support@volleyvision.co.nz and https://volleyvision.co.nz/support
 
-Privacy: no ads, no tracking, no analytics SDKs. Crash reports go to Sentry without user id, email or IP. Privacy policy: https://volleyvision-app.netlify.app/privacy
+Privacy: no ads, no tracking, no analytics SDKs. Crash reports go to Sentry without user id, email or IP. Privacy policy: https://volleyvision.co.nz/privacy
 
 Permissions: camera and photo library are used only to attach a photo in chat. Nothing else uses them.
 
@@ -62,7 +62,7 @@ Sign in with the demo coach account (username and password in the fields). It ha
 - Team chat: Chat tab. Chat is private to team members.
 - Report a message: message menu, Report. Reviewed within 48 hours.
 - Block a member: from their message or profile.
-- Delete account: Profile, Account, Delete account. Web: https://volleyvision-app.netlify.app/delete-account
+- Delete account: Profile, Account, Delete account. Web: https://volleyvision.co.nz/delete-account
 
 Sign-up needs a tick box confirming the person is 13 or older. The app is not directed at children.
 No ads. No tracking. No special hardware needed. The camera and photo picker are only used to attach a photo in chat.

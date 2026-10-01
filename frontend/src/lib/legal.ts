@@ -3,9 +3,10 @@ import { isNative } from './native';
 // The legal pages are static files on the website (9.2), outside the SPA: plain
 // <a href>, never a router <Link> (the catch-all route would send it home). In
 // the apps the link is absolute, so it opens in the phone's browser instead of
-// replacing the app. One spot for the address: move it here if the site moves
-// to volleyvision.co.nz.
-export const SITE_URL = 'https://volleyvision-app.netlify.app';
+// replacing the app. One spot for the address. volleyvision.co.nz (Karlos, 1 Oct)
+// must point at the Netlify site (docs/domain-setup.md) before an app build with
+// this ships, or the links won't open.
+export const SITE_URL = 'https://volleyvision.co.nz';
 
 export type LegalPage = 'privacy' | 'terms' | 'delete-account' | 'support';
 

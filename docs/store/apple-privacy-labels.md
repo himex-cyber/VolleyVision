@@ -2,7 +2,7 @@
 
 Source: https://developer.apple.com/app-store/app-privacy-details/ (fetched 1 Oct 2026).
 Facts: `data-inventory.md`, `frontend/public/privacy.html`.
-Where: App Store Connect → App Privacy. Privacy Policy URL: https://volleyvision-app.netlify.app/privacy
+Where: App Store Connect → App Privacy. Privacy Policy URL: https://volleyvision.co.nz/privacy
 
 ## Top-level answers
 
@@ -60,6 +60,6 @@ Apple lets some optional, infrequent data be left off the label. Our optional fi
 
 ## Related items in App Store Connect
 
-- Privacy Policy URL: https://volleyvision-app.netlify.app/privacy
+- Privacy Policy URL: https://volleyvision.co.nz/privacy
 - Account deletion is required for apps with sign-up. It exists (Profile → Account → Delete account). Say so in the review notes.
 - Privacy manifest is already in the app (commit 5b62333). **Karlos to confirm** at the first TestFlight build that Xcode's privacy report matches this table.

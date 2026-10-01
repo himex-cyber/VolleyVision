@@ -11,8 +11,8 @@ Limits checked 1 Oct 2026: Google title 30, short description 80, full descripti
 | App name | VolleyVision |
 | Primary category | Sports |
 | Secondary category (Apple, optional) | Productivity (**Karlos to confirm**) |
-| Support URL | https://volleyvision-app.netlify.app/support |
-| Privacy URL | https://volleyvision-app.netlify.app/privacy |
+| Support URL | https://volleyvision.co.nz/support |
+| Privacy URL | https://volleyvision.co.nz/privacy |
 | Marketing URL | None (leave blank) |
 | Support email (Google contact) | support@volleyvision.co.nz |
 | Copyright (Apple) | © 2026 Himex Trading Ltd |

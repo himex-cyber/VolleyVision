@@ -11,7 +11,7 @@ Staging already has one for rehearsals: `npm run db:seed:staging` creates `stagi
 
 1. Pick an address you control and won't use for anything else, for example `appreview@volleyvision.co.nz` (an alias
    of the support mailbox is fine).
-2. On https://volleyvision-app.netlify.app/register, sign up as **App Reviewer**. Tick the 13+ / Terms box.
+2. On https://volleyvision.co.nz/register, sign up as **App Reviewer**. Tick the 13+ / Terms box.
 3. Generate a strong password in your password manager. **It goes only into App Store Connect (App Review
    Information → Sign-in required) and the Play Console (App content → App access).** Never in the repo, a chat or
    an email.
