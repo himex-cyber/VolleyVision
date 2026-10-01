@@ -9,6 +9,7 @@ import { assertRoomForAnotherTeam } from '../services/teamOwnership.service';
 import { isGlobalAdmin, seesEveryPlayer, canManageMembers, Permission, roleHasPermission } from '../services/permission.service';
 import { maskOtherUserIds, maskOwner } from '../lib/playerPrivacy';
 import { removeStoredFiles } from '../lib/storageCleanup';
+import { SNAPSHOT_MARKER, REMOVED_WITH_TEAM } from '../lib/messageReport';
 
 const ownerSelect = {
   id: true,
@@ -147,7 +148,16 @@ export async function deleteTeam(req: Request, res: Response, next: NextFunction
       where: { message: { channel: { teamId: req.params.id } } },
       select: { storagePath: true },
     });
-    await prisma.team.delete({ where: { id: req.params.id } });
+    // Reports about the team's messages have no FK to them (they outlive a
+    // removed message), so blank their copies here: deleting a team erases its
+    // chat, reports included. The reason and time stay.
+    await prisma.$transaction([
+      prisma.$executeRaw`
+        UPDATE feedback SET description = regexp_replace(description, ${SNAPSHOT_MARKER + '\n'} || '.*$', ${SNAPSHOT_MARKER + '\n' + REMOVED_WITH_TEAM})
+        WHERE type = 'MESSAGE_REPORT' AND reported_message_id IN (
+          SELECT m.id FROM messages m JOIN channels c ON c.id = m.channel_id WHERE c.team_id = ${req.params.id})`,
+      prisma.team.delete({ where: { id: req.params.id } }),
+    ]);
     await removeStoredFiles(files.map((f) => f.storagePath));
     if (req.user) logAudit(req.user.userId, 'DELETE_TEAM', 'team', req.params.id);
     res.status(204).send();

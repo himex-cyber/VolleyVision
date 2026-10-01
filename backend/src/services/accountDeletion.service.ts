@@ -58,7 +58,7 @@ export async function deleteAccount(userId: string, deps: DeletionDeps = default
     // Held to the end: any write that references this user (a message, a
     // membership, a team) waits, then fails once the row is gone (409).
     await tx.$executeRaw`SELECT 1 FROM users WHERE id = ${userId} FOR UPDATE`;
-    const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true, emailVerifiedAt: true } });
     if (!user) throw new AppError(401, 'Your session has ended. Sign in again.');
     const found = await blockers(tx, userId);
     if (found.length) refuse(found);
@@ -96,14 +96,18 @@ export async function deleteAccount(userId: string, deps: DeletionDeps = default
         WHERE action = 'PLAYER_UPDATE' AND target_id IN (${Prisma.join(playerIds)})`;
     }
 
-    // Their email wherever it was typed: raw text, so compared trimmed and lower-cased.
-    await tx.$executeRaw`DELETE FROM invitations WHERE lower(trim(email)) = ${email}`;
-    await tx.$executeRaw`
+    // Their email wherever it was typed: raw text, so compared trimmed and
+    // lower-cased. Only once they proved it's theirs: anyone can sign up
+    // unverified under an address a team has invited, and deleting that
+    // account mustn't wipe the team's invitations and history (security review).
+    const ownsEmail = user.emailVerifiedAt != null;
+    if (ownsEmail) await tx.$executeRaw`DELETE FROM invitations WHERE lower(trim(email)) = ${email}`;
+    if (ownsEmail) await tx.$executeRaw`
       UPDATE approval_requests SET payload = jsonb_set(payload, '{email}', 'null'),
         status = CASE WHEN status = 'PENDING' THEN 'REJECTED'::"ApprovalStatus" ELSE status END,
         resolved_at = CASE WHEN status = 'PENDING' THEN now() ELSE resolved_at END
       WHERE action = 'INVITATION_CREATE' AND lower(trim(payload->>'email')) = ${email}`;
-    await tx.$executeRaw`
+    if (ownsEmail) await tx.$executeRaw`
       UPDATE audit_logs SET meta = jsonb_set(meta, '{email}', 'null')
       WHERE action = 'CREATE_INVITATION' AND lower(trim(meta->>'email')) = ${email}`;
     await tx.$executeRaw`
@@ -119,9 +123,10 @@ export async function deleteAccount(userId: string, deps: DeletionDeps = default
 
     // Every limiter key naming them: login:email:, forgot:email: and each
     // <limiter>:user:<id>. Ids are cuids, so no LIKE wildcards to escape.
+    const emailKeys = ownsEmail ? [`login:email:${email}`, `forgot:email:${email}`] : [];
     await tx.$executeRaw`
       DELETE FROM rate_limit_buckets
-      WHERE key IN (${'login:email:' + email}, ${'forgot:email:' + email}) OR key LIKE ${'%:user:' + userId}`;
+      WHERE key IN (${Prisma.join([...emailKeys, ''])}) OR key LIKE ${'%:user:' + userId}`;
 
     // Memberships, feedback, invitations they sent, blocks and approval
     // requests they made cascade. Their tokens stop working with the row.
@@ -150,15 +155,19 @@ export async function deleteAccountWithPassword(userId: string, password: unknow
 
 /** What deleteAccount would touch, counts only (the admin script's dry run). */
 export async function planAccountDeletion(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerifiedAt: true } });
   if (!user) return null;
   const email = normalizeEmail(user.email);
+  const ownsEmail = user.emailVerifiedAt != null; // as deleteAccount: unverified addresses aren't matched
   const [found, messages, files, players, invitations, auditRows] = await Promise.all([
     blockers(prisma, userId),
     prisma.message.count({ where: { senderId: userId } }),
     prisma.messageAttachment.count({ where: { OR: [{ message: { senderId: userId } }, { uploadedByUserId: userId }] } }),
     prisma.player.count({ where: { userId } }),
-    prisma.invitation.count({ where: { email: { equals: email, mode: 'insensitive' } } }),
+    // Compared as the deletion does: the address was typed, maybe with spaces.
+    ownsEmail
+      ? prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM invitations WHERE lower(trim(email)) = ${email}`.then(([row]) => Number(row.n))
+      : 0,
     prisma.auditLog.count({ where: { userId } }),
   ]);
   return { blockers: found, messages, files, players, invitations, auditRows };

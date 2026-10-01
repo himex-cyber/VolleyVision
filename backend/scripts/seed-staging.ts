@@ -1,7 +1,11 @@
 /**
  * Staging seed: one pre-verified user per team role plus an outsider, two
  * teams, rosters, and two completed matches whose events carry the zone,
- * rotation, rally and opponent-serve fields the analytics read.
+ * rotation, rally and opponent-serve fields the analytics read. Plus (9.11) a
+ * store-reviewer login owning "Demo Volleyball Club": fake adult players, two
+ * completed matches, one upcoming, and team chat (REVIEWER_EMAIL, or
+ * staging+reviewer@volleyvision.test). Production's reviewer account is made by
+ * hand through the app (docs/store/demo-account.md); no script writes to prod.
  *
  * Refuses to run unless DATABASE_URL is the staging project (lib/stagingGuard.ts):
  * it creates logins with a shared password. Idempotent: upserts everywhere,
@@ -34,6 +38,7 @@ if (SEED_PASSWORD.length < 12) {
 
 const FALCONS = 'staging-falcons';
 const WOLVES = 'staging-wolves';
+const DEMO = 'staging-demo-club';
 
 type SeedUser = { key: string; firstName: string; role: UserRole; teamRole?: TeamRole };
 // teamRole is the Falcons membership; the outsider only owns Wolves.
@@ -45,6 +50,21 @@ const USERS: SeedUser[] = [
   { key: 'player', firstName: 'Pita', role: UserRole.PLAYER, teamRole: TeamRole.PLAYER },
   { key: 'viewer', firstName: 'Vera', role: UserRole.VIEWER, teamRole: TeamRole.VIEWER },
   { key: 'outsider', firstName: 'Owen', role: UserRole.COACH },
+  // Owns the demo club only (9.11).
+  { key: 'reviewer', firstName: 'Reviewer', role: UserRole.COACH },
+];
+const emailFor = (key: string) =>
+  key === 'reviewer' && process.env.REVIEWER_EMAIL ? process.env.REVIEWER_EMAIL : `staging+${key}@volleyvision.test`;
+
+// 9.11: fake adults only. No real people, no minors.
+const DEMO_ROSTER: [string, string, number, Position][] = [
+  ['Ava', 'Setter', 2, Position.SETTER],
+  ['Ben', 'Spiker', 4, Position.OUTSIDE_HITTER],
+  ['Cleo', 'Block', 6, Position.MIDDLE_BLOCKER],
+  ['Dev', 'Swing', 8, Position.OPPOSITE],
+  ['Esi', 'Digs', 10, Position.LIBERO],
+  ['Finn', 'Wing', 13, Position.OUTSIDE_HITTER],
+  ['Gia', 'Middle', 15, Position.MIDDLE_BLOCKER],
 ];
 
 // Fake adult names only: no birth dates, no phone numbers.
@@ -64,7 +84,7 @@ const WOLVES_ROSTER: [string, string, number, Position][] = [
   ['Robin', 'Pack', 8, Position.LIBERO],
 ];
 
-type MatchPlan = { id: string; opponent: string; matchDate: string; setScores: { set: number; home: number; away: number }[] };
+type MatchPlan = { id: string; teamId?: string; opponent: string; matchDate: string; setScores: { set: number; home: number; away: number }[] };
 const MATCHES: MatchPlan[] = [
   {
     id: 'staging-falcons-m1', opponent: 'Test Titans', matchDate: '2026-08-01T19:00:00Z',
@@ -73,6 +93,16 @@ const MATCHES: MatchPlan[] = [
   {
     id: 'staging-falcons-m2', opponent: 'Sample Sharks', matchDate: '2026-08-08T19:00:00Z',
     setScores: [{ set: 1, home: 23, away: 25 }, { set: 2, home: 25, away: 20 }, { set: 3, home: 18, away: 25 }, { set: 4, home: 21, away: 25 }],
+  },
+];
+const DEMO_MATCHES: MatchPlan[] = [
+  {
+    id: 'staging-demo-m1', teamId: DEMO, opponent: 'Harbour City VC', matchDate: '2026-09-12T18:30:00Z',
+    setScores: [{ set: 1, home: 25, away: 18 }, { set: 2, home: 25, away: 22 }, { set: 3, home: 21, away: 25 }, { set: 4, home: 25, away: 20 }],
+  },
+  {
+    id: 'staging-demo-m2', teamId: DEMO, opponent: 'Southern Stars', matchDate: '2026-09-19T18:30:00Z',
+    setScores: [{ set: 1, home: 25, away: 23 }, { set: 2, home: 27, away: 25 }, { set: 3, home: 25, away: 19 }],
   },
 ];
 
@@ -129,7 +159,7 @@ async function main() {
 
   const userIds: Record<string, string> = {};
   for (const u of USERS) {
-    const email = `staging+${u.key}@volleyvision.test`;
+    const email = emailFor(u.key);
     const data = { firstName: u.firstName, lastName: 'Staging', role: u.role, passwordHash, emailVerifiedAt: now,
       termsAcceptedAt: now, termsVersion: CURRENT_TERMS_VERSION }; // 9.3: no Terms step for seed logins
     const user = await prisma.user.upsert({ where: { email }, update: data, create: { email, ...data } });
@@ -144,12 +174,17 @@ async function main() {
     where: { id: WOLVES }, update: {},
     create: { id: WOLVES, name: 'Staging Wolves', season: '2026', ownerId: userIds.outsider },
   });
+  await prisma.team.upsert({
+    where: { id: DEMO }, update: {},
+    create: { id: DEMO, name: 'Demo Volleyball Club', division: 'Premier', season: '2026', ownerId: userIds.reviewer, channels: { create: { type: 'TEAM' } } },
+  });
 
   // Owner memberships are HEAD_COACH, as ensureOwnerMembership does for real teams.
   const { defaultAccessTiers } = await import('../src/services/permission.service');
   const memberships: [string, string, TeamRole][] = [
     ...USERS.filter((u) => u.teamRole).map((u) => [FALCONS, userIds[u.key], u.teamRole!] as [string, string, TeamRole]),
     [WOLVES, userIds.outsider, TeamRole.HEAD_COACH],
+    [DEMO, userIds.reviewer, TeamRole.HEAD_COACH],
   ];
   for (const [teamId, userId, role] of memberships) {
     await prisma.teamMembership.upsert({
@@ -173,10 +208,12 @@ async function main() {
   };
   const falconsPlayers = await upsertRoster(FALCONS, FALCONS_ROSTER);
   await upsertRoster(WOLVES, WOLVES_ROSTER);
+  const demoPlayers = await upsertRoster(DEMO, DEMO_ROSTER);
   // The seed player's own record, so the player portal has data.
   await prisma.player.update({ where: { id: falconsPlayers[0] }, data: { userId: userIds.player } });
 
-  for (const plan of MATCHES) {
+  for (const plan of [...MATCHES, ...DEMO_MATCHES]) {
+    const teamId = plan.teamId ?? FALCONS;
     if (await prisma.match.findUnique({ where: { id: plan.id } })) {
       console.log(`${plan.id} already exists, skipped`);
       continue;
@@ -184,18 +221,35 @@ async function main() {
     const homeSetsWon = plan.setScores.filter((s) => s.home > s.away).length;
     await prisma.match.create({
       data: {
-        id: plan.id, teamId: FALCONS, opponent: plan.opponent, matchDate: new Date(plan.matchDate),
+        id: plan.id, teamId, opponent: plan.opponent, matchDate: new Date(plan.matchDate),
         status: 'COMPLETED', homeSetsWon, awaySetsWon: plan.setScores.length - homeSetsWon, setScores: plan.setScores,
       },
     });
-    const events = buildEvents(plan, falconsPlayers);
+    const events = buildEvents(plan, teamId === DEMO ? demoPlayers : falconsPlayers);
     await prisma.event.createMany({ data: events });
     console.log(`${plan.id}: ${events.length} events`);
+  }
+
+  // The demo club's next fixture, a week out, so the home page shows one.
+  const upcoming = 'staging-demo-next';
+  const nextWeek = new Date(Date.now() + 7 * 86_400_000);
+  await prisma.match.upsert({
+    where: { id: upcoming },
+    update: { matchDate: nextWeek },
+    create: { id: upcoming, teamId: DEMO, opponent: 'Northern Lights', venue: 'Community Stadium', matchDate: nextWeek, status: 'SCHEDULED' },
+  });
+  const demoChannel = await prisma.channel.findFirstOrThrow({ where: { teamId: DEMO, type: 'TEAM' } });
+  if (!(await prisma.message.count({ where: { channelId: demoChannel.id } }))) {
+    await prisma.message.createMany({ data: [
+      { channelId: demoChannel.id, senderId: userIds.reviewer, body: 'Welcome to Demo Volleyball Club. Training is Tuesday 6 pm.' },
+      { channelId: demoChannel.id, senderId: userIds.reviewer, body: 'Great win on Saturday. Stats are up on the match page.' },
+    ] });
   }
 
   console.log('\nStaging seed complete. For backend/.env.staging:');
   console.log(`SMOKE_TEAM_ID=${FALCONS}`);
   console.log(`SMOKE_MATCH_ID=${MATCHES[0].id}`);
+  console.log(`Reviewer login: ${emailFor('reviewer')} (password: SEED_PASSWORD), team ${DEMO}`);
   await prisma.$disconnect();
 }
 

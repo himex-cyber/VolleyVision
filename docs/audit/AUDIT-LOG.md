@@ -1084,3 +1084,35 @@ findings (noted the same owner-id paths, fixed).
 **Production data job (Karlos, C4, after the deploy and a backup):** `npx ts-node scripts/scrub-deleted-messages.ts
 --prod` (dry run), then with `--apply`.
 
+### Phase 9 of the rebuild roadmap: store readiness (branch `rebuild/p9-store-readiness`, 2026-10-01)
+
+One migration, `20260930183513_store_readiness` (G1, Karlos 1 Oct; applied to `vv-pg17` only): `users.terms_accepted_at`
+/ `terms_version`, `FeedbackType.MESSAGE_REPORT`, `feedback.reported_message_id` (no FK, indexed), `user_blocks` (RLS
+on, anon/authenticated revoked). Release v9.17.0 waits on the staging rehearsal (9.S) and Karlos's legal review.
+
+| Item | Change | Test |
+|---|---|---|
+| 9.1 (G1) | The migration above | `rls.test.ts`; shadow-DB replay matches the schema |
+| 9.2 | Static `/privacy`, `/terms`, `/delete-account`, `/support` (drafts from the code and `docs/store/data-inventory.md`; not legal advice); rewrites before the SPA fallback; `lib/legal.ts` one config spot; `check-legal.mjs` (CI; `--release` refuses placeholders and "TO CONFIRM" in Android release builds, Codemagic and `deploy.ps1` prod); links in the menu, footer, sign-up and Profile | check-legal; browser at 360 px |
+| 9.3 (G2) | Sign-up requires `acceptTerms`; login/register/`/auth/me` return `termsRequired`; `POST /profile/accept-terms` (20/h); 403 `TERMS_REQUIRED` on chat post/upload/edit after the channel check; Terms step in the app (deletion reachable from it) | `terms.test.ts`, `lib/terms` |
+| 9.4 (G2) | `DELETE /profile` (password, 5/h; 403 `WRONG_PASSWORD`; 409 `ACCOUNT_HAS_TEAMS`) and `scripts/delete-account.ts`: one locked transaction erasing their messages and files, "Former player", invitations, email/id in approvals, audit (`deleted-user`), report snapshots, rate-limit keys; email-keyed steps only for a verified email; P2003 → 409 | `accountDeletion` unit/fakePrisma/integration (every-table scan) |
+| 9.5 (G2) | `POST /messages/:id/report` (10/h; members only; snapshot after a marker; admin email without message text); admin triage filter and Remove message; `POST /feedback` refuses `MESSAGE_REPORT`; team delete blanks report copies | `moderation.test.ts`, `messageReport` |
+| 9.6 (G2) | `POST /messages/:id/block-sender` (30/h), `GET`/`DELETE /users/me/blocks` (block ids and names only); `listMessages` filters in the query, former members kept | `moderation.test.ts` |
+| 9.7 (G2) | `lib/contentFilter.ts` masks a short word list as `****` on create/upload/edit | `contentFilter.test.ts`, integration |
+| 9.8 (G3) | `@capacitor/preferences` 8.0.1: token and queue in native storage (hydrate before render, ordered writes, migration from localStorage, flush on pause/sign-out/deletion, write failures surfaced); iOS `PrivacyInfo.xcprivacy` (UserDefaults CA92.1) in the App target | `storageCore.test.ts` (+ drift), `check-ios-prod` 31 cases; emulator and device pending |
+| 9.9 | Codemagic `ios-release` (no inspector, `--release` check, no internal-only export, TestFlight build number required) | check-ios-prod `--release` |
+| 9.10 | `docs/store/` (data inventory, Apple labels, Play data safety, ratings, listing, screenshots, review notes) | — |
+| 9.11 | Staging seed reviewer account + "Demo Volleyball Club"; `docs/store/demo-account.md` for production | seed run on `vv-pg17` |
+
+**Reviews:** Opus 9.4 design review before code; `/code-review high` 5 (all fixed); Opus phase-end audit 1 high (the
+invitation page recorded consent nobody gave), 1 medium (team delete left report copies), 5 low: all fixed;
+`/security-review` no findings at threshold (one below, unverified accounts' email-keyed clean-up, fixed).
+
+**Incident (fixed):** a local run of `delete-account.ts --apply` on a throwaway `vv-pg17` user picked up production's
+SMTP login from `backend/.env` (Prisma loads it for unset variables) and likely emailed
+`script-leaver@volleyvision.test` (undeliverable). Local admin runs now blank `SMTP_*` too.
+
+**Verified:** backend `tsc`, 84 unit test files, build; integration 9/9 on `vv-pg17`; frontend `tsc`, lint, build;
+check-legal; browser checks of every new flow (1280 and 360 px). **Pending:** Android emulator check of the storage
+move (not enough free memory on this PC), iPhone device checks, staging rehearsal.
+

@@ -5,7 +5,7 @@
 // blocker only, and a former member's messages stay.
 import assert from 'node:assert/strict';
 import { prisma, startApp, makeUser, makeTeam, addMember, cleanup, call } from './harness';
-import { SNAPSHOT_MARKER } from '../lib/messageReport';
+import { SNAPSHOT_MARKER, REMOVED_WITH_TEAM } from '../lib/messageReport';
 
 async function main() {
   const app = await startApp();
@@ -69,6 +69,15 @@ async function main() {
     assert.equal((await call(app.base, 'DELETE', `/api/v1/users/me/blocks/${blockId}`, owner.token)).status, 404, "not someone else's block");
     assert.equal((await call(app.base, 'DELETE', `/api/v1/users/me/blocks/${blockId}`, reporter.token)).status, 204);
     assert.ok((await seen(reporter.token)).includes(again.id), 'unblocked: back again');
+
+    // Deleting the team erases its chat, the reports' copies included (audit).
+    await prisma.feedback.update({ where: { id: made.body.id }, data: { description: `Reason: spam\n${SNAPSHOT_MARKER}\nstill here` } });
+    await prisma.$executeRaw`UPDATE feedback SET reported_message_id = ${again.id} WHERE id = ${made.body.id}`;
+    await prisma.user.update({ where: { id: owner.id }, data: { passwordHash: 'x' } });
+    const gone = await call(app.base, 'DELETE', `/api/v1/teams/${team.id}`, owner.token);
+    assert.equal(gone.status, 204, JSON.stringify(gone.body));
+    assert.equal((await prisma.feedback.findUniqueOrThrow({ where: { id: made.body.id } })).description,
+      `Reason: spam\n${SNAPSHOT_MARKER}\n${REMOVED_WITH_TEAM}`, 'the report keeps its reason, not the chat');
 
     console.log('moderation: all tests passed');
   } finally {

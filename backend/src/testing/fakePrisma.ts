@@ -64,7 +64,8 @@ export const db: any = new Proxy(
   {
     get(_target, prop) {
       if (prop === '$transaction') {
-        return async (fn: (tx: any) => any) => fn(db);
+        // An array of already-started operations (batch form), or an interactive callback.
+        return async (fn: any) => (Array.isArray(fn) ? Promise.all(fn) : fn(db));
       }
       // Raw SQL (e.g. recordOneEvent's row lock) is a recorded no-op here;
       // only the integration tests prove what it does.

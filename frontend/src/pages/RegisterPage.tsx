@@ -55,7 +55,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await register({ email, password, firstName, lastName, signupIntent: intent });
+      await register({ email, password, firstName, lastName, signupIntent: intent, acceptTerms: agreed });
       navigate(onboardingPath(intent), { replace: true });
     } catch (err) {
       setError(getApiErrorMessage(err, "Couldn't create your account. Check your details and try again."));

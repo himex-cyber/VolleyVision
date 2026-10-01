@@ -46,7 +46,7 @@ tracking, data sales, location, contacts, health data. (Height and weight are op
 
 | Processor | What for | Where | Data |
 |---|---|---|---|
-| Supabase | Database and file storage | **Karlos to confirm** the production region (Dashboard → Project Settings → General) | Everything above except device data |
+| Supabase | Database and file storage | Singapore (AWS ap-southeast-1; from the pooler host, 1 Oct; Karlos to confirm in Dashboard → Project Settings → General) | Everything above except device data |
 | Netlify | Website hosting and the API (one function) | Global CDN; functions in the US by default | Requests in transit; request-path logs |
 | Sentry (Functional Software Inc.) | Error reports | US (`ingest.us.sentry.io`) | Scrubbed errors |
 | Google (Gmail) | Sending email | Google's servers | Recipient address and the email (verification, password reset, invitation, report notice, deletion confirmation) |

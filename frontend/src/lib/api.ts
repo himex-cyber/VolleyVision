@@ -65,7 +65,10 @@ api.interceptors.response.use(
       // The tracker's "taps still waiting" prompt would otherwise stop this
       // redirect and leave the user signed out on the page.
       setLeaveGuard(null);
-      if (window.location.pathname !== '/login') {
+      // Not from the delete page: after DELETE /profile, requests still in
+      // flight come back 401, and this redirect would cut short the clean-up
+      // (native storage writes) and lose the "deleted" notice (9.4).
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/profile/delete-account') {
         window.location.assign('/login');
       }
     }
@@ -108,9 +111,9 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
-  // acceptTerms: the 13+ / Terms tick box (9.3); the form won't submit without it.
-  register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) =>
-    api.post<AuthResponse>('/auth/register', { ...data, acceptTerms: true }).then((r) => r.data),
+  // acceptTerms: the 13+ / Terms tick box (9.3), from whichever form signs up.
+  register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null; acceptTerms: boolean }) =>
+    api.post<AuthResponse>('/auth/register', data).then((r) => r.data),
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>('/auth/login', data).then((r) => r.data),
   logout: () => api.post('/auth/logout').then((r) => r.data),

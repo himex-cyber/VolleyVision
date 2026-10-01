@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import JoinByCodeCard from '../components/team/JoinByCodeCard';
 import { getApiErrorMessage } from '../lib/api';
+import TermsConsent from '../components/legal/TermsConsent';
 
 /**
  * Public entry point for the join-code flow (Stabilization Pass 2).
@@ -22,6 +23,7 @@ export default function RedeemInvitationPage() {
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [agreed, setAgreed] = useState(false); // 9.3: the 13+ and Terms tick box, when creating an account here
 
   // Logged out — authenticate first; once `user` is set the join card renders.
   async function handleAuth(e: FormEvent) {
@@ -33,7 +35,7 @@ export default function RedeemInvitationPage() {
         await login(email, password);
       } else {
         if (password.length < 8) { setError('Password must be at least 8 characters.'); setBusy(false); return; }
-        await register({ email, password, firstName, lastName });
+        await register({ email, password, firstName, lastName, acceptTerms: agreed });
       }
     } catch (err) {
       setError(getApiErrorMessage(err, authMode === 'login'
@@ -98,7 +100,8 @@ export default function RedeemInvitationPage() {
               <input className="input" type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
               <input className="input" type="password" autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               <p className="text-chalk-600 text-xs">If your invitation came by email, use the address it was sent to.</p>
-              <button type="submit" className="btn-primary w-full" disabled={busy}>
+              {authMode === 'register' && <TermsConsent checked={agreed} onChange={setAgreed} />}
+              <button type="submit" className="btn-primary w-full" disabled={busy || (authMode === 'register' && !agreed)}>
                 {busy ? 'Signing in…' : authMode === 'login' ? 'Sign in' : 'Create account'}
               </button>
             </form>

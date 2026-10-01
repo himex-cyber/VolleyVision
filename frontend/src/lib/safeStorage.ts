@@ -21,6 +21,14 @@ export function storageWorks(): boolean {
   return works;
 }
 
+/**
+ * False once a native Preferences write failed: this session still works from
+ * its in-memory copy, but what's queued may not survive a restart (9.8).
+ */
+export function storageDurable(): boolean {
+  return !nativeStore()?.writeFailed();
+}
+
 export function storageGet(key: string): string | null {
   const native = nativeStore();
   if (native) return native.get(key);

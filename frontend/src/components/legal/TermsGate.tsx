@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { profileApi, getApiErrorMessage } from '../../lib/api';
 import TermsConsent from './TermsConsent';
@@ -42,6 +43,9 @@ export default function TermsGate() {
         <button type="button" className="btn-secondary w-full min-h-[44px]" onClick={logout}>
           Sign out
         </button>
+        <p className="text-sm text-grey-600 text-center">
+          Don't agree? <Link to="/profile/delete-account" className="inline-flex items-center min-h-[44px] text-navy-700 font-medium underline">Delete your account</Link>
+        </p>
       </div>
     </div>
   );

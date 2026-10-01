@@ -7,8 +7,9 @@
 // the SUPPORT_EMAIL_TBD placeholder and any "TO CONFIRM" left in a page.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const here = path.dirname(fileURLToPath(import.meta.url));
 const front = path.join(here, '..');
 const read = (p) => readFileSync(p, 'utf8');
 const constant = (src, name) => new RegExp(`${name}\\s*=\\s*'([^']+)'`).exec(src)?.[1];
