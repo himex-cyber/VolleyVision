@@ -1138,3 +1138,15 @@ a free-plan production-deploy pause when the team's credits run out (each produc
 staging site's). Production stays on v9.15.0, compatible with the additive migration. Next: Karlos checks the Netlify
 dashboard (credits used up → wait for 23 Oct or add credits; otherwise Netlify support), then `.\deploy.ps1` from `main`.
 
+**Android emulator check (4 Oct 2026, 9.8 storage move; Karlos has no Android phone).** Emulator `VV_Light` (API 34),
+debug builds of v9.15.0 and v9.17.0 against the local API on `vv-pg17`, driven through WebView debugging (the headless
+image draws no frames, so no screenshots). v9.15.0 signed in as a pre-9.17 account (Terms not accepted); tracker in
+airplane mode: 3 taps, "Offline — 3 waiting", server 0 events, app force-stopped. `adb install -r` v9.17.0, still offline:
+**still signed in**; browser storage empty and all five `vv_` keys now in Preferences; tracker "Offline — 3 waiting".
+Airplane off: "All saved", server 3 events (KILL, DIG, ACE). Online, the Terms step showed (Continue disabled until
+ticked; links open outside the app at volleyvision.co.nz, not live yet); accepted, stored 2026-10-01, gone after a
+restart. Chat post and the word filter (`****`). Sign-out removed the token and user from Preferences (queued taps and
+sent-tap ids stay by design, no names); reopening shows sign-in. Sign-up refuses without the tick; in-app account deletion
+lands on "Your account has been deleted…", the server has no trace, nothing of that account on the device. Signing back in
+works. Not covered: a release-signed build, a real phone, the iPhone (after Apple enrolment).
+
