@@ -1116,3 +1116,16 @@ SMTP login from `backend/.env` (Prisma loads it for unset variables) and likely 
 check-legal; browser checks of every new flow (1280 and 360 px). **Pending:** Android emulator check of the storage
 move (not enough free memory on this PC), iPhone device checks, staging rehearsal.
 
+**Staging rehearsal (3 Oct 2026, 9.12.4).** Staging created (Supabase `volleyvision-staging`, Singapore; Netlify
+`volleyvision-staging`, site 953a98ca; private `team-chat` bucket with the app's 25 MB cap and 13 MIME types). At
+`1b5e9eb` (v9.16.0 + 9.S): migrate, seed, deploy, smoke 10/10. Then `develop` (`109d5f1`): the 9.1 migration applied on
+the seeded data (RLS on `user_blocks`, no anon/authenticated grants, 172 events intact, the 7 existing users marked as
+needing the Terms), deploy, smoke 10/10, and a 31-check rehearsal of the new flows (Terms step and posting gate, word
+filter, upload through the staging bucket and delete with the file erased, report, block/unblock, sign-up tick, account
+deletion incl. wrong password and owner refusal, the four legal pages); then the v9.17.0 seed (reviewer + demo club).
+
+**Incident (3 Oct, resolved the same day):** `netlify env:set --site <staging>` run from the repo root (linked to
+production) wrote eight staging values to production's environment variables: CLIENT_URL and SUPABASE_URL changed,
+two Sentry environment variables added, four re-set to the values production already had. Production's secrets were untouched and nothing was deployed, so the live site never
+used them; Karlos restored the two changed values and removed the extras in the dashboard, checked read-only through the
+Netlify API. Staging variables are now set only in the dashboard.
