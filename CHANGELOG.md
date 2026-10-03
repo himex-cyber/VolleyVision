@@ -2,13 +2,13 @@
 
 All notable changes to VolleyVision, reconstructed from the repository's commit and tag history. Versions are listed newest first, in chronological order of release. Untagged commits are listed under the tagged release they shipped with.
 
-## v9.17.0 — unreleased
+## v9.17.0 — 2026-10-03
 
 Phase 9 of the rebuild roadmap: store readiness, for both app stores. One
-migration (`20260930183513_store_readiness`, additive). Not released yet: it's
-rehearsed on staging first, and the legal pages need Karlos's review and two
-facts (the database region, how long backups are kept) before a production
-deploy or a store build. Works with the Android 9.13.0+ apps, except that
+migration (`20260930183513_store_readiness`, additive), rehearsed on staging
+(v9.16.0 with seed data, then this release on top). The legal pages are
+complete drafts (Singapore database region, backups kept 48 hours) for
+Karlos's review; legal links point at volleyvision.co.nz. Works with the Android 9.13.0+ apps, except that
 signing up in those older builds now fails (they don't send the new tick box;
 none are shared).
 
