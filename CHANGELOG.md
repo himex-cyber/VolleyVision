@@ -8,7 +8,13 @@ Phase 9 of the rebuild roadmap: store readiness, for both app stores. One
 migration (`20260930183513_store_readiness`, additive), rehearsed on staging
 (v9.16.0 with seed data, then this release on top). The legal pages are
 complete drafts (Singapore database region, backups kept 48 hours) for
-Karlos's review; legal links point at volleyvision.co.nz. Works with the Android 9.13.0+ apps, except that
+Karlos's review; legal links point at volleyvision.co.nz.
+
+**Production status:** the migration was applied to production on 3 Oct 2026
+(after a backup). Publishing the app is waiting: Netlify refuses production
+deploys with `403 Forbidden` (most likely the free plan's monthly credits are
+used up; the cycle resets 23 Oct). Production runs v9.15.0 until then, which
+works with the migrated database (the migration only adds). Works with the Android 9.13.0+ apps, except that
 signing up in those older builds now fails (they don't send the new tick box;
 none are shared).
 
