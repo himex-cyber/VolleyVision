@@ -11,7 +11,9 @@ export function isEnumValue<T extends Record<string, string>>(enumObj: T, raw: u
 }
 
 export function parseType(raw: unknown): FeedbackType {
-  if (isEnumValue(FeedbackType, raw)) return raw;
+  // A message report carries a snapshot of someone else's message, so it can
+  // only be made through the report route (9.1/9.5), never forged here.
+  if (isEnumValue(FeedbackType, raw) && raw !== FeedbackType.MESSAGE_REPORT) return raw;
   throw new AppError(400, 'Feedback type must be BUG, FEATURE_REQUEST, or GENERAL.');
 }
 

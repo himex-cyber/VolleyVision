@@ -7,8 +7,11 @@ import {
   useUploadMessage,
   useEditMessage,
   useDeleteMessage,
+  useReportMessage,
+  useBlockSender,
 } from '../hooks/chat';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../lib/api';
 import TeamSubNav from '../components/ui/TeamSubNav';
 import MessageList from '../components/chat/MessageList';
 import MessageComposer from '../components/chat/MessageComposer';
@@ -49,6 +52,8 @@ export default function TeamChatPage() {
   const { sendWithFiles, retryUpload, discardUpload, ownsTempId } = useUploadMessage(channel?.id);
   const editMessage = useEditMessage(channel?.id);
   const deleteMessage = useDeleteMessage(channel?.id);
+  const reportMessage = useReportMessage();
+  const blockSender = useBlockSender(channel?.id);
 
   const canPost = roleInfo?.permissions.includes('POST_MESSAGE') ?? false;
   const isViewer = roleInfo?.role === 'VIEWER';
@@ -86,6 +91,20 @@ export default function TeamChatPage() {
             onLoadOlder={loadOlder}
             onEdit={(messageId, body) => editMessage.mutate({ messageId, body })}
             onDelete={(messageId) => deleteMessage.mutate(messageId)}
+            onReport={async (messageId, reason, note) => {
+              try {
+                await reportMessage.mutateAsync({ messageId, reason, note: note || undefined });
+              } catch (err) {
+                throw new Error(getApiErrorMessage(err, "Couldn't send the report. Try again."));
+              }
+            }}
+            onBlock={(messageId, name) => {
+              if (window.confirm(`You won't see messages from ${name} in team chats. You can unblock them in Profile.`)) {
+                blockSender.mutate(messageId, {
+                  onError: (err) => window.alert(getApiErrorMessage(err, "Couldn't block them. Try again.")),
+                });
+              }
+            }}
             // Failed sends route back to whichever hook created them.
             onRetry={(tempId) => (ownsTempId(tempId) ? retryUpload(tempId) : retry(tempId))}
             onDiscardFailed={(tempId) => (ownsTempId(tempId) ? discardUpload(tempId) : discardFailed(tempId))}

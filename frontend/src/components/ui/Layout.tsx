@@ -9,6 +9,8 @@ import {
 } from './icons';
 import PageLoadingFallback from './PageLoadingFallback';
 import EmailVerificationBanner from './EmailVerificationBanner';
+import LegalLinks from '../legal/LegalLinks';
+import { LEGAL_LINKS, legalHref } from '../../lib/legal';
 
 /**
  * Page components are code-split (see main.tsx), so the routed child suspends
@@ -145,6 +147,13 @@ function AvatarMenu({ user, onSignOut }: {
         <Link to="/feedback" className="flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-grey-900 hover:bg-grey-50 transition-colors">
           <FeedbackIcon className="w-4 h-4" /> Feedback
         </Link>
+        {/* The legal pages (9.2) are static files: plain links, not router ones. */}
+        <div className="border-t border-grey-200 my-1" />
+        {LEGAL_LINKS.map(([page, label]) => (
+          <a key={page} href={legalHref(page)} target="_blank" rel="noopener noreferrer" className="flex items-center px-3.5 py-2.5 text-sm text-grey-600 hover:bg-grey-50 transition-colors">
+            {label}
+          </a>
+        ))}
         <button
           type="button"
           onClick={onSignOut}
@@ -179,6 +188,9 @@ function PublicShell() {
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-6">
         <SuspendedOutlet />
       </main>
+      <footer className="border-t border-grey-200 bg-white">
+        <LegalLinks className="py-2" />
+      </footer>
     </div>
   );
 }

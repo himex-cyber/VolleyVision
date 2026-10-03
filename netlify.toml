@@ -50,6 +50,29 @@
   to = "/.netlify/functions/api/health"
   status = 200
 
+# The legal pages (9.2) are static files in frontend/public, outside the SPA,
+# so they load even if the app is broken and store reviewers can read them.
+# Before the SPA fallback, or it would answer these paths with the app.
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy.html"
+  status = 200
+
+[[redirects]]
+  from = "/terms"
+  to = "/terms.html"
+  status = 200
+
+[[redirects]]
+  from = "/delete-account"
+  to = "/delete-account.html"
+  status = 200
+
+[[redirects]]
+  from = "/support"
+  to = "/support.html"
+  status = 200
+
 # SPA fallback so client-side routing (react-router-dom) works on refresh/deep links.
 [[redirects]]
   from = "/*"

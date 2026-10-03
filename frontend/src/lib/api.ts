@@ -65,7 +65,10 @@ api.interceptors.response.use(
       // The tracker's "taps still waiting" prompt would otherwise stop this
       // redirect and leave the user signed out on the page.
       setLeaveGuard(null);
-      if (window.location.pathname !== '/login') {
+      // Not from the delete page: after DELETE /profile, requests still in
+      // flight come back 401, and this redirect would cut short the clean-up
+      // (native storage writes) and lose the "deleted" notice (9.4).
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/profile/delete-account') {
         window.location.assign('/login');
       }
     }
@@ -77,6 +80,11 @@ api.interceptors.response.use(
  *  (join-team endpoints: accept invitation, redeem join code, claim player). */
 export function isEmailNotVerifiedError(err: unknown): boolean {
   return axios.isAxiosError(err) && err.response?.data?.code === 'EMAIL_NOT_VERIFIED';
+}
+
+/** True when posting in chat was refused until the Terms are accepted (9.3). */
+export function isTermsRequiredError(err: unknown): boolean {
+  return axios.isAxiosError(err) && err.response?.data?.code === 'TERMS_REQUIRED';
 }
 
 /** True when a request failed because of our own rate limiting (429) —
@@ -103,7 +111,8 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
-  register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null }) =>
+  // acceptTerms: the 13+ / Terms tick box (9.3), from whichever form signs up.
+  register: (data: { email: string; password: string; firstName: string; lastName: string; signupIntent?: string | null; acceptTerms: boolean }) =>
     api.post<AuthResponse>('/auth/register', data).then((r) => r.data),
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>('/auth/login', data).then((r) => r.data),
@@ -331,7 +340,15 @@ export const chatApi = {
     api.patch<ChatMessage>(`/messages/${messageId}`, { body }).then((r) => r.data),
   deleteMessage: (messageId: string) =>
     api.delete<ChatMessage>(`/messages/${messageId}`).then((r) => r.data),
+  // Members moderate by message: other members' account ids aren't sent (9.5, 9.6).
+  reportMessage: (messageId: string, data: { reason: ReportReason; note?: string }) =>
+    api.post<{ id: string }>(`/messages/${messageId}/report`, data).then((r) => r.data),
+  blockSender: (messageId: string) => api.post(`/messages/${messageId}/block-sender`),
+  listBlocks: () => api.get<{ id: string; name: string }[]>('/users/me/blocks').then((r) => r.data),
+  unblock: (blockId: string) => api.delete(`/users/me/blocks/${blockId}`),
 };
+
+export type ReportReason = 'harassment' | 'inappropriate' | 'spam' | 'other';
 
 // ─── Feedback tab ─────────────────────────────────────────────────────────────
 import type { Feedback, FeedbackPage, FeedbackStatus } from '../types/feedback';
@@ -413,6 +430,8 @@ export const profileApi = {
   get: () => api.get<UserProfile>('/profile').then((r) => r.data),
   update: (data: Partial<UserProfile>) =>
     api.patch<UserProfile>('/profile', data).then((r) => r.data),
+  acceptTerms: () => api.post<{ termsRequired: boolean }>('/profile/accept-terms').then((r) => r.data),
+  deleteAccount: (password: string) => api.delete('/profile', { data: { password } }),
 };
 
 // ─── Player Portal (Phase 5 Sprint 5) ────────────────────────────────────────

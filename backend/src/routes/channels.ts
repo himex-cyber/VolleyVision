@@ -5,9 +5,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth';
-import { chatPostRateLimit } from '../middleware/rateLimit';
+import { chatPostRateLimit, messageReportRateLimit, blockRateLimit } from '../middleware/rateLimit';
 import { requireChannelPermission, requireTeamPermission } from '../middleware/permissions';
 import { Permission } from '../services/permission.service';
+import { assertTermsAccepted } from '../services/auth.service';
+import { asyncHandler } from '../middleware/asyncHandler';
 import { MAX_ATTACHMENTS_PER_MESSAGE, MAX_FILE_BYTES } from '../services/chatStorage.service';
 import {
   getTeamChannel,
@@ -16,6 +18,8 @@ import {
   uploadChannelMessage,
   updateMessage,
   deleteMessage,
+  reportMessageHandler,
+  blockSenderHandler,
 } from '../controllers/messages';
 
 const router = Router();
@@ -65,11 +69,19 @@ router.get(
   requireChannelPermission(Permission.VIEW_TEAM),
   listChannelMessages,
 );
+// Posting needs the current Terms (9.3). After the channel check, so an
+// outsider still gets the team's 404; before multer, so no upload is parsed.
+const requireTermsAccepted = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+  await assertTermsAccepted(req.user!.userId);
+  next();
+});
+
 router.post(
   '/channels/:channelId/messages',
   requireAuth,
   chatPostRateLimit,
   requireChannelPermission(Permission.POST_MESSAGE),
+  requireTermsAccepted,
   postChannelMessage,
 );
 router.post(
@@ -77,6 +89,7 @@ router.post(
   requireAuth,
   chatPostRateLimit,
   requireChannelPermission(Permission.POST_MESSAGE),
+  requireTermsAccepted,
   uploadFiles,
   uploadChannelMessage,
 );
@@ -84,5 +97,8 @@ router.post(
 // Author/moderator rules resolved in the controller + service.
 router.patch('/messages/:messageId', requireAuth, updateMessage);
 router.delete('/messages/:messageId', requireAuth, deleteMessage);
+// Members moderating by message (9.5, 9.6): membership checked in the controller.
+router.post('/messages/:messageId/report', requireAuth, messageReportRateLimit, reportMessageHandler);
+router.post('/messages/:messageId/block-sender', requireAuth, blockRateLimit, blockSenderHandler);
 
 export default router;

@@ -14,10 +14,11 @@ assert.ok(err(adminScriptTarget([], { DATABASE_URL: LOCAL, DIRECT_URL: 'postgres
 const local = adminScriptTarget(['--apply'], { DATABASE_URL: LOCAL });
 assert.deepEqual(local, {
   apply: true, prod: false,
-  // Local runs never touch real storage: blanked, so dotenv can't fill them.
-  env: { DIRECT_URL: LOCAL, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' },
+  // Local runs never touch real storage or send real email: blanked, so
+  // dotenv and Prisma can't fill them from backend/.env (production).
+  env: { DIRECT_URL: LOCAL, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '' },
 });
-assert.deepEqual(adminScriptTarget([], { DATABASE_URL: LOCAL }), { apply: false, prod: false, env: { DIRECT_URL: LOCAL, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' } }, 'a dry run by default');
+assert.deepEqual(adminScriptTarget([], { DATABASE_URL: LOCAL }), { apply: false, prod: false, env: { DIRECT_URL: LOCAL, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '' } }, 'a dry run by default');
 
 // --prod: backend/.env, said out loud.
 assert.deepEqual(adminScriptTarget(['--prod'], {}), { apply: false, prod: true, env: {} });

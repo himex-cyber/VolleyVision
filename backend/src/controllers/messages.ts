@@ -21,6 +21,8 @@ import {
   hasTeamPermission,
 } from '../services/permission.service';
 import { logAudit } from '../lib/audit';
+import { assertTermsAccepted } from '../services/auth.service';
+import { reportMessage, blockSender, listBlocks, unblock } from '../services/moderation.service';
 import { idempotencyKey } from '../lib/idempotencyKey';
 
 
@@ -104,6 +106,7 @@ export async function updateMessage(req: Request, res: Response, next: NextFunct
     // to VIEWER) loses it immediately, even for their own old messages.
     const allowed = await hasTeamPermission(req.user.userId, teamId, Permission.POST_MESSAGE);
     if (!allowed) throw new AppError(403, 'You do not have permission to perform this action.');
+    await assertTermsAccepted(req.user.userId);
     const message = await editMessage(req.params.messageId, req.user.userId, req.body?.body);
     res.json(message);
   } catch (err) {
@@ -134,6 +137,53 @@ export async function deleteMessage(req: Request, res: Response, next: NextFunct
       });
     }
     res.json(tombstone);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Message-scoped moderation by members (9.5, 9.6): a member of its team, else the same 404 as a missing message. */
+async function assertMessageMember(messageId: string, userId: string): Promise<void> {
+  const teamId = await getVisibleMessageTeamId(messageId, userId);
+  if (!(await hasTeamPermission(userId, teamId, Permission.VIEW_TEAM))) throw new AppError(404, 'Message not found.');
+}
+
+/** POST /messages/:messageId/report (9.5). */
+export async function reportMessageHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    await assertMessageMember(req.params.messageId, req.user!.userId);
+    const report = await reportMessage(req.user!.userId, req.params.messageId, req.body);
+    res.status(201).json({ id: report.id });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /messages/:messageId/block-sender (9.6). */
+export async function blockSenderHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    await assertMessageMember(req.params.messageId, req.user!.userId);
+    await blockSender(req.user!.userId, req.params.messageId);
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** GET /users/me/blocks (9.6). */
+export async function listBlocksHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(await listBlocks(req.user!.userId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** DELETE /users/me/blocks/:blockId (9.6). */
+export async function unblockHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    await unblock(req.user!.userId, req.params.blockId);
+    res.status(204).send();
   } catch (err) {
     next(err);
   }

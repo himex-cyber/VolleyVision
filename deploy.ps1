@@ -8,6 +8,8 @@
 #   .\deploy.ps1 -SkipMigrationCheck  # skip the pending-migrations check below
 #   .\deploy.ps1 -Force               # prod from a dirty tree or a branch other than main
 #   .\deploy.ps1 -NoBackup            # prod without today's backup.ps1 file
+#   .\deploy.ps1 -Target staging -Migrate   # prisma migrate deploy against staging, then stop
+#   .\deploy.ps1 -Target staging -Seed      # npm run db:seed:staging against staging, then stop
 #
 # The auto-built message is "<tag> (<sha>): <commit subject>", with a
 # "+ uncommitted local changes" suffix when the working tree is dirty —
@@ -48,7 +50,9 @@ param(
   [string]$Message,
   [switch]$SkipMigrationCheck,
   [switch]$Force,
-  [switch]$NoBackup
+  [switch]$NoBackup,
+  [switch]$Migrate,
+  [switch]$Seed
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,6 +99,15 @@ function Invoke-WithEnv([hashtable]$Vars, [scriptblock]$Block) {
   }
 }
 
+if (($Migrate -or $Seed) -and $Target -ne 'staging') {
+  Write-Host "ABORTED: -Migrate and -Seed are for staging only. Production migrations are run by hand (cd backend; npx prisma migrate deploy), after a backup."
+  exit 1
+}
+if ($Migrate -and $Seed) {
+  Write-Host "ABORTED: run -Migrate first, then -Seed, as two commands."
+  exit 1
+}
+
 $stagingVars = @{}
 if ($Target -eq 'staging') {
   $stagingEnvPath = Join-Path $PSScriptRoot 'backend/.env.staging'
@@ -114,6 +127,39 @@ if ($Target -eq 'staging') {
     Write-Host "DEPLOY ABORTED: backend/.env.staging points at production (site id, URL or database). Fix it before deploying to staging."
     exit 1
   }
+
+  # -Migrate / -Seed: one step against the staging database, then stop. Only
+  # the variables that step needs are set, and only around it: anything left
+  # unset would be filled by Prisma or dotenv from backend/.env, production.
+  if ($Migrate -or $Seed) {
+    if ($Seed) {
+      foreach ($required in @('STAGING_PROJECT_REF', 'SEED_PASSWORD')) {
+        if (-not $stagingVars[$required]) { Write-Host "ABORTED: $required is missing from backend/.env.staging."; exit 1 }
+      }
+    }
+    $stepEnv = @{ DATABASE_URL = $stagingVars['DATABASE_URL']; DIRECT_URL = $stagingVars['DIRECT_URL'] }
+    if ($Seed) { $stepEnv['STAGING_PROJECT_REF'] = $stagingVars['STAGING_PROJECT_REF']; $stepEnv['SEED_PASSWORD'] = $stagingVars['SEED_PASSWORD'] }
+    Push-Location (Join-Path $PSScriptRoot 'backend')
+    try {
+      Invoke-WithEnv $stepEnv {
+        $ErrorActionPreference = 'Continue'
+        if ($Migrate) {
+          # Prisma's own "Datasource ... at <host>" line is dropped, as in the
+          # status check below; the migration names and result stay.
+          & npx prisma migrate deploy 2>&1 | ForEach-Object { "$_" } | Where-Object { $_ -notmatch 'Datasource' }
+        } else {
+          & npm run db:seed:staging 2>&1 | ForEach-Object { "$_" }
+        }
+        $script:stepExitCode = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+      }
+    } finally {
+      Pop-Location
+    }
+    if ($stepExitCode -ne 0) { Write-Host "STAGING $(if ($Migrate) { 'MIGRATE' } else { 'SEED' }) FAILED (exit code $stepExitCode)."; exit $stepExitCode }
+    Write-Host "Staging $(if ($Migrate) { 'migrations applied' } else { 'seeded' }). Nothing was deployed."
+    exit 0
+  }
 } else {
   $branch = git rev-parse --abbrev-ref HEAD
   $isDirty = [bool](git status --porcelain)
@@ -130,6 +176,15 @@ if ($Target -eq 'staging') {
       exit 1
     }
     Write-Host "Today's backup: $($bk.FullName)"
+  }
+  # The legal pages must match the app and name a real support address (9.2).
+  $ErrorActionPreference = 'Continue'
+  & node (Join-Path $PSScriptRoot 'frontend/scripts/check-legal.mjs') --release
+  $legalExitCode = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($legalExitCode -ne 0) {
+    Write-Host "DEPLOY ABORTED: the legal pages check failed (see above)."
+    exit 1
   }
 }
 

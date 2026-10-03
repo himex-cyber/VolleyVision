@@ -8,6 +8,7 @@ import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { features } from './config/features';
 import { isNative, initNative } from './lib/native';
+import { hydrateStorage } from './lib/nativeStorage';
 import Layout from './components/ui/Layout';
 import RequireAuth from './components/ui/RequireAuth';
 import QueueFlusher from './components/tracking/QueueFlusher';
@@ -99,6 +100,7 @@ const RedeemInvitationPage = lazy(() => import('./pages/RedeemInvitationPage'));
 const InvitationsPage = lazy(() => import('./pages/InvitationsPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage'));
 const TeamsPage = lazy(() => import('./pages/TeamsPage'));
 const TeamDetailPage = lazy(() => import('./pages/TeamDetailPage'));
 const MatchesPage = lazy(() => import('./pages/MatchesPage'));
@@ -174,6 +176,7 @@ function App() {
             <Route element={<RequireAuth />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/profile/delete-account" element={<DeleteAccountPage />} />
               {/* No more separate coach/player portals — old bookmarks land on the
                   unified dashboard. */}
               <Route path="/player" element={<Navigate to="/dashboard" replace />} />
@@ -233,12 +236,16 @@ window.addEventListener('vite:preloadError', (event) => {
 // the app from every screen, so it's reported rather than dropped.
 if (isNative()) initNative().catch((err) => Sentry.captureException(err));
 
-trimCachedMatches();
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </React.StrictMode>
-);
+// Storage first (9.8): in the apps the token and taps come from native
+// Preferences, loaded before anything reads them. No top-level await (Vite's
+// default build target rejects it), so the render waits in a .then.
+hydrateStorage().then(() => {
+  trimCachedMatches();
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>
+  );
+});

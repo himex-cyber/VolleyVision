@@ -75,6 +75,14 @@ const ROWS: Row[] = [
   // 9.0.2: the owner route is gone (it sent the owner's email and global role to every member).
   { name: 'GET team owner (removed)', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/owner`, expect: { outsider: 404, viewer: 404, player: 404 } },
   { name: 'GET team members', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/members`, expect: READ },
+  // Phase 9 routes. Own-account routes answer everyone for themselves; message
+  // moderation is members only, others get the team's 404.
+  { name: 'DELETE own account (no password)', method: 'DELETE', path: () => '/api/v1/profile', body: () => ({}), expect: { outsider: 400, viewer: 400, player: 400 } },
+  { name: 'POST accept Terms', method: 'POST', path: () => '/api/v1/profile/accept-terms', expect: SELF },
+  { name: 'GET own blocks', method: 'GET', path: () => '/api/v1/users/me/blocks', expect: SELF },
+  { name: "DELETE someone else's block", method: 'DELETE', path: () => '/api/v1/users/me/blocks/nope', expect: { outsider: 404, viewer: 404, player: 404 } },
+  { name: 'POST report a message', method: 'POST', path: (f) => `/api/v1/messages/${f.message.id}/report`, body: () => ({ reason: 'spam' }), expect: { outsider: 404, viewer: 201, player: 201 } },
+  { name: 'POST block a sender', method: 'POST', path: (f) => `/api/v1/messages/${f.message.id}/block-sender`, expect: { outsider: 404, viewer: 204, player: 204 } },
   { name: 'GET my-role', method: 'GET', path: (f) => `/api/v1/teams/${f.team.id}/my-role`, expect: READ },
   { name: 'GET matches by team', method: 'GET', path: (f) => `/api/v1/matches/by-team/${f.team.id}`, expect: READ },
   { name: 'GET match', method: 'GET', path: (f) => `/api/v1/matches/${f.match.id}`, expect: READ },

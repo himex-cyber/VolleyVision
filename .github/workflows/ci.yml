@@ -112,6 +112,8 @@ jobs:
         run: npm run lint
       - name: Type-check and build
         run: npm run build
+      - name: Legal pages match the app (company, support email, Terms version)
+        run: node scripts/check-legal.mjs
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
 

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import type { SignupIntent } from '../types';
 import { getApiErrorMessage } from '../lib/api';
+import TermsConsent from '../components/legal/TermsConsent';
 import clsx from 'clsx';
 
 // ── Onboarding redirect — isolated so it's obvious this is a one-time nudge,
@@ -35,6 +36,7 @@ export default function RegisterPage() {
   const [password, setPassword]   = useState('');
   const [confirm, setConfirm]     = useState('');
   const [intent, setIntent]       = useState<SignupIntent | null>(null);
+  const [agreed, setAgreed]       = useState(false);
   const [error, setError]         = useState('');
   const [loading, setLoading]     = useState(false);
 
@@ -53,7 +55,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await register({ email, password, firstName, lastName, signupIntent: intent });
+      await register({ email, password, firstName, lastName, signupIntent: intent, acceptTerms: agreed });
       navigate(onboardingPath(intent), { replace: true });
     } catch (err) {
       setError(getApiErrorMessage(err, "Couldn't create your account. Check your details and try again."));
@@ -192,7 +194,9 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <button type="submit" className="btn-primary w-full mt-2" disabled={loading}>
+            <TermsConsent checked={agreed} onChange={setAgreed} />
+
+            <button type="submit" className="btn-primary w-full mt-2" disabled={loading || !agreed}>
               {loading ? 'Creating account…' : 'Create account'}
             </button>
           </form>

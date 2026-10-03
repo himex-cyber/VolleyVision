@@ -14,7 +14,7 @@ import {
   removeItem, resetSending, retryItem, undoNewest,
 } from './eventQueueCore';
 import type { FailureKind, QueueItem, QueuedEventPayload } from './eventQueueCore';
-import { storageGet, storageKeys, storageRemove, storageSet, storageWorks } from './safeStorage';
+import { storageGet, storageKeys, storageRemove, storageSet, storageWorks, storageDurable } from './safeStorage';
 import { getToken } from './tokenStorage';
 
 const QUEUE_PREFIX = 'vv_queue:';
@@ -116,7 +116,7 @@ export function getQueue(userId: string, matchId: string): QueueItem[] {
 
 /** False when this device can't keep taps across a restart (blocked or full storage). */
 export function queueCanPersist(): boolean {
-  return storageWorks() && !persistFailed;
+  return storageWorks() && storageDurable() && !persistFailed;
 }
 
 /** Matches with anything still queued for this user. */
@@ -200,6 +200,21 @@ export function forgetSession(): void {
   history.clear();
   deviceKeysMemory.clear();
   emit();
+}
+
+/**
+ * Account deletion (9.4): this account's queued taps and device keys go, from
+ * storage and memory. Other accounts on a shared device keep theirs.
+ */
+export function purgeUserQueue(userId: string): void {
+  const prefixes = [`${QUEUE_PREFIX}${userId}:`, `${DEVICE_KEYS_PREFIX}${userId}:`];
+  for (const prefix of prefixes) {
+    for (const k of storageKeys(prefix)) storageRemove(k);
+    for (const map of [memory, parsed, deviceKeysMemory, deviceKeysParsed]) {
+      for (const k of [...map.keys()]) if (k.startsWith(prefix)) map.delete(k);
+    }
+  }
+  forgetSession();
 }
 
 /** Whether Undo can work without a connection: a tap of ours to take back. */

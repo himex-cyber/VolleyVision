@@ -11,10 +11,10 @@ workflows:
     instance_type: mac_mini_m2
     # Every script step runs in a new shell from here; a `cd` doesn't carry over.
     working_directory: frontend
-    integrations:
+    integrations: &integrations
       # The name Karlos gave the API key in Codemagic (Part C2).
       app_store_connect: REPLACE_WITH_CODEMAGIC_KEY_NAME
-    environment:
+    environment: &environment
       # Apple takes uploads only from Xcode 26+ (the iOS 26 SDK) since 28 Apr
       # 2026. Pinned to a 26.x rather than `latest`: Xcode 27.2's JSON project
       # format breaks `cap sync` (ionic-team/capacitor#8607). Move the pin when
@@ -28,15 +28,20 @@ workflows:
         # The app's numeric Apple ID from App Store Connect (Part C2); not a secret.
         APP_STORE_APPLE_ID: REPLACE_WITH_APPLE_ID
     scripts:
-      - name: No placeholders left in codemagic.yaml
+      - &placeholder_guard
+        name: No placeholders left in codemagic.yaml
         # Fails in seconds rather than after a 15-minute build.
         script: |
           # Split so this line doesn't match itself.
           if grep -n "REPLACE""_WITH_" ../codemagic.yaml; then
             echo "Fill in the placeholder values listed above (README: Building the iOS app)"; exit 1
           fi
-      - name: Install dependencies
+      - &install
+        name: Install dependencies
         script: npm ci
+      - &legal
+        name: Legal pages match the app, with a real support address
+        script: node scripts/check-legal.mjs --release
       - name: Build the web app and sync it into ios/ (web inspector on, internal TestFlight only)
         script: CAP_IOS_INSPECTABLE=1 npm run ios:prod
       - name: iOS prod-config check
@@ -48,7 +53,8 @@ workflows:
         # has neither this option nor CAP_IOS_INSPECTABLE.
         script: |
           xcode-project use-profiles --project ios/App/App.xcodeproj --custom-export-options='{"testFlightInternalTestingOnly": true}'
-      - name: App version from android/app/build.gradle (the one version source)
+      - &app_version
+        name: App version from android/app/build.gradle (the one version source)
         # Not agvtool: the project has no VERSIONING_SYSTEM, and Info.plist
         # reads $(MARKETING_VERSION). BSD sed on the Mac, hence -i ''.
         script: |
@@ -62,8 +68,9 @@ workflows:
         # the first build takes the fallback. The fallback (also used when the
         # key, Apple ID or API fails) is Codemagic's BUILD_NUMBER, this
         # workflow's run count. It counts failed runs too, so the first upload
-        # may be 3, not 1; that's fine, Apple only needs it to go up. Every
-        # upload comes from here, so it never reuses a number.
+        # may be 3, not 1; that's fine, Apple only needs it to go up. Once
+        # ios-release has uploaded, a fallback here could repeat one of its
+        # numbers; Apple then refuses the upload, and a rerun fixes it.
         script: |
           set -e
           case "$APP_STORE_APPLE_ID" in
@@ -78,17 +85,18 @@ workflows:
           case "$N" in ''|*[!0-9]*) echo "Bad build number: $N"; exit 1 ;; esac
           sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $N;/" ios/App/App.xcodeproj/project.pbxproj
           echo "Build number $N"
-      - name: Build the signed .ipa
+      - &build_ipa
+        name: Build the signed .ipa
         # Swift Package Manager project: --project, not --workspace, and no pod install.
         script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme App
-    artifacts:
+    artifacts: &artifacts
       # Publishing uploads the .ipa it finds here. Codemagic's docs resolve
       # paths from the clone, but working_directory may apply; list both so a
       # wrong guess doesn't waste a 20-minute build.
       - frontend/build/ios/ipa/*.ipa
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-    publishing:
+    publishing: &publishing
       email:
         recipients:
           - REPLACE_WITH_EMAIL
@@ -100,3 +108,42 @@ workflows:
       # distribution, so the build reaches Karlos once Apple has processed it.
       app_store_connect:
         auth: integration
+
+  # 9.9: builds for external TestFlight testers and App Store review. The same
+  # as ios-testflight except: no web inspector, the prod-config check fails if
+  # it's on (--release), no internal-only export option, and the build number
+  # must come from TestFlight (no fallback: Codemagic's BUILD_NUMBER counts
+  # each workflow separately, so it could repeat a number the other one used).
+  # Still upload only: Karlos submits for review in App Store Connect.
+  ios-release:
+    name: iOS release (external TestFlight / App Store)
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    working_directory: frontend
+    integrations: *integrations
+    environment: *environment
+    scripts:
+      - *placeholder_guard
+      - *install
+      - *legal
+      - name: Build the web app and sync it into ios/ (no web inspector)
+        script: npm run ios:prod
+      - name: iOS prod-config check (release)
+        script: node scripts/check-ios-prod.mjs --release
+      - name: Use the signing profiles
+        script: xcode-project use-profiles --project ios/App/App.xcodeproj
+      - *app_version
+      - name: Build number = latest TestFlight build + 1
+        script: |
+          set -e
+          case "$APP_STORE_APPLE_ID" in
+            ''|*[!0-9]*) echo "Set APP_STORE_APPLE_ID in codemagic.yaml to the app's numeric Apple ID"; exit 1 ;;
+          esac
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID") || {
+            echo "TestFlight lookup failed: run ios-testflight first, or check the key and Apple ID"; exit 1; }
+          N=$(( ${LATEST:-0} + 1 ))
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = $N;/" ios/App/App.xcodeproj/project.pbxproj
+          echo "Build number $N"
+      - *build_ipa
+    artifacts: *artifacts
+    publishing: *publishing

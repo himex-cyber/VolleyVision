@@ -1,6 +1,65 @@
 import { useState } from 'react';
 import type { ChatAttachment, ChatMessage } from '../../types';
 import { formatBytes } from './format';
+import type { ReportReason } from '../../lib/api';
+
+const REASONS: { value: ReportReason; label: string }[] = [
+  { value: 'harassment', label: 'Harassment or bullying' },
+  { value: 'inappropriate', label: 'Inappropriate content' },
+  { value: 'spam', label: 'Spam' },
+  { value: 'other', label: 'Something else' },
+];
+
+/** Report a message (9.5): a reason, an optional note, then a thank-you. */
+function ReportForm({ onSend, onClose }: { onSend: (reason: ReportReason, note: string) => Promise<void>; onClose: () => void }) {
+  const [reason, setReason] = useState<ReportReason | null>(null);
+  const [note, setNote] = useState('');
+  const [state, setState] = useState<'editing' | 'sending' | 'sent'>('editing');
+  const [error, setError] = useState('');
+
+  if (state === 'sent') {
+    return (
+      <div className="mt-2 card p-3 text-sm text-grey-700 flex items-center justify-between gap-3" role="status">
+        <span>Thanks. We'll review this within 48 hours.</span>
+        <button type="button" className="text-sm font-medium text-navy-700 min-h-[44px] px-2" onClick={onClose}>Close</button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="mt-2 card p-3 space-y-2"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!reason) return;
+        setState('sending');
+        setError('');
+        try {
+          await onSend(reason, note.trim());
+          setState('sent');
+        } catch (err) {
+          setError(err instanceof Error && err.message ? err.message : "Couldn't send the report. Try again.");
+          setState('editing');
+        }
+      }}
+    >
+      <p className="text-sm font-medium text-grey-900">Why are you reporting this message?</p>
+      {REASONS.map((r) => (
+        <label key={r.value} className="flex items-center gap-2 min-h-[44px] text-sm text-grey-700 cursor-pointer">
+          <input type="radio" name="report-reason" className="accent-gold-500 w-4 h-4" checked={reason === r.value} onChange={() => setReason(r.value)} />
+          {r.label}
+        </label>
+      ))}
+      <textarea className="input text-sm" rows={2} maxLength={500} placeholder="Anything else we should know (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+      {error && <p className="text-sm text-error-strong" role="alert">{error}</p>}
+      <div className="flex gap-2">
+        <button type="submit" className="btn-primary text-sm min-h-[44px] px-4" disabled={!reason || state === 'sending'}>
+          {state === 'sending' ? 'Sending…' : 'Send report'}
+        </button>
+        <button type="button" className="btn-secondary text-sm min-h-[44px] px-4" onClick={onClose}>Cancel</button>
+      </div>
+    </form>
+  );
+}
 
 /** "just now" → "5m" → "3h" → "Tue 14:02" → "12 Jun" — courtside-glance sizes. */
 // eslint-disable-next-line react-refresh/only-export-components -- shared time formatter belongs next to the message bubble that uses it, not split into its own file
@@ -96,6 +155,9 @@ interface MessageItemProps {
   canModerate: boolean;
   onEdit: (messageId: string, body: string) => void;
   onDelete: (messageId: string) => void;
+  /** Report and block (9.5, 9.6): other people's messages only. */
+  onReport: (messageId: string, reason: ReportReason, note: string) => Promise<void>;
+  onBlock: (messageId: string, senderName: string) => void;
   onRetry: (tempId: string) => void;
   onDiscardFailed: (tempId: string) => void;
   /** An <img> failed to load — likely an expired signed URL; refetch fresh ones. */
@@ -109,12 +171,15 @@ export default function MessageItem({
   canModerate,
   onEdit,
   onDelete,
+  onReport,
+  onBlock,
   onRetry,
   onDiscardFailed,
   onStaleAttachment,
 }: MessageItemProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [reporting, setReporting] = useState(false);
 
   const isDeleted = !!message.deletedAt;
   const isFailed = message.sendState === 'failed';
@@ -160,7 +225,10 @@ export default function MessageItem({
         </div>
 
         {isDeleted ? (
-          <p className="text-sm text-grey-600 italic mt-0.5">Message deleted</p>
+          <p className="text-sm text-grey-600 italic mt-0.5">
+            {/* No sender: its author deleted their account (9.4). */}
+            {message.sender ? 'Message deleted' : 'Message from a former member was removed'}
+          </p>
         ) : editing ? (
           <div className="mt-1">
             <textarea
@@ -211,6 +279,8 @@ export default function MessageItem({
           </>
         )}
 
+        {reporting && <ReportForm onSend={(reason, note) => onReport(message.id, reason, note)} onClose={() => setReporting(false)} />}
+
         {isFailed && (
           <div className="flex items-center gap-3 mt-1">
             <span className="text-xs text-error font-medium">
@@ -226,22 +296,38 @@ export default function MessageItem({
         )}
       </div>
 
-      {!isDeleted && !message.sendState && !editing && (isOwn ? canPost : canModerate) && (
+      {!isDeleted && !message.sendState && !editing && !reporting && (isOwn ? canPost : true) && (
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
           {isOwn && canPost && (
             <button
-              className="text-xs font-medium text-grey-600 hover:text-navy-700 px-1.5 py-1"
+              className="text-xs font-medium text-grey-600 hover:text-navy-700 px-2 min-h-[44px]"
               onClick={() => { setDraft(message.body ?? ''); setEditing(true); }}
             >
               Edit
             </button>
           )}
-          <button
-            className="text-xs font-medium text-grey-600 hover:text-error px-1.5 py-1"
-            onClick={() => onDelete(message.id)}
-          >
-            Delete
-          </button>
+          {/* Someone else's message: report it, or block its sender (9.5, 9.6). */}
+          {!isOwn && message.sender && (
+            <>
+              <button className="text-xs font-medium text-grey-600 hover:text-navy-700 px-2 min-h-[44px]" onClick={() => setReporting(true)}>
+                Report
+              </button>
+              <button
+                className="text-xs font-medium text-grey-600 hover:text-navy-700 px-2 min-h-[44px]"
+                onClick={() => onBlock(message.id, senderName)}
+              >
+                Block
+              </button>
+            </>
+          )}
+          {(isOwn || canModerate) && (
+            <button
+              className="text-xs font-medium text-grey-600 hover:text-error px-2 min-h-[44px]"
+              onClick={() => onDelete(message.id)}
+            >
+              Delete
+            </button>
+          )}
         </div>
       )}
     </div>

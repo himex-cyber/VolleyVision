@@ -12,6 +12,7 @@ export const TYPE_LABELS: Record<FeedbackType, string> = {
   BUG: 'Bug report',
   FEATURE_REQUEST: 'Feature request',
   GENERAL: 'General',
+  MESSAGE_REPORT: 'Message report',
 };
 
 // eslint-disable-next-line react-refresh/only-export-components -- see TYPE_LABELS above
@@ -19,6 +20,7 @@ export const TYPE_BADGE: Record<FeedbackType, string> = {
   BUG: 'badge-error',
   FEATURE_REQUEST: 'badge-info',
   GENERAL: 'badge-neutral',
+  MESSAGE_REPORT: 'badge-error',
 };
 
 // eslint-disable-next-line react-refresh/only-export-components -- see TYPE_LABELS above
