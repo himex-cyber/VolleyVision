@@ -1129,3 +1129,12 @@ production) wrote eight staging values to production's environment variables: CL
 two Sentry environment variables added, four re-set to the values production already had. Production's secrets were untouched and nothing was deployed, so the live site never
 used them; Karlos restored the two changed values and removed the extras in the dashboard, checked read-only through the
 Netlify API. Staging variables are now set only in the dashboard.
+
+**Production, 3–4 Oct 2026.** Backups `vv-backup-2026-10-03-2149.sql` and `-2026-10-04-0117.sql`; the 9.1 migration
+applied to production with `npx prisma migrate deploy` (Karlos's go-ahead). `deploy.ps1` then failed at Netlify's publish
+step with `JSONHTTPError: Forbidden`, both for Claude and for Karlos after a fresh `netlify login` as himextradingltd.
+A draft deploy to the same site works, staging deploys work, and the API reported no usage exceeded; public reports match
+a free-plan production-deploy pause when the team's credits run out (each production deploy costs credits, including the
+staging site's). Production stays on v9.15.0, compatible with the additive migration. Next: Karlos checks the Netlify
+dashboard (credits used up → wait for 23 Oct or add credits; otherwise Netlify support), then `.\deploy.ps1` from `main`.
+
